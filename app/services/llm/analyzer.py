@@ -2,6 +2,8 @@ from typing import List, Dict, Any
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.prompts import ChatPromptTemplate
 import structlog
+import re
+
 logger = structlog.get_logger()
 
 # The "System Prompt" - defines the AI's personality and task
@@ -65,16 +67,47 @@ RULES:
 """
 
 class FinOpsAnalyzer:
+    """
+    The 'Brain' of CloudSentinel.
+    
+    This class wraps a LangChain ChatModel and orchestrates the analysis of cost data.
+    It uses a specialized System Prompt to enforce strict JSON output for programmatic use.
+    """
     def __init__(self, llm: BaseChatModel):
         self.llm = llm
         self.prompt = ChatPromptTemplate.from_messages([
             ("system", FINOPS_SYSTEM_PROMPT),
             ("user", "Analyze this cloud cost data:\n{cost_data}")
         ])
+
+    def _strip_markdown(self, text: str) -> str:
+      """
+      Removes markdown code block wrappers from LLM responses.
+      LLMs often ignore 'no markdown' instructions.
+      """
+      # Pattern matches ```json ... ``` or just ``` ... ```
+      pattern = r'^```(?:json)?\s*\n?(.*?)\n?```$'
+      match = re.match(pattern, text.strip(). re.DOTALL)
+      if match:
+        return match.group(1).strip()
+      return text.strip()
+
     
     async def analyze(self, cost_data: List[Dict[str, Any]]) -> str:
         """
         Takes raw cost data and returns AI-generated insights.
+
+        The process:
+        1. Formats the raw list of dictionaries into a string.
+        2. Injects it into the prompt template.
+        3. Invokes the LLM to process the data against the System Prompt.
+        4. Strips any markdown formatting from the response to ensure valid JSON.
+
+        Args:
+            cost_data: List of daily cost records from the adapter.
+        
+        Returns:
+            str: A raw JSON string containing the analysis.
         """
         logger.info("starting_analysis", data_points=len(cost_data))
         
@@ -88,4 +121,4 @@ class FinOpsAnalyzer:
         response = await chain.ainvoke({"cost_data": formatted_data})
         
         logger.info("analysis_complete")
-        return response.content
+        return self._strip_markdown(response.content)

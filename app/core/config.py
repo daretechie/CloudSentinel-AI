@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     # Groq Credentials
     GROQ_API_KEY: Optional[str] = None
     GROQ_MODEL: str = "llama-3.3-70b-versatile"
+
+    # LLM Provider
+    LLM_PROVIDER: str = "groq" # Options: openai, claude, google, groq
     
     model_config = SettingsConfigDict(
         env_file=".env", 

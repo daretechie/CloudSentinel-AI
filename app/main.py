@@ -56,17 +56,31 @@ async def get_costs(
   end_date: date,
   adapter: Annotated[CostAdapter, Depends(get_cost_adapter)]
 ):
+  """
+  Retrieves daily cloud costs for a specified date range.
+
+  This endpoint uses the `CostAdapter` dependency (Strategy Pattern) to fetch data from the 
+  configured cloud provider (currently AWS).
+
+  Args:
+      start_date (date): The start date for the cost period (inclusive).
+      end_date (date): The end date for the cost period (exclusive).
+      adapter (CostAdapter): The injected cloud provider adapter.
+
+  Returns:
+      List[Dict[str, Any]]: A list of daily cost records.
+  """
   logger.info("fecthing_costs", start=start_date, end=end_date)
   return await adapter.get_daily_costs(start_date, end_date)
 
 # Dependency Factory for LLM
 def get_llm_provider() -> str:
-    # You can make this configurable via settings later
-    return "groq"  # or "openai", "claude", "google"
+  settings = get_settings()
+  return settings.LLM_PROVIDER
 
 def get_analyzer(provider: str = Depends(get_llm_provider)) -> FinOpsAnalyzer:
-    llm = LLMFactory.create(provider)
-    return FinOpsAnalyzer(llm)
+  llm = LLMFactory.create(provider)
+  return FinOpsAnalyzer(llm)
 
 @app.get("/analyze")
 async def analyze_costs(
@@ -76,8 +90,21 @@ async def analyze_costs(
     analyzer: Annotated[FinOpsAnalyzer, Depends(get_analyzer)]
 ):
     """
-    Fetches cloud costs and analyzes them using AI.
-    This is the "Sentinel" core feature.
+    Analyzes cloud costs using GenAI to identify anomalies and savings.
+
+    This is the core "Sentinel" feature. It:
+    1. Fetches raw cost data using the `CostAdapter`.
+    2. Feeds the data into the `FinOpsAnalyzer` (LLM).
+    3. Returns structured insights (anomalies, zombie resources, etc.).
+
+    Args:
+        start_date (date): Start of analysis period.
+        end_date (date): End of analysis period.
+        adapter (CostAdapter): Injected source of cost inputs.
+        analyzer (FinOpsAnalyzer): Injected AI analysis engine.
+
+    Returns:
+        dict: A JSON object containing AI-generated insights.
     """
     logger.info("starting_sentinel_analysis", start=start_date, end=end_date)
     

@@ -23,7 +23,16 @@ class AWSAdapter(CostAdapter):
 
     async def get_daily_costs(self, start_date: date, end_date: date) -> List[Dict[str, Any]]:
         """
-        Fetches daily cost/usage from AWS Cost Explorer.
+        Fetches daily unblended costs from AWS Cost Explorer.
+
+        Args:
+            start_date (date): ISO 8601 start date (e.g., 2026-01-01).
+            end_date (date): ISO 8601 end date.
+
+        Returns:
+            List[Dict[str, Any]]: The 'ResultsByTime' list from the AWS CE API response.
+            Returns an empty list [] provided errors occur (e.g. invalid permissions),
+            ensuring the app doesn't crash.
         """
         try:
             # AWS requires strings in 'YYYY-MM-DD' format
