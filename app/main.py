@@ -14,7 +14,8 @@ from contextlib import asynccontextmanager
 import secrets
 from app.core.auth import get_current_user, CurrentUser
 from app.api.v1.onboard import router as onboard_router
-
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.db.session import get_db
 
 
 # Configure logging
@@ -112,32 +113,25 @@ async def analyze_costs(
     end_date: date,
     adapter: Annotated[CostAdapter, Depends(get_cost_adapter)],
     analyzer: Annotated[FinOpsAnalyzer, Depends(get_analyzer)],
-    user: Annotated[CurrentUser, Depends(get_current_user)]
+    user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),              # <--- Add this
+    provider: str = Depends(get_llm_provider),       # <--- Add this
 ):
     """
     Analyzes cloud costs using GenAI to identify anomalies and savings.
-
-    This is the core "Sentinel" feature. It:
-    1. Fetches raw cost data using the `CostAdapter`.
-    2. Feeds the data into the `FinOpsAnalyzer` (LLM).
-    3. Returns structured insights (anomalies, zombie resources, etc.).
-
-    Args:
-        start_date (date): Start of analysis period.
-        end_date (date): End of analysis period.
-        adapter (CostAdapter): Injected source of cost inputs.
-        analyzer (FinOpsAnalyzer): Injected AI analysis engine.
-
-    Returns:
-        dict: A JSON object containing AI-generated insights.
     """
     logger.info("starting_sentinel_analysis", start=start_date, end=end_date)
     
     # Step 1: Get cost data
     cost_data = await adapter.get_daily_costs(start_date, end_date)
     
-    # Step 2: Analyze with AI
-    insights = await analyzer.analyze(cost_data)
+    # Step 2: Analyze with AI (and track usage)
+    insights = await analyzer.analyze(
+        cost_data,
+        tenant_id=user.tenant_id,  # <--- Pass context
+        db=db,                     # <--- Pass context
+        provider=provider,         # <--- Record provider
+    )
     
     return {"analysis": insights}
 

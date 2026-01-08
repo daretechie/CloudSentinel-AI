@@ -1,0 +1,136 @@
+"""
+LLM Usage Tracker Service
+
+Calculates and persists LLM API costs for analytics and billing.
+Called after every LLM API call to track token usage.
+"""
+
+from uuid import UUID
+from decimal import Decimal
+from sqlalchemy.ext.asyncio import AsyncSession
+import structlog
+
+from app.models.llm import LLMUsage
+
+logger = structlog.get_logger()
+
+# Prices per 1 MILLION tokens (input/output) in USD
+# Source: Official pricing pages as of 2026
+LLM_PRICING = {
+    "groq": {
+        "llama-3.3-70b-versatile": {"input": 0.59, "output": 0.79},
+        "llama-3.1-8b-instant": {"input": 0.05, "output": 0.08},
+        "mixtral-8x7b-32768": {"input": 0.24, "output": 0.24},
+    },
+    "openai": {
+        "gpt-4o": {"input": 2.50, "output": 10.00},
+        "gpt-4o-mini": {"input": 0.15, "output": 0.60},
+        "gpt-4-turbo": {"input": 10.00, "output": 30.00},
+    },
+    "anthropic": {
+        "claude-3-5-sonnet": {"input": 3.00, "output": 15.00},
+        "claude-3-haiku": {"input": 0.25, "output": 1.25},
+        "claude-3-opus": {"input": 15.00, "output": 75.00},
+    },
+}
+
+
+class UsageTracker:
+    """
+    Tracks LLM API usage for cost analytics.
+    
+    Usage:
+        tracker = UsageTracker(db_session)
+        await tracker.record(
+            tenant_id=user.tenant_id,
+            provider="groq",
+            model="llama-3.3-70b-versatile",
+            input_tokens=1500,
+            output_tokens=800,
+            request_type="daily_analysis"
+        )
+    """
+    
+    def __init__(self, db: AsyncSession):
+        self.db = db
+    
+    def calculate_cost(
+        self,
+        provider: str,
+        model: str,
+        input_tokens: int,
+        output_tokens: int,
+    ) -> Decimal:
+        """
+        Calculate USD cost based on provider, model, and token counts.
+        
+        Formula: (input_tokens * input_price / 1M) + (output_tokens * output_price / 1M)
+        
+        Returns 0 if model not found (fail gracefully, don't break the app)
+        """
+        pricing = LLM_PRICING.get(provider, {}).get(model)
+        
+        if not pricing:
+            logger.warning(
+                "llm_pricing_not_found",
+                provider=provider,
+                model=model,
+            )
+            return Decimal("0")
+        
+        # Price is per million tokens, so divide by 1,000,000
+        input_cost = Decimal(str(input_tokens)) * Decimal(str(pricing["input"])) / Decimal("1000000")
+        output_cost = Decimal(str(output_tokens)) * Decimal(str(pricing["output"])) / Decimal("1000000")
+        
+        return input_cost + output_cost
+    
+    async def record(
+        self,
+        tenant_id: UUID,
+        provider: str,
+        model: str,
+        input_tokens: int,
+        output_tokens: int,
+        request_type: str = "unknown",
+    ) -> LLMUsage:
+        """
+        Record an LLM API call to the database.
+        
+        Args:
+            tenant_id: Who made this call
+            provider: API provider (groq, openai, anthropic)
+            model: Specific model used
+            input_tokens: Tokens in prompt
+            output_tokens: Tokens in response
+            request_type: What this call was for
+        
+        Returns:
+            The created LLMUsage record
+        """
+        cost = self.calculate_cost(provider, model, input_tokens, output_tokens)
+        
+        usage = LLMUsage(
+            tenant_id=tenant_id,
+            provider=provider,
+            model=model,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            total_tokens=input_tokens + output_tokens,
+            cost_usd=cost,
+            request_type=request_type,
+        )
+        
+        self.db.add(usage)
+        await self.db.commit()
+        await self.db.refresh(usage)
+        
+        logger.info(
+            "llm_usage_recorded",
+            tenant_id=str(tenant_id),
+            provider=provider,
+            model=model,
+            tokens=input_tokens + output_tokens,
+            cost_usd=float(cost),
+        )
+        
+        return usage

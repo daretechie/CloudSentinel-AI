@@ -1,8 +1,12 @@
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.prompts import ChatPromptTemplate
 import structlog
 import re
+from uuid import UUID
+from typing import Optional
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.services.llm.usage_tracker import UsageTracker
 
 logger = structlog.get_logger()
 
@@ -92,8 +96,13 @@ class FinOpsAnalyzer:
         return match.group(1).strip()
       return text.strip()
 
-    
-    async def analyze(self, cost_data: List[Dict[str, Any]]) -> str:
+    async def analyze(
+    self,
+    cost_data: List[Dict[str, Any]],
+    tenant_id: Optional[UUID] = None,
+    db: Optional[AsyncSession] = None,
+    provider: str = "groq",
+    model: str = "llama-3.3-70b-versatile",) -> str:
         """
         Takes raw cost data and returns AI-generated insights.
 
@@ -119,6 +128,28 @@ class FinOpsAnalyzer:
         
         # Invoke the chain
         response = await chain.ainvoke({"cost_data": formatted_data})
+
+        # Track LLM usage if tenant context provided
+        if tenant_id and db:
+            try:
+                # Extract token usage from response metadata
+                usage_metadata = response.response_metadata.get("token_usage", {})
+                input_tokens = usage_metadata.get("prompt_tokens", 0)
+                output_tokens = usage_metadata.get("completion_tokens", 0)
+                
+                # Record usage
+                tracker = UsageTracker(db)
+                await tracker.record(
+                    tenant_id=tenant_id,
+                    provider=provider,
+                    model=model,
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    request_type="cost_analysis",
+                )
+            except Exception as e:
+                # Don't fail the analysis if tracking fails
+                logger.warning("llm_usage_tracking_failed", error=str(e))
         
         logger.info("analysis_complete")
         return self._strip_markdown(response.content)

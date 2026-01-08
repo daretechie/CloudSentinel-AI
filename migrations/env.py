@@ -15,6 +15,8 @@ from app.models.cloud import CloudAccount, CostRecord
 from app.core.config import get_settings
 from sqlalchemy.ext.asyncio import create_async_engine
 
+from app.models.llm import LLMUsage
+
 settings = get_settings()
 
 
