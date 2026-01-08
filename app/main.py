@@ -16,6 +16,7 @@ from app.core.auth import get_current_user, CurrentUser
 from app.api.v1.onboard import router as onboard_router
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
+from app.services.carbon.calculator import CarbonCalculator
 
 
 # Configure logging
@@ -157,3 +158,27 @@ async def trigger_analysis(x_admin_key: str = Header(..., alias="X-Admin-Key")):
     logger.info("manual_trigger_requested")
     await app.state.scheduler.daily_analysis_job()
     return {"status": "triggered", "message": "Daily analysis job executed."}
+
+@app.get("/carbon")
+async def get_carbon_footprint(
+    start_date: date,
+    end_date: date,
+    adapter: Annotated[CostAdapter, Depends(get_cost_adapter)],
+    user: Annotated[CurrentUser, Depends(get_current_user)],
+    region: str = Query(default="us-east-1", description="AWS region for carbon intensity"),
+):
+    """
+    Calculate carbon footprint from AWS usage.
+    
+    Returns CO₂ emissions estimate based on cost data and region.
+    """
+    logger.info("calculating_carbon", start=start_date, end=end_date, region=region)
+    
+    # Get cost data
+    cost_data = await adapter.get_daily_costs(start_date, end_date)
+    
+    # Calculate carbon
+    calculator = CarbonCalculator()
+    result = calculator.calculate_from_costs(cost_data, region=region)
+    
+    return result
