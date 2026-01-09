@@ -63,10 +63,38 @@ class SchedulerService:
                 return
 
             analysis = await analyzer.analyze(costs)
+            
+            # Calculate total cost
+            total_cost = sum(c.get("amount", 0) for c in costs)
+            
+            # Send Slack digest if configured
+            if self.settings.SLACK_BOT_TOKEN and self.settings.SLACK_CHANNEL_ID:
+                from app.services.notifications import SlackService
+                from app.services.carbon import CarbonCalculator
+                import json
+                
+                slack = SlackService(self.settings.SLACK_BOT_TOKEN, self.settings.SLACK_CHANNEL_ID)
+                
+                # Calculate carbon footprint from actual cost data
+                carbon_calc = CarbonCalculator()
+                carbon_result = carbon_calc.calculate_from_costs(costs)
+                carbon_kg = carbon_result.get("total_co2_kg", 0)
+                
+                # Count zombies from analysis
+                try:
+                    result = json.loads(analysis)
+                    zombie_count = len(result.get("zombie_resources", []))
+                except json.JSONDecodeError:
+                    zombie_count = 0
+                
+                await slack.send_digest({
+                    "total_cost": total_cost,
+                    "carbon_kg": carbon_kg,
+                    "zombie_count": zombie_count,
+                    "period": f"{yesterday.isoformat()} - {today.isoformat()}"
+                })
 
-            # TODO: Send to Slack/Email
-
-            # Log success with key metrics, not truncated text
+            # Log success with key metrics
             logger.info(
                 "scheduler_job_complete",
                 job=job_name,
@@ -144,13 +172,7 @@ class SchedulerService:
             max_instances=1,  # Prevent overlapping runs
             misfire_grace_time=3600,  # 1 hour grace period for missed jobs
         )
-        # Add Slack digest job - runs at 9:00 AM UTC
-        self.scheduler.add_job(
-            self.send_daily_slack_digest,
-            trigger=CronTrigger(hour=9, minute=0, timezone="UTC"),
-            id="slack_daily_digest",
-            replace_existing=True,
-        )
+
         
         self.scheduler.start()
         logger.info("scheduler_started", schedule=f"{hour:02d}:{minute:02d} UTC")
