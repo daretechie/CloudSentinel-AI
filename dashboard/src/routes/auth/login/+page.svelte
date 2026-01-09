@@ -1,8 +1,10 @@
 <!--
-  Login Page
+  Login Page - Premium SaaS Design
   
-  Supabase Auth UI with email/password login.
-  Styled with shadcn-svelte design system.
+  Features:
+  - Clean centered card layout
+  - Smooth form interactions
+  - Motion-enhanced transitions
 -->
 
 <script lang="ts">
@@ -13,6 +15,7 @@
   let password = '';
   let loading = false;
   let error = '';
+  let success = '';
   let mode: 'login' | 'signup' = 'login';
   
   const supabase = createSupabaseBrowserClient();
@@ -20,6 +23,7 @@
   async function handleSubmit() {
     loading = true;
     error = '';
+    success = '';
     
     try {
       if (mode === 'login') {
@@ -37,7 +41,7 @@
         });
         
         if (authError) throw authError;
-        error = '✅ Check your email for confirmation link!';
+        success = 'Check your email for the confirmation link.';
       }
     } catch (e: any) {
       error = e.message;
@@ -48,72 +52,117 @@
 </script>
 
 <svelte:head>
-  <title>{mode === 'login' ? 'Login' : 'Sign Up'} | CloudSentinel</title>
+  <title>{mode === 'login' ? 'Sign In' : 'Create Account'} | CloudSentinel</title>
 </svelte:head>
 
-<div class="flex min-h-[80vh] items-center justify-center">
-  <div class="w-full max-w-md rounded-lg border border-slate-800 bg-slate-900 p-8">
-    <h1 class="mb-6 text-2xl font-bold text-center">
-      {mode === 'login' ? 'Welcome Back' : 'Create Account'}
-    </h1>
-    
-    {#if error}
-      <div class="mb-4 rounded bg-red-900/50 p-3 text-sm text-red-200">
-        {error}
-      </div>
-    {/if}
-    
-    <form on:submit|preventDefault={handleSubmit} class="space-y-4">
-      <div>
-        <label for="email" class="mb-1 block text-sm text-slate-400">Email</label>
-        <input
-          id="email"
-          type="email"
-          bind:value={email}
-          required
-          class="w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-white focus:border-emerald-500 focus:outline-none"
-          placeholder="you@example.com"
-        />
+<div class="min-h-[85vh] flex items-center justify-center px-4">
+  <div class="w-full max-w-sm">
+    <!-- Card -->
+    <div class="card stagger-enter">
+      <!-- Header -->
+      <div class="text-center mb-6">
+        <span class="text-4xl mb-3 block">☁️</span>
+        <h1 class="text-xl font-semibold">
+          {mode === 'login' ? 'Welcome back' : 'Create your account'}
+        </h1>
+        <p class="text-ink-400 text-sm mt-1">
+          {mode === 'login' ? 'Sign in to continue' : 'Start your free trial'}
+        </p>
       </div>
       
-      <div>
-        <label for="password" class="mb-1 block text-sm text-slate-400">Password</label>
-        <input
-          id="password"
-          type="password"
-          bind:value={password}
-          required
-          minlength="6"
-          class="w-full rounded border border-slate-700 bg-slate-800 px-3 py-2 text-white focus:border-emerald-500 focus:outline-none"
-          placeholder="••••••••"
-        />
-      </div>
-      
-      <button
-        type="submit"
-        disabled={loading}
-        class="w-full rounded bg-emerald-600 py-2.5 font-medium hover:bg-emerald-500 disabled:opacity-50"
-      >
-        {#if loading}
-          Loading...
-        {:else}
-          {mode === 'login' ? 'Sign In' : 'Sign Up'}
-        {/if}
-      </button>
-    </form>
-    
-    <p class="mt-6 text-center text-sm text-slate-400">
-      {#if mode === 'login'}
-        Don't have an account?
-        <button on:click={() => mode = 'signup'} class="text-emerald-400 hover:underline">
-          Sign up
-        </button>
-      {:else}
-        Already have an account?
-        <button on:click={() => mode = 'login'} class="text-emerald-400 hover:underline">
-          Sign in
-        </button>
+      <!-- Error/Success Messages -->
+      {#if error}
+        <div class="mb-4 p-3 rounded-lg bg-danger-500/10 border border-danger-500/30 text-danger-400 text-sm">
+          {error}
+        </div>
       {/if}
+      
+      {#if success}
+        <div class="mb-4 p-3 rounded-lg bg-success-500/10 border border-success-500/30 text-success-400 text-sm">
+          {success}
+        </div>
+      {/if}
+      
+      <!-- Form -->
+      <form on:submit|preventDefault={handleSubmit} class="space-y-4">
+        <div>
+          <label for="email" class="label">Email</label>
+          <input
+            id="email"
+            type="email"
+            bind:value={email}
+            required
+            class="input"
+            placeholder="you@company.com"
+          />
+        </div>
+        
+        <div>
+          <label for="password" class="label">Password</label>
+          <input
+            id="password"
+            type="password"
+            bind:value={password}
+            required
+            minlength="6"
+            class="input"
+            placeholder="••••••••"
+          />
+        </div>
+        
+        <button
+          type="submit"
+          disabled={loading}
+          class="btn btn-primary w-full py-2.5"
+        >
+          {#if loading}
+            <span class="spinner"></span>
+            <span>Please wait...</span>
+          {:else}
+            {mode === 'login' ? 'Sign In' : 'Create Account'}
+          {/if}
+        </button>
+      </form>
+      
+      <!-- Toggle Mode -->
+      <p class="mt-6 text-center text-sm text-ink-400">
+        {#if mode === 'login'}
+          Don't have an account?
+          <button 
+            type="button"
+            on:click={() => mode = 'signup'} 
+            class="text-accent-400 hover:underline font-medium"
+          >
+            Sign up
+          </button>
+        {:else}
+          Already have an account?
+          <button 
+            type="button"
+            on:click={() => mode = 'login'} 
+            class="text-accent-400 hover:underline font-medium"
+          >
+            Sign in
+          </button>
+        {/if}
+      </p>
+    </div>
+    
+    <!-- Footer -->
+    <p class="text-center text-xs text-ink-500 mt-6 stagger-enter" style="animation-delay: 100ms;">
+      By continuing, you agree to our Terms and Privacy Policy.
     </p>
   </div>
 </div>
+
+<style>
+  .text-ink-400 { color: var(--color-ink-400); }
+  .text-ink-500 { color: var(--color-ink-500); }
+  .text-accent-400 { color: var(--color-accent-400); }
+  .text-danger-400 { color: var(--color-danger-400); }
+  .text-success-400 { color: var(--color-success-400); }
+  .bg-danger-500\/10 { background-color: rgb(244 63 94 / 0.1); }
+  .bg-success-500\/10 { background-color: rgb(16 185 129 / 0.1); }
+  .border-danger-500\/30 { border-color: rgb(244 63 94 / 0.3); }
+  .border-success-500\/30 { border-color: rgb(16 185 129 / 0.3); }
+</style>

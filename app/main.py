@@ -19,6 +19,8 @@ from app.db.session import get_db
 from app.services.carbon.calculator import CarbonCalculator
 from app.services.zombies.detector import ZombieDetector, RemediationService
 from app.models.remediation import RemediationAction
+from app.models.llm import LLMUsage
+from sqlalchemy import select
 from pydantic import BaseModel
 from typing import Optional
 from uuid import UUID
@@ -179,6 +181,44 @@ async def trigger_analysis(x_admin_key: str = Header(..., alias="X-Admin-Key")):
     logger.info("manual_trigger_requested")
     await app.state.scheduler.daily_analysis_job()
     return {"status": "triggered", "message": "Daily analysis job executed."}
+
+
+@app.get("/llm/usage")
+async def get_llm_usage(
+    user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+    limit: int = Query(default=50, le=200),
+):
+    """
+    Get LLM usage history for the tenant.
+    
+    Returns token counts, costs, and model usage.
+    """
+    result = await db.execute(
+        select(LLMUsage)
+        .where(LLMUsage.tenant_id == user.tenant_id)
+        .order_by(LLMUsage.created_at.desc())
+        .limit(limit)
+    )
+    records = result.scalars().all()
+    
+    return {
+        "usage": [
+            {
+                "id": str(r.id),
+                "model": r.model,
+                "provider": r.provider,
+                "input_tokens": r.input_tokens,
+                "output_tokens": r.output_tokens,
+                "total_tokens": r.total_tokens,
+                "cost_usd": float(r.cost_usd) if r.cost_usd else 0,
+                "request_type": r.request_type,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+            }
+            for r in records
+        ],
+        "count": len(records),
+    }
 
 @app.get("/carbon")
 async def get_carbon_footprint(
