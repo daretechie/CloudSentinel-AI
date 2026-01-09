@@ -22,15 +22,27 @@
   let carbon: any = null;
   let zombies: any = null;
   let error = '';
+  let period = '30d'; // Default period
   
-  const endDate = new Date().toISOString().split('T')[0];
-  const startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-  
-  onMount(async () => {
+  // Calculate dates based on period
+  function getDates() {
+    const end = new Date();
+    const days = parseInt(period.replace('d', ''));
+    const start = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    return {
+      startDate: start.toISOString().split('T')[0],
+      endDate: end.toISOString().split('T')[0]
+    };
+  }
+
+  async function loadData() {
     if (!data.user) {
       loading = false;
       return;
     }
+    
+    loading = true;
+    error = '';
     
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -39,6 +51,8 @@
       const headers = {
         'Authorization': `Bearer ${session.access_token}`,
       };
+      
+      const { startDate, endDate } = getDates();
       
       const [costsRes, carbonRes, zombiesRes] = await Promise.all([
         fetch(`${PUBLIC_API_URL}/costs?start_date=${startDate}&end_date=${endDate}`, { headers }),
@@ -54,7 +68,16 @@
     } finally {
       loading = false;
     }
+  }
+  
+  onMount(() => {
+    loadData();
   });
+  
+  // Reload when period changes
+  $: if (period && data.user && !loading) {
+    loadData();
+  }
   
   // Calculate zombie count
   $: zombieCount = (zombies?.unattached_volumes?.length ?? 0) + 
@@ -104,10 +127,21 @@
   </div>
 {:else}
   <div class="space-y-8">
-    <!-- Page Header -->
-    <div>
-      <h1 class="text-2xl font-bold mb-1">Dashboard</h1>
-      <p class="text-ink-400 text-sm">Overview of your cloud infrastructure</p>
+    <!-- Page Header with Period Selector -->
+    <div class="flex items-center justify-between">
+      <div>
+        <h1 class="text-2xl font-bold mb-1">Dashboard</h1>
+        <p class="text-ink-400 text-sm">Overview of your cloud infrastructure</p>
+      </div>
+      
+      <select 
+        class="period-select"
+        bind:value={period}
+      >
+        <option value="7d">Last 7 Days</option>
+        <option value="30d">Last 30 Days</option>
+        <option value="90d">Last 90 Days</option>
+      </select>
     </div>
     
     {#if loading}
@@ -263,4 +297,19 @@
   .text-danger-400 { color: var(--color-danger-400); }
   .border-danger-500\/50 { border-color: rgb(244 63 94 / 0.5); }
   .bg-danger-500\/10 { background-color: rgb(244 63 94 / 0.1); }
+  
+  .period-select {
+    padding: 0.5rem 1rem;
+    border: 1px solid var(--color-ink-700);
+    border-radius: 0.5rem;
+    background: var(--color-ink-900);
+    color: white;
+    cursor: pointer;
+    font-size: 0.875rem;
+  }
+  
+  .period-select:focus {
+    outline: none;
+    border-color: var(--color-accent-500);
+  }
 </style>
