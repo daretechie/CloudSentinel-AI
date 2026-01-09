@@ -12,6 +12,7 @@
   import { onMount } from 'svelte';
   import { PUBLIC_API_URL } from '$env/static/public';
   import { createSupabaseBrowserClient } from '$lib/supabase';
+  import DateRangePicker from '$lib/components/DateRangePicker.svelte';
   
   export let data;
   
@@ -22,21 +23,11 @@
   let carbon: any = null;
   let zombies: any = null;
   let error = '';
-  let period = '30d'; // Default period
-  
-  // Calculate dates based on period
-  function getDates() {
-    const end = new Date();
-    const days = parseInt(period.replace('d', ''));
-    const start = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
-    return {
-      startDate: start.toISOString().split('T')[0],
-      endDate: end.toISOString().split('T')[0]
-    };
-  }
+  let startDate = '';
+  let endDate = '';
 
   async function loadData() {
-    if (!data.user) {
+    if (!data.user || !startDate || !endDate) {
       loading = false;
       return;
     }
@@ -51,8 +42,6 @@
       const headers = {
         'Authorization': `Bearer ${session.access_token}`,
       };
-      
-      const { startDate, endDate } = getDates();
       
       const [costsRes, carbonRes, zombiesRes] = await Promise.all([
         fetch(`${PUBLIC_API_URL}/costs?start_date=${startDate}&end_date=${endDate}`, { headers }),
@@ -70,14 +59,17 @@
     }
   }
   
-  onMount(() => {
-    loadData();
-  });
-  
-  // Reload when period changes
-  $: if (period && data.user && !loading) {
-    loadData();
+  function handleDateChange(event: CustomEvent<{ startDate: string; endDate: string }>) {
+    startDate = event.detail.startDate;
+    endDate = event.detail.endDate;
+    if (data.user) {
+      loadData();
+    }
   }
+  
+  onMount(() => {
+    // Initial load will be triggered by DateRangePicker's initial event
+  });
   
   // Calculate zombie count
   $: zombieCount = (zombies?.unattached_volumes?.length ?? 0) + 
@@ -127,21 +119,16 @@
   </div>
 {:else}
   <div class="space-y-8">
-    <!-- Page Header with Period Selector -->
-    <div class="flex items-center justify-between">
-      <div>
-        <h1 class="text-2xl font-bold mb-1">Dashboard</h1>
-        <p class="text-ink-400 text-sm">Overview of your cloud infrastructure</p>
+    <!-- Page Header with Date Range Picker -->
+    <div class="flex flex-col gap-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <h1 class="text-2xl font-bold mb-1">Dashboard</h1>
+          <p class="text-ink-400 text-sm">Overview of your cloud infrastructure</p>
+        </div>
       </div>
       
-      <select 
-        class="period-select"
-        bind:value={period}
-      >
-        <option value="7d">Last 7 Days</option>
-        <option value="30d">Last 30 Days</option>
-        <option value="90d">Last 90 Days</option>
-      </select>
+      <DateRangePicker on:dateChange={handleDateChange} />
     </div>
     
     {#if loading}

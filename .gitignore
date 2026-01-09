@@ -16,6 +16,8 @@ eggs/
 .eggs/
 lib/
 lib64/
+# Exception: SvelteKit uses src/lib for components
+!dashboard/src/lib/
 parts/
 sdist/
 var/
