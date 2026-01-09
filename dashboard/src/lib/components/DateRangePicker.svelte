@@ -56,8 +56,11 @@
         customEndDate = dates.endDate;
       }
       value = 'custom';
-      // Dispatch current custom dates only if not initialized
-      // We don't want to auto-dispatch on toggle if it's already set
+      // Dispatch current custom dates
+      dispatch('dateChange', {
+        startDate: customStartDate,
+        endDate: customEndDate,
+      });
     }
   }
   
@@ -103,7 +106,7 @@
   
   <!-- Custom Date Range -->
   {#if showCustom}
-    <div class="custom-range animate-fade-in">
+    <div class="custom-range">
       <div class="date-inputs">
         <div class="date-field">
           <label for="start-date">From</label>
@@ -111,6 +114,7 @@
             type="date" 
             id="start-date"
             bind:value={customStartDate}
+            on:change={applyCustomRange}
           />
         </div>
         <span class="separator">→</span>
@@ -120,16 +124,9 @@
             type="date" 
             id="end-date"
             bind:value={customEndDate}
+            on:change={applyCustomRange}
           />
         </div>
-        
-        <button 
-          class="apply-btn"
-          disabled={!customStartDate || !customEndDate}
-          on:click={applyCustomRange}
-        >
-          Apply
-        </button>
       </div>
     </div>
   {/if}
@@ -175,12 +172,6 @@
     background: var(--color-ink-900);
     border: 1px solid var(--color-ink-700);
     border-radius: 0.5rem;
-    animation: fadeIn 0.2s ease-out;
-  }
-  
-  @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(-5px); }
-    to { opacity: 1; transform: translateY(0); }
   }
   
   .date-inputs {
@@ -217,29 +208,7 @@
   
   .separator {
     color: var(--color-ink-500);
-    padding-bottom: 0.75rem;
-  }
-  
-  .apply-btn {
-    margin-left: auto;
-    padding: 0.5rem 1.25rem;
-    background: var(--color-accent-500);
-    color: white;
-    border: none;
-    border-radius: 0.5rem;
-    font-size: 0.875rem;
-    cursor: pointer;
-    transition: all 0.2s;
-  }
-  
-  .apply-btn:hover:not(:disabled) {
-    background: var(--color-accent-600);
-  }
-  
-  .apply-btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-    background: var(--color-ink-700);
+    padding-bottom: 0.5rem;
   }
   
   /* Make date picker icon visible in dark mode */

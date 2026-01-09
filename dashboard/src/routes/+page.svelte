@@ -13,7 +13,6 @@
   import { PUBLIC_API_URL } from '$env/static/public';
   import { createSupabaseBrowserClient } from '$lib/supabase';
   import DateRangePicker from '$lib/components/DateRangePicker.svelte';
-  import CostChart from '$lib/components/CostChart.svelte';
   
   export let data;
   
@@ -203,20 +202,6 @@
           <p class="text-xs text-ink-500 mt-2">
             Potential savings
           </p>
-        </div>
-      </div>
-      
-      
-      <!-- Cost and Usage Chart -->
-      <div class="card stagger-enter" style="animation-delay: 150ms;">
-        <div class="flex items-center justify-between mb-5">
-          <div>
-            <h2 class="text-lg font-semibold">Cost and usage</h2>
-            <p class="text-sm text-ink-400">Daily cost breakdown by service</p>
-          </div>
-        </div>
-        <div class="h-[350px]">
-          <CostChart data={costs?.breakdown ?? []} />
         </div>
       </div>
       
