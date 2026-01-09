@@ -53,6 +53,7 @@ class ZombieDetector:
     
     def __init__(self, region: str = "us-east-1", credentials: Dict[str, str] = None):
         self.region = region
+        self.credentials = credentials
         
         # Use provided credentials (from STS AssumeRole) or default
         if credentials:
@@ -77,11 +78,19 @@ class ZombieDetector:
                 aws_secret_access_key=credentials["SecretAccessKey"],
                 aws_session_token=credentials["SessionToken"],
             )
+            self.rds = boto3.client(
+                "rds",
+                region_name=region,
+                aws_access_key_id=credentials["AccessKeyId"],
+                aws_secret_access_key=credentials["SecretAccessKey"],
+                aws_session_token=credentials["SessionToken"],
+            )
         else:
             # Default to environment credentials
             self.ec2 = boto3.client("ec2", region_name=region)
             self.cloudwatch = boto3.client("cloudwatch", region_name=region)
             self.elb = boto3.client("elbv2", region_name=region)
+            self.rds = boto3.client("rds", region_name=region)
     
     async def scan_all(self) -> Dict[str, Any]:
         """
@@ -94,25 +103,37 @@ class ZombieDetector:
             "old_snapshots": [],
             "unused_elastic_ips": [],
             "idle_instances": [],
+            "orphan_load_balancers": [],
+            "idle_rds_databases": [],
+            "underused_nat_gateways": [],
             "total_monthly_waste": Decimal("0"),
             "region": self.region,
             "scanned_at": datetime.utcnow().isoformat(),
         }
         
         try:
-            # Scan each category
+            # Storage zombies
             zombies["unattached_volumes"] = self._find_unattached_volumes()
             zombies["old_snapshots"] = self._find_old_snapshots()
             zombies["unused_elastic_ips"] = self._find_unused_elastic_ips()
             
+            # Compute zombies
+            zombies["idle_instances"] = self._find_idle_instances()
+            
+            # Network zombies
+            zombies["orphan_load_balancers"] = self._find_orphan_load_balancers()
+            zombies["underused_nat_gateways"] = self._find_underused_nat_gateways()
+            
+            # Database zombies
+            zombies["idle_rds_databases"] = self._find_idle_rds_databases()
+            
             # Calculate total waste
             total = Decimal("0")
-            for vol in zombies["unattached_volumes"]:
-                total += Decimal(str(vol.get("monthly_cost", 0)))
-            for snap in zombies["old_snapshots"]:
-                total += Decimal(str(snap.get("monthly_cost", 0)))
-            for eip in zombies["unused_elastic_ips"]:
-                total += Decimal(str(ESTIMATED_COSTS["elastic_ip"]))
+            for category in ["unattached_volumes", "old_snapshots", "unused_elastic_ips", 
+                           "idle_instances", "orphan_load_balancers", "idle_rds_databases",
+                           "underused_nat_gateways"]:
+                for item in zombies.get(category, []):
+                    total += Decimal(str(item.get("monthly_cost", 0)))
             
             zombies["total_monthly_waste"] = float(round(total, 2))
             
@@ -121,6 +142,9 @@ class ZombieDetector:
                 volumes=len(zombies["unattached_volumes"]),
                 snapshots=len(zombies["old_snapshots"]),
                 eips=len(zombies["unused_elastic_ips"]),
+                idle_ec2=len(zombies["idle_instances"]),
+                orphan_lbs=len(zombies["orphan_load_balancers"]),
+                idle_rds=len(zombies["idle_rds_databases"]),
                 waste=zombies["total_monthly_waste"],
             )
             
@@ -211,6 +235,243 @@ class ZombieDetector:
                     })
         except ClientError as e:
             logger.warning("eip_scan_error", error=str(e))
+        
+        return zombies
+    
+    def _find_idle_instances(self, cpu_threshold: float = 5.0, days: int = 7) -> List[Dict[str, Any]]:
+        """
+        Find EC2 instances with avg CPU < threshold over specified days.
+        
+        Args:
+            cpu_threshold: Maximum CPU % to be considered idle (default 5%)
+            days: Number of days to check (default 7)
+        """
+        zombies = []
+        
+        try:
+            # Get running instances
+            response = self.ec2.describe_instances(
+                Filters=[{"Name": "instance-state-name", "Values": ["running"]}]
+            )
+            
+            end_time = datetime.utcnow()
+            start_time = end_time - timedelta(days=days)
+            
+            for reservation in response.get("Reservations", []):
+                for instance in reservation.get("Instances", []):
+                    instance_id = instance["InstanceId"]
+                    instance_type = instance.get("InstanceType", "unknown")
+                    
+                    try:
+                        # Get CPU utilization metrics
+                        metrics = self.cloudwatch.get_metric_statistics(
+                            Namespace="AWS/EC2",
+                            MetricName="CPUUtilization",
+                            Dimensions=[{"Name": "InstanceId", "Value": instance_id}],
+                            StartTime=start_time,
+                            EndTime=end_time,
+                            Period=86400,  # 1 day
+                            Statistics=["Average"]
+                        )
+                        
+                        datapoints = metrics.get("Datapoints", [])
+                        if datapoints:
+                            avg_cpu = sum(d["Average"] for d in datapoints) / len(datapoints)
+                            if avg_cpu < cpu_threshold:
+                                # Estimate cost based on instance type
+                                cost_key = f"ec2_{instance_type.replace('.', '_')}"
+                                monthly_cost = ESTIMATED_COSTS.get(cost_key, ESTIMATED_COSTS["ec2_default"])
+                                
+                                zombies.append({
+                                    "resource_id": instance_id,
+                                    "resource_type": "EC2 Instance",
+                                    "instance_type": instance_type,
+                                    "avg_cpu_percent": round(avg_cpu, 2),
+                                    "monthly_cost": round(monthly_cost, 2),
+                                    "launch_time": instance.get("LaunchTime", "").isoformat() if instance.get("LaunchTime") else "",
+                                    "recommendation": "Stop or terminate if not needed",
+                                    "action": "stop_instance",
+                                    "supports_backup": True,
+                                })
+                    except ClientError:
+                        pass  # Skip instances where metrics aren't available
+                        
+        except ClientError as e:
+            logger.warning("idle_instance_scan_error", error=str(e))
+        
+        return zombies
+    
+    def _find_orphan_load_balancers(self) -> List[Dict[str, Any]]:
+        """Find ALBs/NLBs with no healthy targets."""
+        zombies = []
+        
+        try:
+            lbs = self.elb.describe_load_balancers()
+            
+            for lb in lbs.get("LoadBalancers", []):
+                lb_arn = lb["LoadBalancerArn"]
+                lb_name = lb["LoadBalancerName"]
+                lb_type = lb.get("Type", "application")
+                
+                try:
+                    # Get target groups for this LB
+                    target_groups = self.elb.describe_target_groups(
+                        LoadBalancerArn=lb_arn
+                    )
+                    
+                    has_healthy_targets = False
+                    for tg in target_groups.get("TargetGroups", []):
+                        health = self.elb.describe_target_health(
+                            TargetGroupArn=tg["TargetGroupArn"]
+                        )
+                        healthy = [t for t in health.get("TargetHealthDescriptions", [])
+                                  if t.get("TargetHealth", {}).get("State") == "healthy"]
+                        if healthy:
+                            has_healthy_targets = True
+                            break
+                    
+                    if not has_healthy_targets:
+                        zombies.append({
+                            "resource_id": lb_name,
+                            "resource_arn": lb_arn,
+                            "resource_type": "Load Balancer",
+                            "lb_type": lb_type,
+                            "monthly_cost": ESTIMATED_COSTS["elb"],
+                            "recommendation": "Delete if no longer needed",
+                            "action": "delete_load_balancer",
+                            "supports_backup": False,
+                        })
+                except ClientError:
+                    pass  # Skip LBs where target group info isn't available
+                    
+        except ClientError as e:
+            logger.warning("orphan_lb_scan_error", error=str(e))
+        
+        return zombies
+    
+    def _find_idle_rds_databases(self, connection_threshold: int = 1, days: int = 7) -> List[Dict[str, Any]]:
+        """
+        Find RDS instances with < threshold connections over specified days.
+        
+        Args:
+            connection_threshold: Max avg connections to be considered idle (default 1)
+            days: Number of days to check (default 7)
+        """
+        zombies = []
+        
+        try:
+            response = self.rds.describe_db_instances()
+            end_time = datetime.utcnow()
+            start_time = end_time - timedelta(days=days)
+            
+            for db in response.get("DBInstances", []):
+                db_id = db["DBInstanceIdentifier"]
+                db_class = db.get("DBInstanceClass", "unknown")
+                engine = db.get("Engine", "unknown")
+                
+                try:
+                    metrics = self.cloudwatch.get_metric_statistics(
+                        Namespace="AWS/RDS",
+                        MetricName="DatabaseConnections",
+                        Dimensions=[{"Name": "DBInstanceIdentifier", "Value": db_id}],
+                        StartTime=start_time,
+                        EndTime=end_time,
+                        Period=86400,
+                        Statistics=["Average"]
+                    )
+                    
+                    datapoints = metrics.get("Datapoints", [])
+                    if datapoints:
+                        avg_connections = sum(d["Average"] for d in datapoints) / len(datapoints)
+                        if avg_connections < connection_threshold:
+                            # Estimate monthly cost based on instance class
+                            # db.t3.micro ~ $12/mo, db.r5.large ~ $180/mo
+                            if "micro" in db_class:
+                                monthly_cost = 12.00
+                            elif "small" in db_class:
+                                monthly_cost = 25.00
+                            elif "medium" in db_class:
+                                monthly_cost = 50.00
+                            elif "large" in db_class:
+                                monthly_cost = 100.00
+                            elif "xlarge" in db_class:
+                                monthly_cost = 200.00
+                            else:
+                                monthly_cost = 75.00  # Default
+                            
+                            zombies.append({
+                                "resource_id": db_id,
+                                "resource_type": "RDS Database",
+                                "db_class": db_class,
+                                "engine": engine,
+                                "avg_connections": round(avg_connections, 2),
+                                "monthly_cost": round(monthly_cost, 2),
+                                "recommendation": "Stop or delete if not needed",
+                                "action": "stop_rds_instance",
+                                "supports_backup": True,
+                            })
+                except ClientError:
+                    pass  # Skip DBs where metrics aren't available
+                    
+        except ClientError as e:
+            logger.warning("idle_rds_scan_error", error=str(e))
+        
+        return zombies
+    
+    def _find_underused_nat_gateways(self, gb_threshold: float = 1.0, days: int = 30) -> List[Dict[str, Any]]:
+        """
+        Find NAT Gateways with < threshold GB data processed.
+        NAT Gateway costs $32.40/month base + data processing.
+        
+        Args:
+            gb_threshold: Max GB processed to be considered underused (default 1.0)
+            days: Number of days to check (default 30)
+        """
+        zombies = []
+        
+        try:
+            response = self.ec2.describe_nat_gateways(
+                Filters=[{"Name": "state", "Values": ["available"]}]
+            )
+            
+            end_time = datetime.utcnow()
+            start_time = end_time - timedelta(days=days)
+            
+            for nat in response.get("NatGateways", []):
+                nat_id = nat["NatGatewayId"]
+                vpc_id = nat.get("VpcId", "unknown")
+                
+                try:
+                    metrics = self.cloudwatch.get_metric_statistics(
+                        Namespace="AWS/NATGateway",
+                        MetricName="BytesOutToDestination",
+                        Dimensions=[{"Name": "NatGatewayId", "Value": nat_id}],
+                        StartTime=start_time,
+                        EndTime=end_time,
+                        Period=86400 * days,  # Sum over entire period
+                        Statistics=["Sum"]
+                    )
+                    
+                    datapoints = metrics.get("Datapoints", [])
+                    total_bytes = sum(d.get("Sum", 0) for d in datapoints)
+                    total_gb = total_bytes / (1024**3)
+                    
+                    if total_gb < gb_threshold:
+                        zombies.append({
+                            "resource_id": nat_id,
+                            "resource_type": "NAT Gateway",
+                            "vpc_id": vpc_id,
+                            "data_processed_gb": round(total_gb, 4),
+                            "monthly_cost": 32.40,  # Base cost
+                            "recommendation": "Consider VPC endpoints or smaller NAT",
+                            "action": "delete_nat_gateway",
+                            "supports_backup": False,
+                        })
+                except ClientError:
+                    pass  # Skip NATs where metrics aren't available
+                    
+        except ClientError as e:
+            logger.warning("nat_gateway_scan_error", error=str(e))
         
         return zombies
 

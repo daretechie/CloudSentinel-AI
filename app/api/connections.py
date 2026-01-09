@@ -189,6 +189,21 @@ Resources:
                   - ec2:DescribeSnapshots
                   - ec2:DescribeAddresses
                   - ec2:DescribeNetworkInterfaces
+                  - ec2:DescribeNatGateways
+                  - ec2:DescribeSecurityGroups
+                Resource: '*'
+              - Sid: ELBReadOnly
+                Effect: Allow
+                Action:
+                  - elasticloadbalancing:DescribeLoadBalancers
+                  - elasticloadbalancing:DescribeTargetGroups
+                  - elasticloadbalancing:DescribeTargetHealth
+                Resource: '*'
+              - Sid: RDSReadOnly
+                Effect: Allow
+                Action:
+                  - rds:DescribeDBInstances
+                  - rds:DescribeDBClusters
                 Resource: '*'
               - Sid: CloudWatchRead
                 Effect: Allow
@@ -239,7 +254,19 @@ resource "aws_iam_role_policy" "cloudsentinel_policy" {{
       {{
         Sid      = "EC2ReadOnly" 
         Effect   = "Allow"
-        Action   = ["ec2:DescribeInstances", "ec2:DescribeVolumes", "ec2:DescribeSnapshots", "ec2:DescribeAddresses", "ec2:DescribeNetworkInterfaces"]
+        Action   = ["ec2:DescribeInstances", "ec2:DescribeVolumes", "ec2:DescribeSnapshots", "ec2:DescribeAddresses", "ec2:DescribeNetworkInterfaces", "ec2:DescribeNatGateways", "ec2:DescribeSecurityGroups"]
+        Resource = "*"
+      }},
+      {{
+        Sid      = "ELBReadOnly"
+        Effect   = "Allow"
+        Action   = ["elasticloadbalancing:DescribeLoadBalancers", "elasticloadbalancing:DescribeTargetGroups", "elasticloadbalancing:DescribeTargetHealth"]
+        Resource = "*"
+      }},
+      {{
+        Sid      = "RDSReadOnly"
+        Effect   = "Allow"
+        Action   = ["rds:DescribeDBInstances", "rds:DescribeDBClusters"]
         Resource = "*"
       }},
       {{
@@ -270,10 +297,13 @@ output "role_arn" {{
             "ce:GetCostAndUsage - Read your cost data",
             "ce:GetCostForecast - View cost predictions",
             "ce:GetTags - Read cost allocation tags",
-            "ec2:DescribeInstances - Detect unused EC2 instances",
+            "ec2:DescribeInstances - Detect idle EC2 instances",
             "ec2:DescribeVolumes - Detect unattached EBS volumes",
             "ec2:DescribeSnapshots - Detect old snapshots",
             "ec2:DescribeAddresses - Detect unused Elastic IPs",
+            "ec2:DescribeNatGateways - Detect underused NAT gateways",
+            "elasticloadbalancing:Describe* - Detect orphan load balancers",
+            "rds:DescribeDBInstances - Detect idle RDS databases",
             "cloudwatch:GetMetricData - Monitor resource utilization",
         ]
     )
