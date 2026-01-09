@@ -149,14 +149,14 @@ async def get_setup_templates():
     
     # CloudFormation YAML template with external_id embedded
     cloudformation_yaml = f'''AWSTemplateFormatVersion: '2010-09-09'
-Description: CloudSentinel AI - Read-Only IAM Role for Cost Analysis
+Description: CloudSentinel AI - Read-Only IAM Role for Cost Analysis and Resource Optimization
 
 Resources:
   CloudSentinelRole:
     Type: AWS::IAM::Role
     Properties:
       RoleName: CloudSentinelReadOnly
-      Description: Allows CloudSentinel AI to read cost data
+      Description: Allows CloudSentinel AI to read cost data and detect zombie resources
       MaxSessionDuration: 3600
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
@@ -169,7 +169,7 @@ Resources:
               StringEquals:
                 sts:ExternalId: '{external_id}'
       Policies:
-        - PolicyName: CloudSentinelCostExplorerReadOnly
+        - PolicyName: CloudSentinelReadOnlyPolicy
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -186,6 +186,15 @@ Resources:
                 Action:
                   - ec2:DescribeInstances
                   - ec2:DescribeVolumes
+                  - ec2:DescribeSnapshots
+                  - ec2:DescribeAddresses
+                  - ec2:DescribeNetworkInterfaces
+                Resource: '*'
+              - Sid: CloudWatchRead
+                Effect: Allow
+                Action:
+                  - cloudwatch:GetMetricData
+                  - cloudwatch:GetMetricStatistics
                 Resource: '*'
 
 Outputs:
@@ -194,12 +203,12 @@ Outputs:
     Value: !GetAtt CloudSentinelRole.Arn'''
 
     # Terraform HCL template
-    terraform_hcl = f'''# CloudSentinel AI - IAM Role for Cost Analysis
+    terraform_hcl = f'''# CloudSentinel AI - IAM Role for Cost Analysis and Resource Optimization
 # Apply with: terraform apply
 
 resource "aws_iam_role" "cloudsentinel" {{
   name        = "CloudSentinelReadOnly"
-  description = "Allows CloudSentinel AI to read cost data"
+  description = "Allows CloudSentinel AI to read cost data and detect zombie resources"
   
   assume_role_policy = jsonencode({{
     Version = "2012-10-17"
@@ -214,8 +223,8 @@ resource "aws_iam_role" "cloudsentinel" {{
 
 data "aws_caller_identity" "current" {{}}
 
-resource "aws_iam_role_policy" "cost_explorer" {{
-  name = "CloudSentinelCostExplorerReadOnly"
+resource "aws_iam_role_policy" "cloudsentinel_policy" {{
+  name = "CloudSentinelReadOnlyPolicy"
   role = aws_iam_role.cloudsentinel.id
   
   policy = jsonencode({{
@@ -224,13 +233,19 @@ resource "aws_iam_role_policy" "cost_explorer" {{
       {{
         Sid      = "CostExplorerRead"
         Effect   = "Allow"
-        Action   = ["ce:GetCostAndUsage", "ce:GetCostForecast", "ce:GetTags"]
+        Action   = ["ce:GetCostAndUsage", "ce:GetCostForecast", "ce:GetDimensionValues", "ce:GetTags"]
         Resource = "*"
       }},
       {{
         Sid      = "EC2ReadOnly" 
         Effect   = "Allow"
-        Action   = ["ec2:DescribeInstances", "ec2:DescribeVolumes"]
+        Action   = ["ec2:DescribeInstances", "ec2:DescribeVolumes", "ec2:DescribeSnapshots", "ec2:DescribeAddresses", "ec2:DescribeNetworkInterfaces"]
+        Resource = "*"
+      }},
+      {{
+        Sid      = "CloudWatchRead"
+        Effect   = "Allow"
+        Action   = ["cloudwatch:GetMetricData", "cloudwatch:GetMetricStatistics"]
         Resource = "*"
       }}
     ]
@@ -257,6 +272,9 @@ output "role_arn" {{
             "ce:GetTags - Read cost allocation tags",
             "ec2:DescribeInstances - Detect unused EC2 instances",
             "ec2:DescribeVolumes - Detect unattached EBS volumes",
+            "ec2:DescribeSnapshots - Detect old snapshots",
+            "ec2:DescribeAddresses - Detect unused Elastic IPs",
+            "cloudwatch:GetMetricData - Monitor resource utilization",
         ]
     )
 
