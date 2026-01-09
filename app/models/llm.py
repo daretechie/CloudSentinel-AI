@@ -90,3 +90,56 @@ class LLMUsage(Base):
     def __repr__(self):
         """String representation for debugging."""
         return f"<LLMUsage {self.model} ${self.cost_usd:.6f}>"
+
+
+class LLMBudget(Base):
+    """
+    Tracks monthly LLM usage budget per tenant.
+    
+    Enables:
+    - Soft alerts: Notify when usage hits threshold (e.g., 80%)
+    - Hard limits: Optionally block requests when budget exceeded
+    - Cost control: Prevent surprise AI bills
+    
+    Example:
+        budget = LLMBudget(
+            tenant_id=tenant.id,
+            monthly_limit_usd=Decimal("10.00"),
+            alert_threshold_percent=80,
+            hard_limit=False,  # Alert only, don't block
+        )
+    """
+    
+    __tablename__ = "llm_budgets"
+    
+    # Primary Key
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    
+    # Foreign Key: One budget per tenant
+    tenant_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("tenants.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,  # One budget per tenant
+        index=True,
+    )
+    
+    # Monthly limit in USD (e.g., $10.00)
+    # Numeric(10,2): Up to $99,999,999.99
+    monthly_limit_usd = Column(Numeric(10, 2), nullable=False, default=10.00)
+    
+    # Alert threshold percentage (e.g., 80 = alert at 80% usage)
+    alert_threshold_percent = Column(Integer, nullable=False, default=80)
+    
+    # Hard limit: If True, block LLM requests when budget exceeded
+    # If False, just alert but allow requests to continue
+    hard_limit = Column(String(10), nullable=False, default="false")
+    
+    # Track if alert has been sent this month (avoid spam)
+    alert_sent_at = Column(String(50), nullable=True)
+    
+    # Relationship
+    tenant = relationship("Tenant", back_populates="llm_budget")
+    
+    def __repr__(self):
+        return f"<LLMBudget ${self.monthly_limit_usd}/month>"

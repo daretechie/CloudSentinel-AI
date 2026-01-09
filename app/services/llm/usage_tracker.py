@@ -133,4 +133,88 @@ class UsageTracker:
             cost_usd=float(cost),
         )
         
+        # Check budget and alert if threshold crossed
+        await self._check_budget_and_alert(tenant_id)
+        
         return usage
+    
+    async def get_monthly_usage(self, tenant_id: UUID) -> Decimal:
+        """
+        Get total LLM cost for the current month for a tenant.
+        
+        Returns:
+            Total cost in USD for current month
+        """
+        from datetime import datetime
+        from sqlalchemy import select, func, extract
+        
+        now = datetime.utcnow()
+        
+        result = await self.db.execute(
+            select(func.sum(LLMUsage.cost_usd))
+            .where(LLMUsage.tenant_id == tenant_id)
+            .where(extract('year', LLMUsage.created_at) == now.year)
+            .where(extract('month', LLMUsage.created_at) == now.month)
+        )
+        
+        total = result.scalar() or Decimal("0")
+        return Decimal(str(total))
+    
+    async def _check_budget_and_alert(self, tenant_id: UUID) -> None:
+        """
+        Check if tenant has exceeded budget threshold and send Slack alert.
+        """
+        from sqlalchemy import select
+        from app.models.llm import LLMBudget
+        from app.core.config import get_settings
+        from datetime import datetime
+        
+        # Get tenant's budget settings
+        result = await self.db.execute(
+            select(LLMBudget).where(LLMBudget.tenant_id == tenant_id)
+        )
+        budget = result.scalar_one_or_none()
+        
+        if not budget:
+            return  # No budget set, skip
+        
+        # Get current month's usage
+        current_usage = await self.get_monthly_usage(tenant_id)
+        limit = Decimal(str(budget.monthly_limit_usd))
+        threshold_percent = budget.alert_threshold_percent
+        
+        # Calculate percentage used
+        if limit > 0:
+            usage_percent = (current_usage / limit) * 100
+        else:
+            usage_percent = Decimal("0")
+        
+        # Check if threshold crossed and alert not already sent this month
+        now = datetime.utcnow()
+        current_month = f"{now.year}-{now.month:02d}"
+        
+        if usage_percent >= threshold_percent and budget.alert_sent_at != current_month:
+            # Send Slack alert
+            settings = get_settings()
+            if settings.SLACK_BOT_TOKEN and settings.SLACK_CHANNEL_ID:
+                from app.services.notifications import SlackService
+                slack = SlackService(settings.SLACK_BOT_TOKEN, settings.SLACK_CHANNEL_ID)
+                
+                severity = "critical" if usage_percent >= 100 else "warning"
+                await slack.send_alert(
+                    title="LLM Budget Alert",
+                    message=f"*Usage:* ${current_usage:.2f} / ${limit:.2f} ({usage_percent:.0f}%)\n*Threshold:* {threshold_percent}%\n*Status:* {'EXCEEDED' if usage_percent >= 100 else 'Warning'}",
+                    severity=severity,
+                )
+                
+                logger.warning(
+                    "llm_budget_threshold_crossed",
+                    tenant_id=str(tenant_id),
+                    usage_usd=float(current_usage),
+                    limit_usd=float(limit),
+                    usage_percent=float(usage_percent),
+                )
+            
+            # Update alert_sent_at to avoid duplicate alerts
+            budget.alert_sent_at = current_month
+            await self.db.commit()
