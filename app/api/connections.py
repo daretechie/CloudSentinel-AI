@@ -122,37 +122,141 @@ def verify_aws_connection(role_arn: str, external_id: str) -> tuple[bool, str | 
 # API Endpoints
 # ============================================================
 
-@router.post("/setup", response_model=AWSConnectionSetup)
-async def get_setup_info():
+class TemplateResponse(BaseModel):
+    """Response containing template content for IAM role setup."""
+    external_id: str
+    cloudformation_yaml: str
+    terraform_hcl: str
+    instructions: str
+    permissions_summary: list[str]
+
+
+@router.post("/setup", response_model=TemplateResponse)
+async def get_setup_templates():
     """
-    Get the external ID and CloudFormation URL for setting up a new connection.
+    Get CloudFormation and Terraform templates with a unique External ID.
     
-    This is called BEFORE the user creates the IAM role.
-    The external_id must be included in the role's trust policy.
+    Returns templates that users can copy/paste directly into AWS Console
+    or their IaC repository. No external URL dependencies.
+    
+    Three Paths UX:
+    - Path A: Copy YAML → Create Stack manually
+    - Path B: Copy Terraform → Add to IaC repo
+    - Path C: Download file → Upload to AWS
     """
     external_id = AWSConnection.generate_external_id()
     
-    # Build CloudFormation quick-create URL
-    settings = get_settings()
-    template_url = "https://raw.githubusercontent.com/daretechie/CloudSentinel-AI/main/cloudformation/cloudsentinel-role.yaml"
-    
-    cf_url = (
-        f"https://console.aws.amazon.com/cloudformation/home#/stacks/create/review"
-        f"?templateURL={template_url}"
-        f"&stackName=CloudSentinelRole"
-        f"&param_ExternalId={external_id}"
-    )
-    
-    return AWSConnectionSetup(
+    # CloudFormation YAML template with external_id embedded
+    cloudformation_yaml = f'''AWSTemplateFormatVersion: '2010-09-09'
+Description: CloudSentinel AI - Read-Only IAM Role for Cost Analysis
+
+Resources:
+  CloudSentinelRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: CloudSentinelReadOnly
+      Description: Allows CloudSentinel AI to read cost data
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${{AWS::AccountId}}:root'
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                sts:ExternalId: '{external_id}'
+      Policies:
+        - PolicyName: CloudSentinelCostExplorerReadOnly
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: CostExplorerRead
+                Effect: Allow
+                Action:
+                  - ce:GetCostAndUsage
+                  - ce:GetCostForecast
+                  - ce:GetDimensionValues
+                  - ce:GetTags
+                Resource: '*'
+              - Sid: EC2ReadOnly
+                Effect: Allow
+                Action:
+                  - ec2:DescribeInstances
+                  - ec2:DescribeVolumes
+                Resource: '*'
+
+Outputs:
+  RoleArn:
+    Description: Copy this ARN to CloudSentinel
+    Value: !GetAtt CloudSentinelRole.Arn'''
+
+    # Terraform HCL template
+    terraform_hcl = f'''# CloudSentinel AI - IAM Role for Cost Analysis
+# Apply with: terraform apply
+
+resource "aws_iam_role" "cloudsentinel" {{
+  name        = "CloudSentinelReadOnly"
+  description = "Allows CloudSentinel AI to read cost data"
+  
+  assume_role_policy = jsonencode({{
+    Version = "2012-10-17"
+    Statement = [{{
+      Effect    = "Allow"
+      Principal = {{ AWS = "arn:aws:iam::${{data.aws_caller_identity.current.account_id}}:root" }}
+      Action    = "sts:AssumeRole"
+      Condition = {{ StringEquals = {{ "sts:ExternalId" = "{external_id}" }} }}
+    }}]
+  }})
+}}
+
+data "aws_caller_identity" "current" {{}}
+
+resource "aws_iam_role_policy" "cost_explorer" {{
+  name = "CloudSentinelCostExplorerReadOnly"
+  role = aws_iam_role.cloudsentinel.id
+  
+  policy = jsonencode({{
+    Version = "2012-10-17"
+    Statement = [
+      {{
+        Sid      = "CostExplorerRead"
+        Effect   = "Allow"
+        Action   = ["ce:GetCostAndUsage", "ce:GetCostForecast", "ce:GetTags"]
+        Resource = "*"
+      }},
+      {{
+        Sid      = "EC2ReadOnly" 
+        Effect   = "Allow"
+        Action   = ["ec2:DescribeInstances", "ec2:DescribeVolumes"]
+        Resource = "*"
+      }}
+    ]
+  }})
+}}
+
+output "role_arn" {{
+  value = aws_iam_role.cloudsentinel.arn
+}}'''
+
+    return TemplateResponse(
         external_id=external_id,
-        cloudformation_url=cf_url,
+        cloudformation_yaml=cloudformation_yaml,
+        terraform_hcl=terraform_hcl,
         instructions=(
-            "1. Click the CloudFormation URL to deploy the IAM role\n"
-            "2. Confirm the stack name and external ID\n"
-            "3. Check the IAM capabilities box and create the stack\n"
-            "4. Copy the RoleArn from the stack outputs\n"
-            "5. Come back here and register the connection"
-        )
+            "1. Copy the CloudFormation or Terraform template above\n"
+            "2. Deploy it in your AWS account\n"
+            "3. Copy the Role ARN from the outputs\n"
+            "4. Paste the Role ARN below to verify connection"
+        ),
+        permissions_summary=[
+            "ce:GetCostAndUsage - Read your cost data",
+            "ce:GetCostForecast - View cost predictions",
+            "ce:GetTags - Read cost allocation tags",
+            "ec2:DescribeInstances - Detect unused EC2 instances",
+            "ec2:DescribeVolumes - Detect unattached EBS volumes",
+        ]
     )
 
 
