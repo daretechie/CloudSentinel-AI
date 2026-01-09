@@ -18,6 +18,7 @@ from app.api.connections import router as connections_router
 from app.api.settings import router as settings_router
 from app.api.leaderboards import router as leaderboards_router
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.services.carbon.calculator import CarbonCalculator
 from app.services.zombies.detector import ZombieDetector, RemediationService
