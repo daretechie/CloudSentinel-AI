@@ -1,0 +1,100 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: |
+  CloudSentinel AI - Read-Only IAM Role for Cost Analysis
+  
+  This template creates an IAM role that allows CloudSentinel to read
+  your AWS cost data. The role uses cross-account AssumeRole with
+  an External ID for security.
+  
+  Permissions granted:
+  - Cost Explorer read access (ce:GetCostAndUsage, ce:GetTags)
+  - No write access, no resource access
+
+Parameters:
+  ExternalId:
+    Type: String
+    Description: |
+      The External ID provided by CloudSentinel. 
+      This is required for security and prevents unauthorized access.
+    AllowedPattern: 'cs-[a-f0-9]{32}'
+    ConstraintDescription: External ID must be in format 'cs-' followed by 32 hex characters
+
+Resources:
+  CloudSentinelRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: CloudSentinelReadOnly
+      Description: Allows CloudSentinel AI to read cost data for analysis
+      MaxSessionDuration: 3600  # 1 hour (minimum for security)
+      
+      # Trust policy: Who can assume this role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              # CloudSentinel's AWS Account
+              # In production, replace with your actual AWS account ID
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                # External ID prevents confused deputy attacks
+                sts:ExternalId: !Ref ExternalId
+      
+      # Inline policy: What this role can do
+      Policies:
+        - PolicyName: CloudSentinelCostExplorerReadOnly
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # Cost Explorer Read Access
+              - Sid: CostExplorerRead
+                Effect: Allow
+                Action:
+                  - ce:GetCostAndUsage
+                  - ce:GetCostForecast
+                  - ce:GetDimensionValues
+                  - ce:GetTags
+                  - ce:GetReservationCoverage
+                  - ce:GetReservationUtilization
+                  - ce:GetSavingsPlansUtilization
+                  - ce:GetSavingsPlansCoverage
+                Resource: '*'
+              
+              # (Optional) Read EC2 instances for zombie detection
+              - Sid: EC2ReadOnly
+                Effect: Allow
+                Action:
+                  - ec2:DescribeInstances
+                  - ec2:DescribeVolumes
+                  - ec2:DescribeSnapshots
+                Resource: '*'
+              
+              # (Optional) Read RDS for zombie detection
+              - Sid: RDSReadOnly
+                Effect: Allow
+                Action:
+                  - rds:DescribeDBInstances
+                  - rds:DescribeDBClusters
+                Resource: '*'
+
+      Tags:
+        - Key: Purpose
+          Value: CloudSentinel-CostAnalysis
+        - Key: ManagedBy
+          Value: CloudSentinel
+
+Outputs:
+  RoleArn:
+    Description: The ARN of the CloudSentinel role. Copy this to CloudSentinel dashboard.
+    Value: !GetAtt CloudSentinelRole.Arn
+    Export:
+      Name: CloudSentinelRoleArn
+  
+  Instructions:
+    Description: Next steps
+    Value: |
+      1. Copy the RoleArn above
+      2. Go to CloudSentinel dashboard -> Settings -> AWS Connection
+      3. Paste the Role ARN and click Verify
