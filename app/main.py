@@ -109,19 +109,40 @@ async def health_check():
 async def get_costs(
   start_date: date,
   end_date: date,
-  adapter: Annotated[CostAdapter, Depends(get_cost_adapter)],
-  user: Annotated[CurrentUser, Depends(get_current_user)]
+  user: Annotated[CurrentUser, Depends(get_current_user)],
+  db: Session = Depends(get_db)
 ):
   """
   Retrieves daily cloud costs for a specified date range.
 
-  This endpoint uses the `CostAdapter` dependency (Strategy Pattern) to fetch data from the 
-  configured cloud provider (currently AWS).
+  Uses the user's AWS connection from the dashboard (via STS AssumeRole)
+  to fetch cost data from their AWS account.
 
   Returns:
       Dict with total_cost and breakdown of daily costs.
   """
-  logger.info("fetching_costs", start=start_date, end=end_date, user_id=str(user.id))
+  from app.models.aws_connection import AWSConnection
+  from app.services.adapters.aws_multitenant import MultiTenantAWSAdapter
+  
+  # Get user's AWS connection from database
+  connection = db.query(AWSConnection).filter(
+    AWSConnection.tenant_id == user.tenant_id
+  ).first()
+  
+  if not connection:
+    logger.warning("no_aws_connection", tenant_id=str(user.tenant_id))
+    return {
+      "total_cost": 0,
+      "breakdown": [],
+      "start_date": start_date.isoformat(),
+      "end_date": end_date.isoformat(),
+      "error": "No AWS connection found. Please set up your AWS connection in the dashboard."
+    }
+  
+  # Use MultiTenantAWSAdapter with user's connection (STS AssumeRole)
+  adapter = MultiTenantAWSAdapter(connection)
+  
+  logger.info("fetching_costs", start=start_date, end=end_date, user_id=str(user.id), aws_account=connection.aws_account_id)
   raw_costs = await adapter.get_daily_costs(start_date, end_date)
   
   # Calculate total cost from AWS response
@@ -142,7 +163,8 @@ async def get_costs(
     "total_cost": max(total_cost, 0),  # Avoid negative values from refunds
     "breakdown": breakdown,
     "start_date": start_date.isoformat(),
-    "end_date": end_date.isoformat()
+    "end_date": end_date.isoformat(),
+    "aws_account": connection.aws_account_id
   }
 
 # Dependency Factory for LLM
@@ -158,15 +180,27 @@ def get_analyzer(provider: str = Depends(get_llm_provider)) -> FinOpsAnalyzer:
 async def analyze_costs(
     start_date: date,
     end_date: date,
-    adapter: Annotated[CostAdapter, Depends(get_cost_adapter)],
     analyzer: Annotated[FinOpsAnalyzer, Depends(get_analyzer)],
     user: Annotated[CurrentUser, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),              # <--- Add this
-    provider: str = Depends(get_llm_provider),       # <--- Add this
+    db: Session = Depends(get_db),
+    provider: str = Depends(get_llm_provider),
 ):
     """
     Analyzes cloud costs using GenAI to identify anomalies and savings.
     """
+    from app.models.aws_connection import AWSConnection
+    from app.services.adapters.aws_multitenant import MultiTenantAWSAdapter
+    
+    # Get user's AWS connection from database
+    connection = db.query(AWSConnection).filter(
+        AWSConnection.tenant_id == user.tenant_id
+    ).first()
+    
+    if not connection:
+        return {"analysis": "No AWS connection found. Please set up your AWS connection in the dashboard."}
+    
+    adapter = MultiTenantAWSAdapter(connection)
+    
     logger.info("starting_sentinel_analysis", start=start_date, end=end_date)
     
     # Step 1: Get cost data
@@ -175,9 +209,9 @@ async def analyze_costs(
     # Step 2: Analyze with AI (and track usage)
     insights = await analyzer.analyze(
         cost_data,
-        tenant_id=user.tenant_id,  # <--- Pass context
-        db=db,                     # <--- Pass context
-        provider=provider,         # <--- Record provider
+        tenant_id=user.tenant_id,
+        db=db,
+        provider=provider,
     )
     
     return {"analysis": insights}
@@ -247,8 +281,8 @@ async def get_llm_usage(
 async def get_carbon_footprint(
     start_date: date,
     end_date: date,
-    adapter: Annotated[CostAdapter, Depends(get_cost_adapter)],
     user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Session = Depends(get_db),
     region: str = Query(default="us-east-1", description="AWS region for carbon intensity"),
 ):
     """
@@ -256,6 +290,19 @@ async def get_carbon_footprint(
     
     Returns CO₂ emissions estimate based on cost data and region.
     """
+    from app.models.aws_connection import AWSConnection
+    from app.services.adapters.aws_multitenant import MultiTenantAWSAdapter
+    
+    # Get user's AWS connection from database
+    connection = db.query(AWSConnection).filter(
+        AWSConnection.tenant_id == user.tenant_id
+    ).first()
+    
+    if not connection:
+        return {"total_co2_kg": 0, "equivalencies": {}, "error": "No AWS connection found"}
+    
+    adapter = MultiTenantAWSAdapter(connection)
+    
     logger.info("calculating_carbon", start=start_date, end=end_date, region=region)
     
     # Get cost data
@@ -270,6 +317,7 @@ async def get_carbon_footprint(
 @app.get("/zombies")
 async def scan_zombies(
     user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Session = Depends(get_db),
     region: str = Query(default="us-east-1"),
 ):
     """
@@ -278,8 +326,38 @@ async def scan_zombies(
     Returns unattached volumes, old snapshots, unused Elastic IPs.
     Sends Slack alert if zombies are detected (based on user settings).
     """
-    logger.info("scanning_zombies", region=region)
-    detector = ZombieDetector(region=region)
+    from app.models.aws_connection import AWSConnection
+    
+    # Get user's AWS connection from database
+    connection = db.query(AWSConnection).filter(
+        AWSConnection.tenant_id == user.tenant_id
+    ).first()
+    
+    if not connection:
+        return {
+            "unattached_volumes": [],
+            "old_snapshots": [],
+            "unused_elastic_ips": [],
+            "error": "No AWS connection found. Please set up your AWS connection in the dashboard."
+        }
+    
+    # Get STS credentials for user's AWS account
+    import boto3
+    sts_client = boto3.client("sts")
+    try:
+        response = sts_client.assume_role(
+            RoleArn=connection.role_arn,
+            RoleSessionName="CloudSentinelZombieScan",
+            ExternalId=connection.external_id,
+            DurationSeconds=3600,
+        )
+        credentials = response["Credentials"]
+    except Exception as e:
+        logger.error("sts_assume_role_failed", error=str(e))
+        return {"error": f"Failed to assume AWS role: {str(e)}"}
+    
+    logger.info("scanning_zombies", region=region, aws_account=connection.aws_account_id)
+    detector = ZombieDetector(region=region, credentials=credentials)
     zombies = await detector.scan_all()
     
     # Count total zombies found

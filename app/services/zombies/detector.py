@@ -46,13 +46,42 @@ class ZombieDetector:
     Usage:
         detector = ZombieDetector()
         zombies = await detector.scan_all()
+        
+    For multi-tenant (uses STS credentials):
+        detector = ZombieDetector(region=region, credentials=creds)
     """
     
-    def __init__(self, region: str = "us-east-1"):
+    def __init__(self, region: str = "us-east-1", credentials: Dict[str, str] = None):
         self.region = region
-        self.ec2 = boto3.client("ec2", region_name=region)
-        self.cloudwatch = boto3.client("cloudwatch", region_name=region)
-        self.elb = boto3.client("elbv2", region_name=region)
+        
+        # Use provided credentials (from STS AssumeRole) or default
+        if credentials:
+            self.ec2 = boto3.client(
+                "ec2", 
+                region_name=region,
+                aws_access_key_id=credentials["AccessKeyId"],
+                aws_secret_access_key=credentials["SecretAccessKey"],
+                aws_session_token=credentials["SessionToken"],
+            )
+            self.cloudwatch = boto3.client(
+                "cloudwatch", 
+                region_name=region,
+                aws_access_key_id=credentials["AccessKeyId"],
+                aws_secret_access_key=credentials["SecretAccessKey"],
+                aws_session_token=credentials["SessionToken"],
+            )
+            self.elb = boto3.client(
+                "elbv2", 
+                region_name=region,
+                aws_access_key_id=credentials["AccessKeyId"],
+                aws_secret_access_key=credentials["SecretAccessKey"],
+                aws_session_token=credentials["SessionToken"],
+            )
+        else:
+            # Default to environment credentials
+            self.ec2 = boto3.client("ec2", region_name=region)
+            self.cloudwatch = boto3.client("cloudwatch", region_name=region)
+            self.elb = boto3.client("elbv2", region_name=region)
     
     async def scan_all(self) -> Dict[str, Any]:
         """
