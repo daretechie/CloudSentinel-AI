@@ -8,7 +8,7 @@
 -->
 
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
+  import { createEventDispatcher, onMount } from 'svelte';
   
   const dispatch = createEventDispatcher<{
     dateChange: { startDate: string; endDate: string };
@@ -19,6 +19,7 @@
   let showCustom = false;
   let customStartDate = '';
   let customEndDate = '';
+  let initialized = false;
   
   // Preset options
   const presets = [
@@ -55,6 +56,11 @@
         customEndDate = dates.endDate;
       }
       value = 'custom';
+      // Dispatch current custom dates
+      dispatch('dateChange', {
+        startDate: customStartDate,
+        endDate: customEndDate,
+      });
     }
   }
   
@@ -67,11 +73,14 @@
     }
   }
   
-  // Initialize with default dates
-  $: if (value !== 'custom') {
-    const dates = getDatesFromPreset(value);
-    dispatch('dateChange', dates);
-  }
+  // Initialize with default dates on mount
+  onMount(() => {
+    if (!initialized) {
+      const dates = getDatesFromPreset(value);
+      dispatch('dateChange', dates);
+      initialized = true;
+    }
+  });
 </script>
 
 <div class="date-range-picker">
