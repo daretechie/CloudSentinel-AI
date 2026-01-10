@@ -1,5 +1,5 @@
 [project]
-name = "cloudsentinel-ai"
+name = "cloudsentinel"
 version = "0.1.0"
 description = "The Autonomous FinOps + GreenOps Guardian for Startups"
 authors = [

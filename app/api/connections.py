@@ -149,14 +149,14 @@ async def get_setup_templates():
     
     # CloudFormation YAML template with external_id embedded
     cloudformation_yaml = f'''AWSTemplateFormatVersion: '2010-09-09'
-Description: CloudSentinel AI - Read-Only IAM Role for Cost Analysis and Resource Optimization
+Description: CloudSentinel - Read-Only IAM Role for Cost Analysis and Resource Optimization
 
 Resources:
   CloudSentinelRole:
     Type: AWS::IAM::Role
     Properties:
       RoleName: CloudSentinelReadOnly
-      Description: Allows CloudSentinel AI to read cost data and detect zombie resources
+      Description: Allows CloudSentinel to read cost data and detect zombie resources
       MaxSessionDuration: 3600
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
@@ -218,12 +218,12 @@ Outputs:
     Value: !GetAtt CloudSentinelRole.Arn'''
 
     # Terraform HCL template
-    terraform_hcl = f'''# CloudSentinel AI - IAM Role for Cost Analysis and Resource Optimization
+    terraform_hcl = f'''# CloudSentinel - IAM Role for Cost Analysis and Resource Optimization
 # Apply with: terraform apply
 
 resource "aws_iam_role" "cloudsentinel" {{
   name        = "CloudSentinelReadOnly"
-  description = "Allows CloudSentinel AI to read cost data and detect zombie resources"
+  description = "Allows CloudSentinel to read cost data and detect zombie resources"
   
   assume_role_policy = jsonencode({{
     Version = "2012-10-17"

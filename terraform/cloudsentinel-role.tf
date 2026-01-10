@@ -1,4 +1,4 @@
-# CloudSentinel AI - Read-Only IAM Role for Cost Analysis
+# CloudSentinel - Read-Only IAM Role for Cost Analysis
 #
 # This Terraform module creates an IAM role that allows CloudSentinel to read
 # your AWS cost data. The role uses cross-account AssumeRole with
@@ -31,7 +31,7 @@ variable "cloudsentinel_account_id" {
 # IAM Role for CloudSentinel
 resource "aws_iam_role" "cloudsentinel" {
   name               = "CloudSentinelReadOnly"
-  description        = "Allows CloudSentinel AI to read cost data for analysis"
+  description        = "Allows CloudSentinel to read cost data for analysis"
   max_session_duration = 3600  # 1 hour
 
   assume_role_policy = jsonencode({

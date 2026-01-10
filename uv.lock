@@ -225,7 +225,7 @@ wheels = [
 ]
 
 [[package]]
-name = "cloudsentinel-ai"
+name = "cloudsentinel"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [

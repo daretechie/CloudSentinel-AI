@@ -35,6 +35,11 @@
     alert_on_zombie_detected: true,
   };
   
+  // AWS Connection state
+  let awsConnection: any = null;
+  let loadingAWS = true;
+  let disconnecting = false;
+  
   async function getHeaders() {
     const { data: { session } } = await supabase.auth.getSession();
     return {
@@ -110,11 +115,65 @@
     }
   }
   
+  async function loadAWSConnection() {
+    try {
+      const headers = await getHeaders();
+      const res = await fetch(`${PUBLIC_API_URL}/connections/aws`, { headers });
+      
+      if (res.ok) {
+        const connections = await res.json();
+        awsConnection = connections.length > 0 ? connections[0] : null;
+      }
+    } catch (e: any) {
+      console.error('Failed to load AWS connection:', e);
+    } finally {
+      loadingAWS = false;
+    }
+  }
+  
+  async function disconnectAWS() {
+    if (!awsConnection) return;
+    
+    const confirmed = confirm(
+      'Are you sure you want to disconnect your AWS account?\n\n' +
+      'This will delete the connection from CloudSentinel. ' +
+      'You will need to go through onboarding again to reconnect.'
+    );
+    
+    if (!confirmed) return;
+    
+    disconnecting = true;
+    error = '';
+    
+    try {
+      const headers = await getHeaders();
+      const res = await fetch(`${PUBLIC_API_URL}/connections/aws/${awsConnection.id}`, {
+        method: 'DELETE',
+        headers,
+      });
+      
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.detail || 'Failed to disconnect AWS');
+      }
+      
+      awsConnection = null;
+      success = 'AWS account disconnected successfully! You can now re-onboard with updated permissions.';
+      setTimeout(() => success = '', 5000);
+    } catch (e: any) {
+      error = e.message;
+    } finally {
+      disconnecting = false;
+    }
+  }
+  
   onMount(() => {
     if (data.user) {
       loadSettings();
+      loadAWSConnection();
     } else {
       loading = false;
+      loadingAWS = false;
     }
   });
 </script>
@@ -152,6 +211,51 @@
         <p class="text-success-400">{success}</p>
       </div>
     {/if}
+    
+    <!-- AWS Connection -->
+    <div class="card stagger-enter">
+      <h2 class="text-lg font-semibold mb-5 flex items-center gap-2">
+        <span>☁️</span> AWS Connection
+      </h2>
+      
+      {#if loadingAWS}
+        <div class="skeleton h-4 w-48"></div>
+      {:else if awsConnection}
+        <div class="space-y-4">
+          <div class="flex items-center gap-3">
+            <span class="connection-status connected"></span>
+            <span class="text-success-400 font-medium">Connected</span>
+          </div>
+          
+          <div class="text-sm text-ink-400 space-y-1">
+            <p><strong>Account:</strong> {awsConnection.aws_account_id}</p>
+            <p><strong>Region:</strong> {awsConnection.region}</p>
+            <p><strong>Role:</strong> {awsConnection.role_arn?.split('/').pop() || 'CloudSentinelReadOnly'}</p>
+            <p><strong>Status:</strong> {awsConnection.status}</p>
+          </div>
+          
+          <div class="pt-4 border-t border-ink-700">
+            <button 
+              class="btn btn-danger" 
+              on:click={disconnectAWS}
+              disabled={disconnecting}
+            >
+              {disconnecting ? '⏳ Disconnecting...' : '🔌 Disconnect AWS Account'}
+            </button>
+            <p class="text-xs text-ink-500 mt-2">
+              Disconnecting will allow you to re-onboard with updated permissions.
+            </p>
+          </div>
+        </div>
+      {:else}
+        <div class="space-y-3">
+          <p class="text-ink-400">No AWS account connected.</p>
+          <a href="/onboarding" class="btn btn-primary inline-block">
+            ➕ Connect AWS Account
+          </a>
+        </div>
+      {/if}
+    </div>
     
     <!-- Slack Settings -->
     <div class="card stagger-enter">
@@ -357,5 +461,31 @@
   .btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+  }
+  
+  .btn-danger {
+    background: rgb(220, 38, 38);
+    color: white;
+    border: none;
+  }
+  
+  .btn-danger:hover:not(:disabled) {
+    background: rgb(185, 28, 28);
+  }
+  
+  .connection-status {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--color-ink-500);
+  }
+  
+  .connection-status.connected {
+    background: rgb(16, 185, 129);
+    box-shadow: 0 0 8px rgb(16, 185, 129 / 0.5);
+  }
+  
+  .border-ink-700 {
+    border-color: var(--color-ink-700);
   }
 </style>

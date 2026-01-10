@@ -1,4 +1,4 @@
-# CloudSentinel AI 🤖🛡️
+# CloudSentinel 🤖🛡️
 
 <p align="center">
   <img src="assets/cloudsentinel_icon.png" alt="CloudSentinel Logo" width="120" />
@@ -6,12 +6,12 @@
 
 **The Autonomous FinOps Guardian for Multi-Cloud Infrastructure**
 
-[![CI/CD Status](https://github.com/daretechie/CloudSentinel-AI/actions/workflows/ci.yml/badge.svg)](https://github.com/daretechie/CloudSentinel-AI/actions)
+[![CI/CD Status](https://github.com/daretechie/cloudsentinel/actions/workflows/ci.yml/badge.svg)](https://github.com/daretechie/cloudsentinel/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/release/python-3120/)
 [![Docker Image Size](https://img.shields.io/badge/docker%20image-256MB-green)](https://hub.docker.com/)
 
-CloudSentinel AI is an **autonomous agent** that proactively monitors cloud infrastructure costs, detects anomalies using Generative AI (LLMs), and identifies "zombie resources" (idle assets).
+CloudSentinel is an **autonomous agent** that proactively monitors cloud infrastructure costs, detects anomalies using Generative AI (LLMs), and identifies "zombie resources" (idle assets).
 
 It is built with Clean Architecture, Strategy Pattern for multi-cloud support, and a comprehensive DevOps pipeline.
 
@@ -81,8 +81,8 @@ graph TD
 
 ### 1. Clone & Configure
 ```bash
-git clone https://github.com/daretechie/CloudSentinel-AI.git
-cd CloudSentinel-AI
+git clone https://github.com/daretechie/cloudsentinel.git
+cd cloudsentinel
 cp .env.example .env
 ```
 

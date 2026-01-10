@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: |
-  CloudSentinel AI - Read-Only IAM Role for Cost Analysis
+  CloudSentinel - Read-Only IAM Role for Cost Analysis
   
   This template creates an IAM role that allows CloudSentinel to read
   your AWS cost data. The role uses cross-account AssumeRole with
@@ -24,7 +24,7 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       RoleName: CloudSentinelReadOnly
-      Description: Allows CloudSentinel AI to read cost data for analysis
+      Description: Allows CloudSentinel to read cost data for analysis
       MaxSessionDuration: 3600  # 1 hour (minimum for security)
       
       # Trust policy: Who can assume this role

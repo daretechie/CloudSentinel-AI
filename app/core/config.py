@@ -3,7 +3,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Optional
 
 class Settings(BaseSettings):
-    APP_NAME: str = "CloudSentinel AI"
+    APP_NAME: str = "CloudSentinel"
     VERSION: str = "0.1.0"
     DEBUG: bool = False
     

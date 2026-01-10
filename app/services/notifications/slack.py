@@ -101,7 +101,7 @@ class SlackService:
                     {
                         "type": "context",
                         "elements": [
-                            {"type": "mrkdwn", "text": "Powered by CloudSentinel AI"}
+                            {"type": "mrkdwn", "text": "Powered by CloudSentinel"}
                         ]
                     }
                 ]
