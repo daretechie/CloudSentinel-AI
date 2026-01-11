@@ -9,7 +9,7 @@
 
 <script lang="ts">
   import { createSupabaseBrowserClient } from '$lib/supabase';
-  import { goto } from '$app/navigation';
+  import { goto, invalidateAll } from '$app/navigation';
   
   let email = '';
   let password = '';
@@ -33,6 +33,9 @@
         });
         
         if (authError) throw authError;
+        
+        // Invalidate all load functions to refresh user data, then navigate
+        await invalidateAll();
         goto('/');
       } else {
         const { error: authError } = await supabase.auth.signUp({

@@ -1,15 +1,49 @@
-FROM python:3.12-slim
+# ============================================================
+# STAGE 1: Build the SvelteKit application
+# ============================================================
+FROM node:20-slim AS builder
+
+# Enable corepack for pnpm
+RUN corepack enable && corepack prepare pnpm@latest --activate
 
 WORKDIR /app
 
-# Install streamlit and requests
-RUN pip install --no-cache-dir streamlit requests
+# Copy dependency files (relative to root context)
+COPY dashboard/package.json dashboard/pnpm-lock.yaml ./
 
-# Copy dashboard code
-COPY ./dashboard ./dashboard
+# Install dependencies (will go into /app/node_modules)
+RUN pnpm install --frozen-lockfile
 
-# Expose Streamlit default port
-EXPOSE 8501
+# Copy dashboard source code
+COPY dashboard/ ./
 
-# Run Streamlit
-CMD ["streamlit", "run", "dashboard/app.py", "--server.address=0.0.0.0"]
+# Build the app. Output goes to /app/build
+RUN pnpm run build
+
+# ============================================================
+# STAGE 2: Runtime
+# ============================================================
+FROM node:20-slim AS runtime
+
+WORKDIR /app
+
+# Enable corepack for pnpm
+RUN corepack enable && corepack prepare pnpm@latest --activate
+
+# Copy build output and necessary files from builder
+COPY --from=builder /app/build ./build
+COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/pnpm-lock.yaml ./pnpm-lock.yaml
+
+# Install only production dependencies
+RUN pnpm install --prod --frozen-lockfile
+
+# Expose SvelteKit port
+EXPOSE 3000
+
+ENV NODE_ENV=production
+ENV HOST=0.0.0.0
+ENV PORT=3000
+
+# Run the app
+CMD ["node", "build"]

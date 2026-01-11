@@ -6,9 +6,7 @@ Tests cover:
 - Authentication requirements on protected endpoints
 - Basic response validation
 """
-import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import patch, MagicMock
 
 
 class TestHealthEndpoint:

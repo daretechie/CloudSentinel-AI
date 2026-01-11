@@ -14,7 +14,7 @@ Usage:
 """
 
 from typing import List, Dict, Any, Optional
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 import boto3
 from botocore.exceptions import ClientError
 import structlog
@@ -53,7 +53,7 @@ class MultiTenantAWSAdapter(CostAdapter):
         """
         # Check if we have valid cached credentials
         if self._credentials and self._credentials_expire_at:
-            if datetime.utcnow() < self._credentials_expire_at:
+            if datetime.now(timezone.utc) < self._credentials_expire_at:
                 return self._credentials
         
         # Assume the role
@@ -101,26 +101,61 @@ class MultiTenantAWSAdapter(CostAdapter):
             aws_session_token=creds["SessionToken"],
         )
     
-    async def get_daily_costs(self, start_date: date, end_date: date) -> List[Dict[str, Any]]:
+    async def get_daily_costs(
+        self, 
+        start_date: date, 
+        end_date: date,
+        usage_only: bool = False,
+        group_by_service: bool = False,
+    ) -> List[Dict[str, Any]]:
         """
         Fetch daily costs from the customer's AWS account.
+        
+        Args:
+            start_date: Start date for the query
+            end_date: End date for the query
+            usage_only: If True, excludes credits/refunds (shows gross usage)
+            group_by_service: If True, breaks down costs by AWS service
+        
+        Returns:
+            List of daily cost records from AWS Cost Explorer
         """
         try:
             client = self._get_ce_client()
             
-            response = client.get_cost_and_usage(
-                TimePeriod={
+            # Build the base request
+            request_params = {
+                "TimePeriod": {
                     "Start": start_date.isoformat(),
                     "End": end_date.isoformat(),
                 },
-                Granularity="DAILY",
-                Metrics=["UnblendedCost"],
-            )
+                "Granularity": "DAILY",
+                "Metrics": ["UnblendedCost"],
+            }
+            
+            # Filter to Usage only (excludes Credits, Refunds, Tax)
+            if usage_only:
+                request_params["Filter"] = {
+                    "Dimensions": {
+                        "Key": "RECORD_TYPE",
+                        "Values": ["Usage"],
+                    }
+                }
+            
+            # Group by service for detailed breakdown
+            if group_by_service:
+                request_params["GroupBy"] = [
+                    {"Type": "DIMENSION", "Key": "SERVICE"}
+                ]
+            
+            response = client.get_cost_and_usage(**request_params)
             
             logger.info(
                 "multitenant_cost_fetch_success",
                 aws_account=self.connection.aws_account_id,
                 days=len(response.get("ResultsByTime", [])),
+                usage_only=usage_only,
+                group_by_service=group_by_service,
             )
             
             return response.get("ResultsByTime", [])
@@ -132,6 +167,15 @@ class MultiTenantAWSAdapter(CostAdapter):
                 error=str(e),
             )
             return []
+    
+    async def get_gross_usage(self, start_date: date, end_date: date) -> List[Dict[str, Any]]:
+        """
+        Fetch gross usage costs (excluding credits/refunds).
+        
+        This is essential for accurate carbon footprint calculation,
+        as credits don't reduce actual resource usage/emissions.
+        """
+        return await self.get_daily_costs(start_date, end_date, usage_only=True)
     
     async def get_resource_usage(self, service_name: str) -> List[Dict[str, Any]]:
         """Placeholder for future resource-level usage."""

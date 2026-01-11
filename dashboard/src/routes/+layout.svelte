@@ -23,6 +23,7 @@
   // Navigation items
   const navItems = [
     { href: '/', label: 'Dashboard', icon: '📊' },
+    { href: '/greenops', label: 'GreenOps', icon: '🌱' },
     { href: '/llm', label: 'LLM Usage', icon: '🤖' },
     { href: '/onboarding', label: 'AWS Setup', icon: '☁️' },
     { href: '/leaderboards', label: 'Leaderboards', icon: '🏆' },

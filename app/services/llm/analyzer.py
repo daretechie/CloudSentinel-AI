@@ -4,7 +4,6 @@ from langchain_core.prompts import ChatPromptTemplate
 import structlog
 import re
 from uuid import UUID
-from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.services.llm.usage_tracker import UsageTracker
 import json

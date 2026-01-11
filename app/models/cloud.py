@@ -1,9 +1,13 @@
 import uuid
 from datetime import date
-from sqlalchemy import String, Boolean, ForeignKey, Numeric, Integer, Date
+from sqlalchemy import String, Boolean, ForeignKey, Numeric, Date
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID
+from typing import TYPE_CHECKING
 from app.db.base import Base
+
+if TYPE_CHECKING:
+    from app.models.tenant import Tenant
 
 class CloudAccount(Base):
     __tablename__ = "cloud_accounts"

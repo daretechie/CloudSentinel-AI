@@ -37,7 +37,7 @@ services:
       context: .
       dockerfile: Dockerfile.dashboard
     ports:
-      - "8501:8501"
+      - "3000:3000"
     depends_on:
       - api
     environment:

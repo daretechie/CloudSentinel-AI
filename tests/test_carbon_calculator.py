@@ -6,12 +6,9 @@ Tests cover:
 - Equivalency calculations (trees, miles, etc.)
 - Edge cases (zero cost, unknown regions)
 """
-import pytest
-from decimal import Decimal
 from app.services.carbon.calculator import (
     CarbonCalculator,
     REGION_CARBON_INTENSITY,
-    SERVICE_ENERGY_FACTORS,
 )
 
 

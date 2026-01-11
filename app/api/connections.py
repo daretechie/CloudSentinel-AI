@@ -24,7 +24,6 @@ from botocore.exceptions import ClientError
 
 from app.db.session import get_db
 from app.models.aws_connection import AWSConnection
-from app.core.config import get_settings
 from app.core.auth import get_current_user, CurrentUser
 
 logger = structlog.get_logger()
@@ -94,7 +93,7 @@ def verify_aws_connection(role_arn: str, external_id: str) -> tuple[bool, str | 
         sts_client = boto3.client("sts")
         
         # Try to assume the role
-        response = sts_client.assume_role(
+        sts_client.assume_role(
             RoleArn=role_arn,
             RoleSessionName="CloudSentinelVerification",
             ExternalId=external_id,

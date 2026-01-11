@@ -112,7 +112,6 @@ async def get_current_user(
     
     payload = decode_jwt(credentials.credentials) 
     user_id = payload.get("sub")
-    email = payload.get("email")
 
     if not user_id:
         raise HTTPException(

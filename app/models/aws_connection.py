@@ -20,7 +20,7 @@ Usage:
 
 import uuid
 import secrets
-from sqlalchemy import Column, String, ForeignKey, DateTime, Text, func
+from sqlalchemy import Column, String, ForeignKey, DateTime, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 

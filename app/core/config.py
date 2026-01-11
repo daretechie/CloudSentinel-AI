@@ -49,6 +49,13 @@ class Settings(BaseSettings):
     SLACK_BOT_TOKEN: Optional[str] = None
     SLACK_CHANNEL_ID: Optional[str] = None
     
+    # SMTP Email (for carbon alerts)
+    SMTP_HOST: Optional[str] = None
+    SMTP_PORT: int = 587
+    SMTP_USER: Optional[str] = None
+    SMTP_PASSWORD: Optional[str] = None
+    SMTP_FROM: str = "alerts@cloudsentinel.io"
+    
     model_config = SettingsConfigDict(
         env_file=".env", 
         env_ignore_empty=True

@@ -23,13 +23,18 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: "3.12"
-          cache: "pip"
 
-      - name: Install Poetry
-        run: pip install poetry==1.8.2
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          version: "latest"
 
       - name: Install Dependencies
-        run: poetry install --with dev
+        run: uv sync --dev
+
+      - name: Run Linting (Ruff)
+        run: uv run ruff check .
 
       - name: Run Pytest
         env:
@@ -40,7 +45,7 @@ jobs:
           AWS_SECRET_ACCESS_KEY: "testing"
           AWS_DEFAULT_REGION: "us-east-1"
           GROQ_API_KEY: "testing"
-        run: poetry run pytest -v
+        run: uv run pytest -v
 
   # JOB 2: SECURITY & BUILD INTEGRITY
   build-and-scan:

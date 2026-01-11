@@ -1,14 +1,16 @@
 """
-Carbon Footprint Calculator
+Carbon Footprint Calculator (2026 Edition)
 
 Estimates CO₂ emissions from AWS cloud usage based on:
 1. AWS region (electricity grid carbon intensity)
 2. Service type (compute, storage, networking)
 3. Cost as a proxy for resource consumption
+4. Embodied emissions (server manufacturing impact)
 
-References:
-- AWS Customer Carbon Footprint Tool methodology
+Methodology Sources:
+- AWS Customer Carbon Footprint Tool (CCFT) v3.0.0 (Oct 2025)
 - Cloud Carbon Footprint (CCF) open source project
+- GHG Protocol for Scope 1, 2, and 3 emissions
 - EPA emissions factors
 """
 
@@ -20,7 +22,7 @@ logger = structlog.get_logger()
 
 
 # Carbon intensity by AWS region (gCO₂eq per kWh)
-# Source: Electricity Maps, EPA eGRID, and AWS sustainability reports
+# Source: Electricity Maps, EPA eGRID, and AWS sustainability reports (2025)
 REGION_CARBON_INTENSITY = {
     # Low carbon (renewables/nuclear)
     "us-west-2": 21,      # Oregon - hydro
@@ -49,11 +51,13 @@ REGION_CARBON_INTENSITY = {
 # Different services have different energy profiles
 SERVICE_ENERGY_FACTORS = {
     "Amazon Elastic Compute Cloud - Compute": 0.05,  # EC2 is energy-intensive
+    "EC2 - Other": 0.04,                             # EC2 related services
     "Amazon Simple Storage Service": 0.01,           # S3 is efficient
     "Amazon Relational Database Service": 0.04,      # RDS moderate
     "Amazon CloudFront": 0.02,                       # CDN is efficient
     "AWS Lambda": 0.03,                              # Serverless moderate
     "Amazon DynamoDB": 0.02,                         # NoSQL efficient
+    "Amazon Virtual Private Cloud": 0.02,            # VPC networking
     "default": 0.03,                                 # Default estimate
 }
 
@@ -61,16 +65,23 @@ SERVICE_ENERGY_FACTORS = {
 # AWS reports PUE of ~1.2 for modern datacenters
 AWS_PUE = 1.2
 
+# Embodied emissions factor (kgCO2e per kWh of compute)
+# Source: CCF methodology - accounts for server manufacturing
+# Typical value: ~0.025 kgCO2e per kWh (amortized over 4-year server lifecycle)
+EMBODIED_EMISSIONS_FACTOR = 0.025
+
 
 class CarbonCalculator:
     """
     Calculates carbon footprint from cloud cost data.
     
-    Methodology:
+    2026 Methodology (aligned with CCF and AWS CCFT):
     1. Estimate energy (kWh) from cost using service-specific factors
     2. Apply PUE multiplier for datacenter overhead
-    3. Multiply by region carbon intensity (gCO₂/kWh)
-    4. Convert to kg CO₂
+    3. Multiply by region carbon intensity (gCO₂/kWh) → Scope 2
+    4. Add embodied emissions (Scope 3)
+    5. Convert to kg CO₂
+    6. Calculate carbon efficiency score (gCO2e per $1)
     """
     
     def calculate_from_costs(
@@ -81,12 +92,15 @@ class CarbonCalculator:
         """
         Calculate carbon footprint from AWS cost data.
         
+        IMPORTANT: For accurate results, pass GROSS USAGE data
+        (excluding credits/refunds). Use adapter.get_gross_usage().
+        
         Args:
-            cost_data: Cost records from AWS Cost Explorer
+            cost_data: Cost records from AWS Cost Explorer (use gross usage!)
             region: AWS region (for carbon intensity lookup)
         
         Returns:
-            Dict with total emissions, breakdown, and equivalencies
+            Dict with total emissions, breakdown, efficiency score, and equivalencies
         """
         total_cost_usd = Decimal("0")
         total_energy_kwh = Decimal("0")
@@ -99,7 +113,7 @@ class CarbonCalculator:
                     .get("UnblendedCost", {})
                     .get("Amount", "0")
                 )
-                # Only count positive costs
+                # Only count positive costs (gross usage should be positive)
                 if cost_amount > 0:
                     total_cost_usd += cost_amount
                     # Estimate energy using default factor
@@ -117,29 +131,54 @@ class CarbonCalculator:
             region, REGION_CARBON_INTENSITY["default"]
         )
         
-        # Calculate CO₂ in grams
-        co2_grams = total_energy_with_pue * Decimal(str(carbon_intensity))
+        # Calculate Scope 2 CO₂ (operational emissions) in grams
+        scope2_co2_grams = total_energy_with_pue * Decimal(str(carbon_intensity))
+        scope2_co2_kg = scope2_co2_grams / Decimal("1000")
         
-        # Convert to kg
-        co2_kg = co2_grams / Decimal("1000")
+        # Calculate Scope 3 CO₂ (embodied emissions from server manufacturing)
+        scope3_co2_kg = total_energy_with_pue * Decimal(str(EMBODIED_EMISSIONS_FACTOR))
+        
+        # Total CO₂ = Scope 2 + Scope 3
+        total_co2_kg = scope2_co2_kg + scope3_co2_kg
+        
+        # Calculate Carbon Efficiency Score (gCO2e per $1 of usage)
+        # Lower is better - this is a key FinOps Carbon KPI
+        carbon_efficiency_score = 0.0
+        if total_cost_usd > 0:
+            carbon_efficiency_score = float(total_co2_kg * 1000 / total_cost_usd)
         
         # Calculate equivalencies for user-friendly display
-        equivalencies = self._calculate_equivalencies(float(co2_kg))
+        equivalencies = self._calculate_equivalencies(float(total_co2_kg))
         
         result = {
-            "total_co2_kg": round(float(co2_kg), 3),
+            # Core metrics
+            "total_co2_kg": round(float(total_co2_kg), 3),
+            "scope2_co2_kg": round(float(scope2_co2_kg), 3),
+            "scope3_co2_kg": round(float(scope3_co2_kg), 3),
             "total_cost_usd": round(float(total_cost_usd), 2),
             "estimated_energy_kwh": round(float(total_energy_with_pue), 3),
+            
+            # FinOps Carbon KPI (lower is better)
+            "carbon_efficiency_score": round(carbon_efficiency_score, 2),
+            "carbon_efficiency_unit": "gCO2e per $1 spent",
+            
+            # Region info
             "region": region,
             "carbon_intensity_gco2_kwh": carbon_intensity,
+            
+            # Human-readable equivalencies
             "equivalencies": equivalencies,
-            "methodology": "Based on Cloud Carbon Footprint methodology",
+            
+            # Methodology metadata
+            "methodology": "CloudSentinel 2026 (CCF + AWS CCFT v3.0.0)",
+            "includes_embodied_emissions": True,
         }
         
         logger.info(
             "carbon_calculated",
             co2_kg=result["total_co2_kg"],
             cost_usd=result["total_cost_usd"],
+            efficiency_score=result["carbon_efficiency_score"],
             region=region,
         )
         
@@ -164,3 +203,28 @@ class CarbonCalculator:
             # Average home uses ~900kWh/month = ~360kg CO₂/month
             "percent_of_home_month": round((co2_kg / 360) * 100, 2),
         }
+    
+    def get_green_region_recommendations(self, current_region: str) -> List[Dict[str, Any]]:
+        """
+        Recommend lower-carbon regions for workload placement.
+        
+        CloudSentinel Innovation: Help users reduce emissions
+        by migrating to greener AWS regions.
+        """
+        current_intensity = REGION_CARBON_INTENSITY.get(
+            current_region, REGION_CARBON_INTENSITY["default"]
+        )
+        
+        recommendations = []
+        for region, intensity in sorted(REGION_CARBON_INTENSITY.items(), key=lambda x: x[1]):
+            if region == "default":
+                continue
+            if intensity < current_intensity:
+                savings_percent = round((1 - intensity / current_intensity) * 100, 1)
+                recommendations.append({
+                    "region": region,
+                    "carbon_intensity": intensity,
+                    "savings_percent": savings_percent,
+                })
+        
+        return recommendations[:5]  # Top 5 greenest alternatives

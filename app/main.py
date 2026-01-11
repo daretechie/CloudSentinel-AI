@@ -1,6 +1,7 @@
 from datetime import date
-from typing import List, Dict, Any, Annotated
+from typing import Annotated
 from fastapi import FastAPI, Depends, Query, Header, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import get_settings
 from app.core.logging import setup_logging
 import structlog
@@ -18,7 +19,6 @@ from app.api.connections import router as connections_router
 from app.api.settings import router as settings_router
 from app.api.leaderboards import router as leaderboards_router
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.services.carbon.calculator import CarbonCalculator
 from app.services.zombies.detector import ZombieDetector, RemediationService
@@ -71,7 +71,6 @@ app = FastAPI(
 Instrumentator().instrument(app).expose(app)
 
 # CORS Middleware - Allow frontend dashboard to access API
-from fastapi.middleware.cors import CORSMiddleware
 
 app.add_middleware(
     CORSMiddleware,
@@ -291,7 +290,14 @@ async def get_carbon_footprint(
     """
     Calculate carbon footprint from AWS usage.
     
-    Returns CO₂ emissions estimate based on cost data and region.
+    Uses GROSS USAGE (excluding credits/refunds) for accurate emissions.
+    Includes Scope 2 (operational) and Scope 3 (embodied) emissions.
+    
+    Returns:
+        - CO₂ emissions breakdown (Scope 2 + Scope 3)
+        - Carbon efficiency score (gCO2e per $1)
+        - Green region recommendations
+        - Human-readable equivalencies
     """
     from app.models.aws_connection import AWSConnection
     from app.services.adapters.aws_multitenant import MultiTenantAWSAdapter
@@ -309,14 +315,122 @@ async def get_carbon_footprint(
     
     logger.info("calculating_carbon", start=start_date, end=end_date, region=region)
     
-    # Get cost data
-    cost_data = await adapter.get_daily_costs(start_date, end_date)
+    # IMPORTANT: Use gross usage (excludes credits) for accurate carbon calculation
+    cost_data = await adapter.get_gross_usage(start_date, end_date)
     
     # Calculate carbon
     calculator = CarbonCalculator()
-    result = calculator.calculate_from_costs(cost_data, region=region)
+    carbon_result = calculator.calculate_from_costs(cost_data, region=region)
     
-    return result
+    # Add green region recommendations
+    carbon_result["green_region_recommendations"] = calculator.get_green_region_recommendations(region)
+    
+    return carbon_result
+
+
+@app.get("/carbon/budget")
+async def get_carbon_budget_status(
+    user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+    region: str = Query(default="us-east-1"),
+):
+    """
+    Get carbon budget status for the current month.
+    
+    Returns:
+        - Current month's CO2 usage vs budget
+        - Alert status (ok, warning, exceeded)
+        - Recommendations for staying within budget
+    """
+    from app.models.aws_connection import AWSConnection
+    from app.services.adapters.aws_multitenant import MultiTenantAWSAdapter
+    from app.services.carbon.budget_alerts import CarbonBudgetService
+    from datetime import date
+    
+    # Get user's AWS connection
+    result = await db.execute(
+        select(AWSConnection).where(AWSConnection.tenant_id == user.tenant_id)
+    )
+    connection = result.scalar_one_or_none()
+    
+    if not connection:
+        return {"error": "No AWS connection found", "alert_status": "unknown"}
+    
+    # Get current month's carbon footprint
+    today = date.today()
+    month_start = date(today.year, today.month, 1)
+    
+    adapter = MultiTenantAWSAdapter(connection)
+    cost_data = await adapter.get_gross_usage(month_start, today)
+    
+    calculator = CarbonCalculator()
+    carbon_result = calculator.calculate_from_costs(cost_data, region=region)
+    
+    # Get budget status
+    budget_service = CarbonBudgetService(db)
+    budget_status = await budget_service.get_budget_status(
+        tenant_id=user.tenant_id,
+        month_start=month_start,
+        current_co2_kg=carbon_result["total_co2_kg"],
+    )
+    
+    # Send alert if needed
+    if budget_status["alert_status"] in ["warning", "exceeded"]:
+        await budget_service.send_carbon_alert(user.tenant_id, budget_status)
+    
+    return budget_status
+
+
+@app.get("/graviton")
+async def analyze_graviton_opportunities(
+    user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+    region: str = Query(default="us-east-1"),
+):
+    """
+    Analyze EC2 instances for Graviton migration opportunities.
+    
+    CloudSentinel Innovation: Identifies x86 instances that could 
+    migrate to ARM-based Graviton for up to 60% energy savings.
+    
+    Returns:
+        - Total running instances
+        - Already on Graviton count
+        - Migration candidates with recommended types
+        - Estimated energy/carbon savings
+    """
+    from app.models.aws_connection import AWSConnection
+    from app.services.carbon.graviton_analyzer import GravitonAnalyzer
+    
+    # Get user's AWS connection
+    result = await db.execute(
+        select(AWSConnection).where(AWSConnection.tenant_id == user.tenant_id)
+    )
+    connection = result.scalar_one_or_none()
+    
+    if not connection:
+        return {"error": "No AWS connection found", "migration_candidates": 0}
+    
+    # Get STS credentials
+    import boto3
+    sts_client = boto3.client("sts")
+    try:
+        response = sts_client.assume_role(
+            RoleArn=connection.role_arn,
+            RoleSessionName="CloudSentinelGravitonAnalysis",
+            ExternalId=connection.external_id,
+            DurationSeconds=3600,
+        )
+        credentials = response["Credentials"]
+    except Exception as e:
+        logger.error("graviton_sts_failed", error=str(e))
+        return {"error": f"Failed to assume AWS role: {str(e)}"}
+    
+    # Analyze instances
+    analyzer = GravitonAnalyzer(credentials=credentials, region=region)
+    analysis = await analyzer.analyze_instances()
+    
+    return analysis
 
 @app.get("/zombies")
 async def scan_zombies(

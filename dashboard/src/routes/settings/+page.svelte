@@ -167,13 +167,68 @@
     }
   }
   
+  // Carbon settings state
+  let carbonSettings = {
+    carbon_budget_kg: 100,
+    alert_threshold_percent: 80,
+    default_region: 'us-east-1',
+    email_enabled: false,
+    email_recipients: '',
+  };
+  let loadingCarbon = true;
+  let savingCarbon = false;
+  
+  async function loadCarbonSettings() {
+    try {
+      const headers = await getHeaders();
+      const res = await fetch(`${PUBLIC_API_URL}/settings/carbon`, { headers });
+      
+      if (res.ok) {
+        carbonSettings = await res.json();
+      }
+    } catch (e: any) {
+      console.error('Failed to load carbon settings:', e);
+    } finally {
+      loadingCarbon = false;
+    }
+  }
+  
+  async function saveCarbonSettings() {
+    savingCarbon = true;
+    error = '';
+    success = '';
+    
+    try {
+      const headers = await getHeaders();
+      const res = await fetch(`${PUBLIC_API_URL}/settings/carbon`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify(carbonSettings),
+      });
+      
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.detail || 'Failed to save carbon settings');
+      }
+      
+      success = 'Carbon settings saved successfully!';
+      setTimeout(() => success = '', 3000);
+    } catch (e: any) {
+      error = e.message;
+    } finally {
+      savingCarbon = false;
+    }
+  }
+  
   onMount(() => {
     if (data.user) {
       loadSettings();
       loadAWSConnection();
+      loadCarbonSettings();
     } else {
       loading = false;
       loadingAWS = false;
+      loadingCarbon = false;
     }
   });
 </script>
@@ -253,6 +308,81 @@
           <a href="/onboarding" class="btn btn-primary inline-block">
             ➕ Connect AWS Account
           </a>
+        </div>
+      {/if}
+    </div>
+    
+    <!-- Carbon Budget Settings -->
+    <div class="card stagger-enter">
+      <h2 class="text-lg font-semibold mb-5 flex items-center gap-2">
+        <span>🌱</span> Carbon Budget
+      </h2>
+      
+      {#if loadingCarbon}
+        <div class="skeleton h-4 w-48"></div>
+      {:else}
+        <div class="space-y-4">
+          <div class="form-group">
+            <label for="carbon_budget">Monthly Carbon Budget (kg CO₂)</label>
+            <input 
+              type="number" 
+              id="carbon_budget"
+              bind:value={carbonSettings.carbon_budget_kg}
+              min="0"
+              step="10"
+            />
+            <p class="text-xs text-ink-500 mt-1">Set your monthly carbon footprint limit</p>
+          </div>
+          
+          <div class="form-group">
+            <label for="alert_threshold">Alert Threshold (%)</label>
+            <input 
+              type="number" 
+              id="alert_threshold"
+              bind:value={carbonSettings.alert_threshold_percent}
+              min="0"
+              max="100"
+            />
+            <p class="text-xs text-ink-500 mt-1">Warn when usage reaches this percentage of budget</p>
+          </div>
+          
+          <div class="form-group">
+            <label for="default_region">Default AWS Region</label>
+            <select id="default_region" bind:value={carbonSettings.default_region} class="select">
+              <option value="us-west-2">US West (Oregon) - 21 gCO₂/kWh ⭐</option>
+              <option value="eu-north-1">EU (Stockholm) - 28 gCO₂/kWh ⭐</option>
+              <option value="ca-central-1">Canada (Central) - 35 gCO₂/kWh ⭐</option>
+              <option value="eu-west-1">EU (Ireland) - 316 gCO₂/kWh</option>
+              <option value="us-east-1">US East (N. Virginia) - 379 gCO₂/kWh</option>
+              <option value="ap-northeast-1">Asia Pacific (Tokyo) - 506 gCO₂/kWh</option>
+            </select>
+            <p class="text-xs text-ink-500 mt-1">Regions marked with ⭐ have lowest carbon intensity</p>
+          </div>
+          
+          <!-- Email Notifications -->
+          <div class="form-group">
+            <label class="flex items-center gap-3 cursor-pointer">
+              <input type="checkbox" bind:checked={carbonSettings.email_enabled} class="toggle" />
+              <span>Enable email notifications for carbon alerts</span>
+            </label>
+          </div>
+          
+          {#if carbonSettings.email_enabled}
+            <div class="form-group">
+              <label for="email_recipients">Email Recipients</label>
+              <input 
+                type="text" 
+                id="email_recipients"
+                bind:value={carbonSettings.email_recipients}
+                placeholder="email1@example.com, email2@example.com"
+              />
+              <p class="text-xs text-ink-500 mt-1">Comma-separated email addresses for carbon budget alerts</p>
+            </div>
+          {/if}
+          
+          <button class="btn btn-primary" on:click={saveCarbonSettings} disabled={savingCarbon}>
+            {savingCarbon ? '⏳ Saving...' : '💾 Save Carbon Settings'}
+          </button>
         </div>
       {/if}
     </div>

@@ -141,7 +141,7 @@ class TestRecordUsage:
         
         # Mock the budget check to do nothing
         with patch.object(tracker, '_check_budget_and_alert', new_callable=AsyncMock):
-            result = await tracker.record(
+            await tracker.record(
                 tenant_id=tenant_id,
                 provider="groq",
                 model="llama-3.3-70b-versatile",

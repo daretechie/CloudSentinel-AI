@@ -3,7 +3,6 @@ Leaderboards API Endpoints for CloudSentinel.
 Shows team savings rankings ("Who saved the most?").
 """
 from datetime import datetime, timedelta
-from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel

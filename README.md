@@ -68,7 +68,7 @@ graph TD
 *   **Cloud SDK:** Boto3 (AWS)
 *   **Scheduling:** APScheduler (AsyncIO)
 *   **Observability:** Prometheus, Structlog
-*   **DevOps:** Docker, GitHub Actions, Poetry
+*   **DevOps:** Docker, GitHub Actions, uv
 
 ---
 
@@ -106,8 +106,8 @@ Visit `http://localhost:8000/docs` to see the API.
 
 ### 3. Run Locally (Dev)
 ```bash
-poetry install
-poetry run uvicorn app.main:app --reload
+uv sync
+uv run uvicorn app.main:app --reload
 ```
 
 ---
@@ -117,7 +117,7 @@ poetry run uvicorn app.main:app --reload
 We use `pytest` for unit testing. The CI pipeline runs these automatically.
 
 ```bash
-poetry run pytest
+uv run pytest
 ```
 *   **Coverage:** 100% of Adapter logic is covered using `unittest.mock` (no real AWS calls made during tests).
 

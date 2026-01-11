@@ -3,20 +3,15 @@ from logging.config import fileConfig
 
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
-from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
 import ssl
 
 from app.db.base import Base
 # Import all models so Base knows about them!
-from app.models.tenant import Tenant, User
-from app.models.cloud import CloudAccount, CostRecord
 from app.core.config import get_settings
 from sqlalchemy.ext.asyncio import create_async_engine
 
-from app.models.llm import LLMUsage
-from app.models.remediation import RemediationRequest
 
 settings = get_settings()
 
