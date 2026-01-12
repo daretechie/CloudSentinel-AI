@@ -14,6 +14,7 @@ References:
 
 from typing import Dict, Any, Optional
 import structlog
+import aioboto3
 
 logger = structlog.get_logger()
 
@@ -91,20 +92,19 @@ class GravitonAnalyzer:
         """
         self.credentials = credentials
         self.region = region
+        self.session = aioboto3.Session()
     
-    def _get_ec2_client(self):
-        """Get EC2 client with optional STS credentials."""
-        import boto3
-        
+    def _get_ec2_client_context(self):
+        """Get EC2 client context manager with optional STS credentials."""
         if self.credentials:
-            return boto3.client(
+            return self.session.client(
                 "ec2",
                 region_name=self.region,
                 aws_access_key_id=self.credentials["AccessKeyId"],
                 aws_secret_access_key=self.credentials["SecretAccessKey"],
                 aws_session_token=self.credentials["SessionToken"],
             )
-        return boto3.client("ec2", region_name=self.region)
+        return self.session.client("ec2", region_name=self.region)
     
     async def analyze_instances(self) -> Dict[str, Any]:
         """
@@ -114,48 +114,48 @@ class GravitonAnalyzer:
             Dict containing migration opportunities and estimated savings
         """
         try:
-            ec2 = self._get_ec2_client()
-            
-            # Get all running instances
-            response = ec2.describe_instances(
-                Filters=[{"Name": "instance-state-name", "Values": ["running"]}]
-            )
-            
-            candidates = []
-            total_instances = 0
-            graviton_instances = 0
-            
-            for reservation in response.get("Reservations", []):
-                for instance in reservation.get("Instances", []):
-                    total_instances += 1
-                    instance_type = instance.get("InstanceType", "")
-                    instance_id = instance.get("InstanceId", "")
-                    
-                    # Check if already on Graviton
-                    if any(g in instance_type for g in ["g.", "7g.", "6g.", "4g."]):
-                        graviton_instances += 1
-                        continue
-                    
-                    # Check if migration candidate exists
-                    if instance_type in GRAVITON_EQUIVALENTS:
-                        graviton_type, savings_percent = GRAVITON_EQUIVALENTS[instance_type]
-                        
-                        # Get instance name from tags
-                        name = ""
-                        for tag in instance.get("Tags", []):
-                            if tag.get("Key") == "Name":
-                                name = tag.get("Value", "")
-                                break
-                        
-                        candidates.append({
-                            "instance_id": instance_id,
-                            "name": name,
-                            "current_type": instance_type,
-                            "recommended_type": graviton_type,
-                            "energy_savings_percent": savings_percent,
-                            "carbon_reduction_percent": savings_percent,  # ~1:1 with energy
-                            "migration_complexity": "low",  # Most are compatible
-                        })
+            async with self._get_ec2_client_context() as ec2:
+                # Get all running instances with pagination
+                candidates = []
+                total_instances = 0
+                graviton_instances = 0
+                
+                paginator = ec2.get_paginator("describe_instances")
+                
+                async for response in paginator.paginate(
+                    Filters=[{"Name": "instance-state-name", "Values": ["running"]}]
+                ):
+                    for reservation in response.get("Reservations", []):
+                        for instance in reservation.get("Instances", []):
+                            total_instances += 1
+                            instance_type = instance.get("InstanceType", "")
+                            instance_id = instance.get("InstanceId", "")
+                            
+                            # Check if already on Graviton
+                            if any(g in instance_type for g in ["g.", "7g.", "6g.", "4g."]):
+                                graviton_instances += 1
+                                continue
+                            
+                            # Check if migration candidate exists
+                            if instance_type in GRAVITON_EQUIVALENTS:
+                                graviton_type, savings_percent = GRAVITON_EQUIVALENTS[instance_type]
+                                
+                                # Get instance name from tags
+                                name = ""
+                                for tag in instance.get("Tags", []):
+                                    if tag.get("Key") == "Name":
+                                        name = tag.get("Value", "")
+                                        break
+                                
+                                candidates.append({
+                                    "instance_id": instance_id,
+                                    "name": name,
+                                    "current_type": instance_type,
+                                    "recommended_type": graviton_type,
+                                    "energy_savings_percent": savings_percent,
+                                    "carbon_reduction_percent": savings_percent,  # ~1:1 with energy
+                                    "migration_complexity": "low",  # Most are compatible
+                                })
             
             # Calculate summary
             result = {

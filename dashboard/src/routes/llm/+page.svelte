@@ -8,64 +8,77 @@
 -->
 
 <script lang="ts">
-  import { onMount } from 'svelte';
   import { PUBLIC_API_URL } from '$env/static/public';
   import { createSupabaseBrowserClient } from '$lib/supabase';
   
-  export let data;
+  let { data } = $props();
   
   const supabase = createSupabaseBrowserClient();
   
-  let loading = true;
-  let usage: any[] = [];
-  let error = '';
-  let summary = {
+  let loading = $state(true);
+  let usage: any[] = $state([]);
+  let error = $state('');
+  let summary = $state({
     total_cost: 0,
     total_tokens: 0,
     by_model: {} as Record<string, { tokens: number, cost: number, calls: number }>,
-  };
+  });
   
-  onMount(async () => {
+  $effect(() => {
     if (!data.user) {
       loading = false;
       return;
     }
     
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
-      
-      const headers = {
-        'Authorization': `Bearer ${session.access_token}`,
-      };
-      
-      const res = await fetch(`${PUBLIC_API_URL}/llm/usage`, { headers });
-      
-      if (!res.ok) {
-        throw new Error(`API error: ${res.status}`);
-      }
-      
-      const result = await res.json();
-      usage = result.usage || [];
-      
-      for (const record of usage) {
-        summary.total_cost += record.cost_usd || 0;
-        summary.total_tokens += record.total_tokens || 0;
+    async function loadData() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
         
-        const model = record.model || 'unknown';
-        if (!summary.by_model[model]) {
-          summary.by_model[model] = { tokens: 0, cost: 0, calls: 0 };
+        const headers = {
+          'Authorization': `Bearer ${session.access_token}`,
+        };
+        
+        const res = await fetch(`${PUBLIC_API_URL}/llm/usage`, { headers });
+        
+        if (!res.ok) {
+          throw new Error(`API error: ${res.status}`);
         }
-        summary.by_model[model].tokens += record.total_tokens || 0;
-        summary.by_model[model].cost += record.cost_usd || 0;
-        summary.by_model[model].calls += 1;
+        
+        const result = await res.json();
+        usage = result.usage || [];
+        
+        let newTotalCost = 0;
+        let newTotalTokens = 0;
+        let newByModel: Record<string, { tokens: number, cost: number, calls: number }> = {};
+
+        for (const record of usage) {
+          newTotalCost += record.cost_usd || 0;
+          newTotalTokens += record.total_tokens || 0;
+          
+          const model = record.model || 'unknown';
+          if (!newByModel[model]) {
+            newByModel[model] = { tokens: 0, cost: 0, calls: 0 };
+          }
+          newByModel[model].tokens += record.total_tokens || 0;
+          newByModel[model].cost += record.cost_usd || 0;
+          newByModel[model].calls += 1;
+        }
+
+        summary = {
+          total_cost: newTotalCost,
+          total_tokens: newTotalTokens,
+          by_model: newByModel
+        };
+        
+      } catch (e: any) {
+        error = e.message;
+      } finally {
+        loading = false;
       }
-      
-    } catch (e: any) {
-      error = e.message;
-    } finally {
-      loading = false;
     }
+
+    loadData();
   });
 </script>
 

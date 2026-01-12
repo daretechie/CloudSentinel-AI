@@ -10,21 +10,20 @@
 -->
 
 <script lang="ts">
-  import { onMount } from 'svelte';
   import { PUBLIC_API_URL } from '$env/static/public';
   import { createSupabaseBrowserClient } from '$lib/supabase';
   
-  export let data;
+  let { data } = $props();
   
   const supabase = createSupabaseBrowserClient();
   
   // State
-  let carbonData: any = null;
-  let gravitonData: any = null;
-  let budgetData: any = null;
-  let loading = true;
-  let error = '';
-  let selectedRegion = 'us-east-1';
+  let carbonData: any = $state(null);
+  let gravitonData: any = $state(null);
+  let budgetData: any = $state(null);
+  let loading = $state(true);
+  let error = $state('');
+  let selectedRegion = $state('us-east-1');
   
   // Date range (default: last 30 days for faster loading)
   const today = new Date();
@@ -105,9 +104,9 @@
     loading = false;
   }
   
-  onMount(async () => {
+  $effect(() => {
     if (data.user) {
-      await loadAllData();
+      loadAllData();
     } else {
       loading = false;
       error = 'Please log in to view GreenOps data.';
@@ -136,7 +135,7 @@
     
     <select 
       bind:value={selectedRegion}
-      on:change={() => loadAllData()}
+      onchange={() => loadAllData()}
       class="bg-ink-800 border border-ink-700 rounded-lg px-3 py-2 text-sm"
     >
       <option value="us-east-1">US East (N. Virginia)</option>
@@ -146,7 +145,6 @@
       <option value="ap-northeast-1">Asia Pacific (Tokyo)</option>
     </select>
   </div>
-  
   {#if loading}
     <div class="flex items-center justify-center py-20">
       <div class="animate-spin rounded-full h-8 w-8 border-t-2 border-accent-500"></div>
@@ -156,218 +154,199 @@
       <p class="text-red-400">{error}</p>
     </div>
   {:else}
-    <!-- Carbon Budget Status -->
-    {#if budgetData && !budgetData.error}
-      <div class="card p-6" class:budget-ok={budgetData.alert_status === 'ok'} 
-           class:budget-warning={budgetData.alert_status === 'warning'}
-           class:budget-exceeded={budgetData.alert_status === 'exceeded'}>
-        <div class="flex items-center justify-between mb-4">
-          <h2 class="text-lg font-semibold">Carbon Budget Status</h2>
-          <span class="badge" class:badge-success={budgetData.alert_status === 'ok'}
-                class:badge-warning={budgetData.alert_status === 'warning'}
-                class:badge-error={budgetData.alert_status === 'exceeded'}>
-            {budgetData.alert_status === 'ok' ? '✓ On Track' : 
-             budgetData.alert_status === 'warning' ? '⚠️ Warning' : '🚨 Exceeded'}
-          </span>
-        </div>
-        
-        <!-- Progress Bar -->
-        <div class="w-full bg-ink-800 rounded-full h-4 mb-3">
-          <div 
-            class="h-4 rounded-full transition-all"
-            class:bg-green-500={budgetData.alert_status === 'ok'}
-            class:bg-yellow-500={budgetData.alert_status === 'warning'}
-            class:bg-red-500={budgetData.alert_status === 'exceeded'}
-            style="width: {Math.min(budgetData.usage_percent, 100)}%"
-          ></div>
-        </div>
-        
-        <div class="flex justify-between text-sm text-ink-400">
-          <span>{formatCO2(budgetData.current_usage_kg)} used</span>
-          <span>{budgetData.usage_percent}% of {formatCO2(budgetData.budget_kg)} budget</span>
-        </div>
-      </div>
-    {/if}
-    
-    <!-- Main Stats Grid -->
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-      <!-- Total CO2 -->
-      <div class="card p-6">
-        <div class="flex items-center gap-3 mb-2">
-          <span class="text-2xl">🌍</span>
-          <span class="text-ink-400 text-sm">Total Carbon Footprint</span>
-        </div>
-        <p class="text-3xl font-bold text-white">
-          {carbonData ? formatCO2(carbonData.total_co2_kg) : '—'}
-        </p>
-        <p class="text-xs text-ink-500 mt-1">Scope 2 + Scope 3 emissions</p>
-      </div>
+    <!-- Bento Box Grid -->
+    <div class="bento-grid">
       
-      <!-- Carbon Efficiency -->
-      <div class="card p-6">
-        <div class="flex items-center gap-3 mb-2">
-          <span class="text-2xl">📈</span>
-          <span class="text-ink-400 text-sm">Carbon Efficiency</span>
-        </div>
-        <p class="text-3xl font-bold text-white">
-          {carbonData ? carbonData.carbon_efficiency_score : '—'}
-          <span class="text-lg text-ink-400">gCO₂/$</span>
-        </p>
-        <p class="text-xs text-ink-500 mt-1">Lower is better</p>
-      </div>
-      
-      <!-- Energy Usage -->
-      <div class="card p-6">
-        <div class="flex items-center gap-3 mb-2">
-          <span class="text-2xl">⚡</span>
-          <span class="text-ink-400 text-sm">Estimated Energy</span>
-        </div>
-        <p class="text-3xl font-bold text-white">
-          {carbonData ? carbonData.estimated_energy_kwh.toFixed(2) : '—'}
-          <span class="text-lg text-ink-400">kWh</span>
-        </p>
-        <p class="text-xs text-ink-500 mt-1">Including PUE overhead</p>
-      </div>
-      
-      <!-- Graviton Opportunities -->
-      <div class="card p-6">
-        <div class="flex items-center gap-3 mb-2">
-          <span class="text-2xl">🚀</span>
-          <span class="text-ink-400 text-sm">Graviton Opportunities</span>
-        </div>
-        <p class="text-3xl font-bold text-white">
-          {gravitonData && !gravitonData.error ? gravitonData.migration_candidates : '—'}
-        </p>
-        <p class="text-xs text-ink-500 mt-1">Instances for 40-60% savings</p>
-      </div>
-    </div>
-    
-    <!-- Scope Breakdown & Equivalencies -->
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <!-- Emissions Breakdown -->
-      <div class="card p-6">
-        <h3 class="text-lg font-semibold mb-4">📊 Emissions Breakdown</h3>
-        
-        {#if carbonData}
-          <div class="space-y-4">
-            <div>
-              <div class="flex justify-between text-sm mb-1">
-                <span class="text-ink-400">Scope 2 (Operational)</span>
-                <span class="text-white">{formatCO2(carbonData.scope2_co2_kg)}</span>
-              </div>
-              <div class="w-full bg-ink-800 rounded-full h-2">
-                <div class="bg-blue-500 h-2 rounded-full" 
-                     style="width: {carbonData.total_co2_kg > 0 ? (carbonData.scope2_co2_kg / carbonData.total_co2_kg * 100) : 0}%"></div>
-              </div>
+      <!-- 1. Total CO2 (Hero - Large) -->
+      <div class="glass-panel col-span-2 relative overflow-hidden group">
+        <div class="absolute top-0 right-0 p-4 opacity-10 text-9xl leading-none select-none pointer-events-none">🌍</div>
+        <div class="relative z-10 flex flex-col justify-between h-full">
+          <div>
+            <h2 class="text-ink-400 text-sm font-medium uppercase tracking-wider mb-1">Total Carbon Footprint</h2>
+            <div class="flex items-baseline gap-2">
+              <span class="text-5xl font-bold text-white tracking-tight">
+                {carbonData ? formatCO2(carbonData.total_co2_kg) : '—'}
+              </span>
+              {#if carbonData?.forecast_30d}
+                <span class="text-xs text-ink-400 bg-ink-800/50 px-2 py-1 rounded-full border border-ink-700">
+                  Forecast: {formatCO2(carbonData.forecast_30d.projected_co2_kg)} / 30d
+                </span>
+              {/if}
             </div>
-            
-            <div>
-              <div class="flex justify-between text-sm mb-1">
-                <span class="text-ink-400">Scope 3 (Embodied)</span>
-                <span class="text-white">{formatCO2(carbonData.scope3_co2_kg)}</span>
-              </div>
-              <div class="w-full bg-ink-800 rounded-full h-2">
-                <div class="bg-purple-500 h-2 rounded-full" 
-                     style="width: {carbonData.total_co2_kg > 0 ? (carbonData.scope3_co2_kg / carbonData.total_co2_kg * 100) : 0}%"></div>
-              </div>
-            </div>
+            <p class="text-ink-400 text-sm mt-2">Combined Scope 2 (Operational) & Scope 3 (Embodied)</p>
           </div>
           
-          <div class="mt-4 pt-4 border-t border-ink-800">
-            <p class="text-xs text-ink-500">
-              Region: {carbonData.region} ({carbonData.carbon_intensity_gco2_kwh} gCO₂/kWh)
-            </p>
-            <p class="text-xs text-ink-500">
-              Methodology: {carbonData.methodology}
-            </p>
-          </div>
-        {/if}
+          {#if carbonData}
+            <div class="grid grid-cols-2 gap-4 mt-6">
+               <div>
+                  <div class="text-xs text-ink-400 mb-1">Scope 2</div>
+                  <div class="h-1.5 w-full bg-ink-800 rounded-full overflow-hidden">
+                     <div class="h-full bg-accent-500" style="width: {carbonData.total_co2_kg > 0 ? (carbonData.scope2_co2_kg / carbonData.total_co2_kg * 100) : 0}%"></div>
+                  </div>
+                  <div class="text-white text-sm mt-1">{formatCO2(carbonData.scope2_co2_kg)}</div>
+               </div>
+               <div>
+                  <div class="text-xs text-ink-400 mb-1">Scope 3</div>
+                  <div class="h-1.5 w-full bg-ink-800 rounded-full overflow-hidden">
+                     <div class="h-full bg-purple-500" style="width: {carbonData.total_co2_kg > 0 ? (carbonData.scope3_co2_kg / carbonData.total_co2_kg * 100) : 0}%"></div>
+                  </div>
+                  <div class="text-white text-sm mt-1">{formatCO2(carbonData.scope3_co2_kg)}</div>
+               </div>
+            </div>
+          {/if}
+        </div>
       </div>
-      
-      <!-- Equivalencies -->
-      <div class="card p-6">
-        <h3 class="text-lg font-semibold mb-4">🌲 Environmental Impact</h3>
+
+      <!-- 2. Efficiency Score (Compact) -->
+      <div class="glass-panel text-center flex flex-col items-center justify-center">
+        <div class="text-4xl mb-2">📈</div>
+        <h3 class="text-ink-400 text-xs uppercase font-medium">Efficiency Score</h3>
+        <p class="text-3xl font-bold text-white mt-1">
+          {carbonData ? carbonData.carbon_efficiency_score : '—'}
+        </p>
+        <p class="text-ink-500 text-xs">gCO₂e per $1 spent</p>
+      </div>
+
+      <!-- 3. Energy Usage (Compact) -->
+      <div class="glass-panel text-center flex flex-col items-center justify-center">
+        <div class="text-4xl mb-2">⚡</div>
+        <h3 class="text-ink-400 text-xs uppercase font-medium">Est. Energy</h3>
+        <p class="text-3xl font-bold text-white mt-1">
+          {carbonData ? Math.round(carbonData.estimated_energy_kwh) : '—'}
+        </p>
+        <p class="text-ink-500 text-xs">kWh (incl. PUE)</p>
+      </div>
+
+      <!-- 4. Carbon Budget (Wide) -->
+      <div class="glass-panel col-span-2">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-lg font-semibold text-white flex items-center gap-2">
+            📊 Monthly Carbon Budget
+          </h3>
+          {#if budgetData}
+             <span class="badge" class:badge-success={budgetData.alert_status === 'ok'}
+                   class:badge-warning={budgetData.alert_status === 'warning'}
+                   class:badge-error={budgetData.alert_status === 'exceeded'}>
+               {budgetData.alert_status === 'ok' ? 'ON TRACK' : 
+                budgetData.alert_status === 'warning' ? 'WARNING' : 'EXCEEDED'}
+             </span>
+          {/if}
+        </div>
         
-        {#if carbonData?.equivalencies}
-          <div class="grid grid-cols-2 gap-4">
-            <div class="bg-ink-800/50 rounded-lg p-4 text-center">
-              <p class="text-2xl mb-1">🚗</p>
-              <p class="text-xl font-bold text-white">{carbonData.equivalencies.miles_driven}</p>
-              <p class="text-xs text-ink-400">miles driven</p>
-            </div>
-            
-            <div class="bg-ink-800/50 rounded-lg p-4 text-center">
-              <p class="text-2xl mb-1">🌳</p>
-              <p class="text-xl font-bold text-white">{carbonData.equivalencies.trees_needed_for_year}</p>
-              <p class="text-xs text-ink-400">trees needed/year</p>
-            </div>
-            
-            <div class="bg-ink-800/50 rounded-lg p-4 text-center">
-              <p class="text-2xl mb-1">📱</p>
-              <p class="text-xl font-bold text-white">{carbonData.equivalencies.smartphone_charges}</p>
-              <p class="text-xs text-ink-400">phone charges</p>
-            </div>
-            
-            <div class="bg-ink-800/50 rounded-lg p-4 text-center">
-              <p class="text-2xl mb-1">🏠</p>
-              <p class="text-xl font-bold text-white">{carbonData.equivalencies.percent_of_home_month}%</p>
-              <p class="text-xs text-ink-400">of avg home/month</p>
-            </div>
+        {#if budgetData}
+          <div class="relative pt-4">
+             <div class="flex justify-between text-xs text-ink-400 mb-1">
+                <span>{formatCO2(budgetData.current_usage_kg)} used</span>
+                <span>Limit: {formatCO2(budgetData.budget_kg)}</span>
+             </div>
+             <div class="w-full bg-ink-950 rounded-full h-3 border border-ink-800 overflow-hidden">
+               <div class="h-full rounded-full transition-all duration-1000 ease-out relative"
+                    class:bg-green-500={budgetData.alert_status === 'ok'}
+                    class:bg-yellow-500={budgetData.alert_status === 'warning'}
+                    class:bg-red-500={budgetData.alert_status === 'exceeded'}
+                    style="width: {Math.min(budgetData.usage_percent, 100)}%">
+                    <div class="absolute inset-0 bg-white/20 animate-pulse"></div>
+               </div>
+             </div>
+             <p class="text-right text-xs text-ink-500 mt-1">{budgetData.usage_percent}% consumed</p>
           </div>
+        {:else}
+          <div class="animate-pulse h-12 bg-ink-800/50 rounded"></div>
         {/if}
       </div>
+
+      <!-- 5. Graviton Migration (Row Span) -->
+      <div class="glass-panel row-span-2 col-span-2">
+         <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold text-white flex items-center gap-2">
+               🚀 Graviton Candidates
+               {#if gravitonData && gravitonData.candidates?.length}
+                  <span class="bg-accent-500/20 text-accent-400 text-xs px-2 py-0.5 rounded-full">{gravitonData.candidates.length}</span>
+               {/if}
+            </h3>
+         </div>
+         
+         <div class="space-y-3 overflow-y-auto max-h-[300px] pr-2 custom-scrollbar">
+            {#if gravitonData && gravitonData.candidates?.length > 0}
+               {#each gravitonData.candidates.slice(0, 5) as candidate}
+                  <div class="bg-ink-900/40 border border-ink-800 rounded-lg p-3 hover:border-accent-500/30 transition-colors">
+                     <div class="flex justify-between items-start mb-1">
+                        <span class="font-mono text-sm text-white">{candidate.instance_id}</span>
+                        <span class="text-green-400 text-xs font-bold">-{candidate.energy_savings_percent}% CO₂</span>
+                     </div>
+                     <div class="flex items-center gap-2 text-xs text-ink-400">
+                        <span>{candidate.current_type}</span>
+                        <span>→</span>
+                        <span class="text-accent-400">{candidate.recommended_type}</span>
+                     </div>
+                  </div>
+               {/each}
+            {:else if gravitonData}
+              <div class="text-center py-8 text-ink-500">
+                 <p>All workloads optimized! 🎉</p>
+              </div>
+            {:else}
+               <div class="space-y-3">
+                  {#each Array(3) as _}
+                    <div class="h-16 bg-ink-800/30 rounded-lg animate-pulse"></div>
+                  {/each}
+               </div>
+            {/if}
+         </div>
+      </div>
+
+      <!-- 6. Real-world Impact -->
+      <div class="glass-panel col-span-2">
+         <h3 class="text-sm font-semibold text-ink-300 mb-3 uppercase tracking-wider">Environmental Equivalencies</h3>
+         
+         {#if carbonData?.equivalencies}
+           <div class="grid grid-cols-4 gap-2">
+             <div class="text-center p-2 bg-ink-900/30 rounded border border-ink-800/50">
+               <div class="text-xl mb-1">🚗</div>
+               <div class="text-sm font-bold text-white">{carbonData.equivalencies.miles_driven}</div>
+               <div class="text-[10px] text-ink-500">miles</div>
+             </div>
+             <div class="text-center p-2 bg-ink-900/30 rounded border border-ink-800/50">
+               <div class="text-xl mb-1">🌳</div>
+               <div class="text-sm font-bold text-white">{carbonData.equivalencies.trees_needed_for_year}</div>
+               <div class="text-[10px] text-ink-500">trees</div>
+             </div>
+             <div class="text-center p-2 bg-ink-900/30 rounded border border-ink-800/50">
+               <div class="text-xl mb-1">📱</div>
+               <div class="text-sm font-bold text-white">{carbonData.equivalencies.smartphone_charges}</div>
+               <div class="text-[10px] text-ink-500">charges</div>
+             </div>
+             <div class="text-center p-2 bg-ink-900/30 rounded border border-ink-800/50">
+               <div class="text-xl mb-1">🏠</div>
+               <div class="text-sm font-bold text-white">{carbonData.equivalencies.percent_of_home_month}%</div>
+               <div class="text-[10px] text-ink-500">home/mo</div>
+             </div>
+           </div>
+         {/if}
+      </div>
+
     </div>
-    
-    <!-- Green Region Recommendations -->
+
+    <!-- Green Regions Section (Separate Flow) -->
     {#if carbonData?.green_region_recommendations?.length > 0}
-      <div class="card p-6">
-        <h3 class="text-lg font-semibold mb-4">🌿 Greener Region Alternatives</h3>
-        <p class="text-ink-400 text-sm mb-4">
-          Consider migrating workloads to these lower-carbon regions:
-        </p>
-        
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {#each carbonData.green_region_recommendations.slice(0, 3) as rec}
-            <div class="bg-green-900/20 border border-green-800 rounded-lg p-4">
-              <p class="font-semibold text-white">{rec.region}</p>
-              <p class="text-green-400 text-sm">{rec.carbon_intensity} gCO₂/kWh</p>
-              <p class="text-green-300 text-xs mt-1">↓ {rec.savings_percent}% less carbon</p>
-            </div>
-          {/each}
-        </div>
-      </div>
-    {/if}
-    
-    <!-- Graviton Migration Candidates -->
-    {#if gravitonData && gravitonData.candidates?.length > 0}
-      <div class="card p-6">
-        <h3 class="text-lg font-semibold mb-4">🚀 Graviton Migration Candidates</h3>
-        <p class="text-ink-400 text-sm mb-4">
-          These EC2 instances can migrate to ARM for up to 60% energy savings:
-        </p>
-        
-        <div class="overflow-x-auto">
-          <table class="w-full text-sm">
-            <thead class="text-ink-400 border-b border-ink-800">
-              <tr>
-                <th class="text-left py-2">Instance</th>
-                <th class="text-left py-2">Current Type</th>
-                <th class="text-left py-2">Recommended</th>
-                <th class="text-left py-2">Energy Savings</th>
-              </tr>
-            </thead>
-            <tbody>
-              {#each gravitonData.candidates.slice(0, 5) as candidate}
-                <tr class="border-b border-ink-800/50">
-                  <td class="py-3 text-white">{candidate.name || candidate.instance_id}</td>
-                  <td class="py-3 text-ink-400">{candidate.current_type}</td>
-                  <td class="py-3 text-green-400">{candidate.recommended_type}</td>
-                  <td class="py-3 text-green-400">↓ {candidate.energy_savings_percent}%</td>
-                </tr>
-              {/each}
-            </tbody>
-          </table>
-        </div>
+      <div class="glass-panel mt-6">
+         <h3 class="text-lg font-semibold mb-3 flex items-center gap-2">
+            🌿 Recommended Regions
+            <span class="text-xs font-normal text-ink-400 bg-ink-800 px-2 py-0.5 rounded">Lower Carbon Intensity</span>
+         </h3>
+         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+           {#each carbonData.green_region_recommendations.slice(0, 3) as rec}
+             <div class="group p-4 rounded-lg bg-gradient-to-br from-green-900/10 to-green-900/5 border border-green-900/30 hover:border-green-500/50 transition-all cursor-pointer">
+               <div class="flex justify-between items-start">
+                  <span class="font-bold text-white group-hover:text-green-400 transition-colors">{rec.region}</span>
+                  <span class="text-xs bg-green-900/40 text-green-300 px-1.5 py-0.5 rounded">{rec.carbon_intensity} g/kWh</span>
+               </div>
+               <div class="mt-2 text-sm text-ink-400">
+                  Save <span class="text-green-400 font-bold">{rec.savings_percent}%</span> emissions
+               </div>
+             </div>
+           {/each}
+         </div>
       </div>
     {/if}
   {/if}
@@ -395,18 +374,4 @@
     color: rgb(248 113 113);
   }
   
-  .budget-ok {
-    background-color: rgb(34 197 94 / 0.1);
-    border-color: rgb(34 197 94 / 0.3);
-  }
-  
-  .budget-warning {
-    background-color: rgb(234 179 8 / 0.1);
-    border-color: rgb(234 179 8 / 0.3);
-  }
-  
-  .budget-exceeded {
-    background-color: rgb(239 68 68 / 0.1);
-    border-color: rgb(239 68 68 / 0.3);
-  }
 </style>

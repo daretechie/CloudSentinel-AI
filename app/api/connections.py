@@ -13,18 +13,19 @@ Endpoints:
 """
 
 from uuid import UUID
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 import structlog
-import boto3
+import aioboto3
+import boto3  # retained for sync scripts if necessary, but unused here now
 from botocore.exceptions import ClientError
 
 from app.db.session import get_db
 from app.models.aws_connection import AWSConnection
-from app.core.auth import get_current_user, CurrentUser
+from app.core.auth import get_current_user, CurrentUser, requires_role
 
 logger = structlog.get_logger()
 router = APIRouter(prefix="/connections/aws", tags=["connections"])
@@ -54,8 +55,7 @@ class AWSConnectionResponse(BaseModel):
     error_message: str | None
     created_at: datetime
     
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class AWSConnectionSetup(BaseModel):
@@ -69,40 +69,28 @@ class AWSConnectionSetup(BaseModel):
 # Helper Functions
 # ============================================================
 
-async def get_tenant_id_from_auth() -> UUID:
+async def verify_aws_connection(role_arn: str, external_id: str) -> tuple[bool, str | None]:
     """
-    TODO: Extract tenant_id from JWT token.
-    For now, return a placeholder. This MUST be implemented properly.
-    """
-    # In production, this would decode the JWT and return the tenant_id
-    # For development, we'll need to implement this with Supabase auth
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="Auth integration required. Implement JWT tenant extraction."
-    )
-
-
-def verify_aws_connection(role_arn: str, external_id: str) -> tuple[bool, str | None]:
-    """
-    Test if we can assume the IAM role.
+    Test if we can assume the IAM role (Async).
     
     Returns:
         (success: bool, error_message: str | None)
     """
     try:
-        sts_client = boto3.client("sts")
-        
-        # Try to assume the role
-        sts_client.assume_role(
-            RoleArn=role_arn,
-            RoleSessionName="CloudSentinelVerification",
-            ExternalId=external_id,
-            DurationSeconds=900,  # Minimum duration
-        )
-        
-        # If successful, we got temporary credentials
-        logger.info("aws_connection_verified", role_arn=role_arn)
-        return True, None
+        session = aioboto3.Session()
+        async with session.client("sts") as sts_client:
+            
+            # Try to assume the role
+            await sts_client.assume_role(
+                RoleArn=role_arn,
+                RoleSessionName="CloudSentinelVerification",
+                ExternalId=external_id,
+                DurationSeconds=900,  # Minimum duration
+            )
+            
+            # If successful, we got temporary credentials
+            logger.info("aws_connection_verified", role_arn=role_arn)
+            return True, None
         
     except ClientError as e:
         error_code = e.response.get("Error", {}).get("Code", "Unknown")
@@ -204,6 +192,31 @@ Resources:
                   - rds:DescribeDBInstances
                   - rds:DescribeDBClusters
                 Resource: '*'
+              - Sid: RedshiftReadOnly
+                Effect: Allow
+                Action:
+                  - redshift:DescribeClusters
+                Resource: '*'
+              - Sid: SageMakerReadOnly
+                Effect: Allow
+                Action:
+                  - sagemaker:ListEndpoints
+                  - sagemaker:ListNotebookInstances
+                  - sagemaker:ListModels
+                Resource: '*'
+              - Sid: ECRReadOnly
+                Effect: Allow
+                Action:
+                  - ecr:DescribeRepositories
+                  - ecr:DescribeImages
+                Resource: '*'
+              - Sid: S3ReadOnly
+                Effect: Allow
+                Action:
+                  - s3:ListAllMyBuckets
+                  - s3:GetBucketLocation
+                  - s3:GetBucketTagging
+                Resource: '*'
               - Sid: CloudWatchRead
                 Effect: Allow
                 Action:
@@ -269,6 +282,30 @@ resource "aws_iam_role_policy" "cloudsentinel_policy" {{
         Resource = "*"
       }},
       {{
+        Sid      = "RedshiftOnly"
+        Effect   = "Allow"
+        Action   = ["redshift:DescribeClusters"]
+        Resource = "*"
+      }},
+      {{
+        Sid      = "SageMakerReadOnly"
+        Effect   = "Allow"
+        Action   = ["sagemaker:ListEndpoints", "sagemaker:ListNotebookInstances", "sagemaker:ListModels"]
+        Resource = "*"
+      }},
+      {{
+        Sid      = "ECRReadOnly"
+        Effect   = "Allow"
+        Action   = ["ecr:DescribeRepositories", "ecr:DescribeImages"]
+        Resource = "*"
+      }},
+      {{
+        Sid      = "S3ReadOnly"
+        Effect   = "Allow"
+        Action   = ["s3:ListAllMyBuckets", "s3:GetBucketLocation", "s3:GetBucketTagging"]
+        Resource = "*"
+      }},
+      {{
         Sid      = "CloudWatchRead"
         Effect   = "Allow"
         Action   = ["cloudwatch:GetMetricData", "cloudwatch:GetMetricStatistics"]
@@ -311,7 +348,7 @@ output "role_arn" {{
 @router.post("", response_model=AWSConnectionResponse, status_code=status.HTTP_201_CREATED)
 async def create_connection(
     data: AWSConnectionCreate,
-    current_user: CurrentUser = Depends(get_current_user),  # <-- Auth dependency
+    current_user: CurrentUser = Depends(requires_role("member")),  # <-- Auth dependency
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -361,7 +398,7 @@ async def create_connection(
 
 @router.get("", response_model=list[AWSConnectionResponse])
 async def list_connections(
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(requires_role("member")),
     db: AsyncSession = Depends(get_db),
 ):
     """
@@ -381,7 +418,7 @@ async def list_connections(
 @router.post("/{connection_id}/verify")
 async def verify_connection(
     connection_id: UUID,
-    current_user: CurrentUser = Depends(get_current_user),  # Add this
+    current_user: CurrentUser = Depends(requires_role("member")),  # Add this
     db: AsyncSession = Depends(get_db),
 ):
     # Fetch connection AND verify tenant ownership
@@ -397,11 +434,12 @@ async def verify_connection(
         raise HTTPException(status_code=404, detail="Connection not found")
     
     # Verify the connection
-    success, error = verify_aws_connection(connection.role_arn, connection.external_id)
+    success, error = await verify_aws_connection(connection.role_arn, connection.external_id)
     
     # Update status
     connection.status = "active" if success else "error"
-    connection.last_verified_at = datetime.utcnow()
+    # FIX: Use naive UTC datetime for SQLAlchemy DateTime column
+    connection.last_verified_at = datetime.now(timezone.utc).replace(tzinfo=None)
     connection.error_message = error
     await db.commit()
     
@@ -417,7 +455,7 @@ async def verify_connection(
 @router.delete("/{connection_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_connection(
     connection_id: UUID,
-    current_user: CurrentUser = Depends(get_current_user),  # Add auth
+    current_user: CurrentUser = Depends(requires_role("member")),  # Add auth
     db: AsyncSession = Depends(get_db),
 ):
     """

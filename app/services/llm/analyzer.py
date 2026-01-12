@@ -1,19 +1,22 @@
 from typing import List, Dict, Any, Optional
+import json
+import re
+import structlog
+from uuid import UUID
+
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.prompts import ChatPromptTemplate
-import structlog
-import re
-from uuid import UUID
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.services.llm.usage_tracker import UsageTracker
-import json
+
 from app.core.config import get_settings
+from app.services.llm.usage_tracker import UsageTracker
 from app.services.notifications import SlackService
+
 logger = structlog.get_logger()
 
 # The "System Prompt" - defines the AI's personality and task
 FINOPS_SYSTEM_PROMPT = """You are a FinOps cost analysis expert specializing in cloud infrastructure optimization.
-
 TASK:
 Analyze the provided cloud cost data and identify cost optimization opportunities.
 
@@ -102,8 +105,8 @@ class FinOpsAnalyzer:
     cost_data: List[Dict[str, Any]],
     tenant_id: Optional[UUID] = None,
     db: Optional[AsyncSession] = None,
-    provider: str = "groq",
-    model: str = "llama-3.3-70b-versatile",) -> str:
+    provider: Optional[str] = None,
+    model: Optional[str] = None,) -> str:
         """
         Takes raw cost data and returns AI-generated insights.
 
@@ -121,11 +124,50 @@ class FinOpsAnalyzer:
         """
         logger.info("starting_analysis", data_points=len(cost_data))
         
-        # Format cost data as string for the prompt
-        formatted_data = str(cost_data)
+        # Format cost data as JSON string for the prompt (better than str() for LLMs)
+        formatted_data = json.dumps(cost_data, default=str)
         
+        # Determine provider and model
+        effective_provider = provider
+        effective_model = model
+        
+        if tenant_id and db and (not effective_provider or not effective_model):
+            from app.models.llm import LLMBudget
+            result = await db.execute(select(LLMBudget).where(LLMBudget.tenant_id == tenant_id))
+            budget = result.scalar_one_or_none()
+            if budget:
+                effective_provider = effective_provider or budget.preferred_provider
+                effective_model = effective_model or budget.preferred_model
+        
+        # Fallbacks if still none
+        effective_provider = effective_provider or get_settings().LLM_PROVIDER
+        effective_model = effective_model or "llama-3.3-70b-versatile"
+
+        # BYOK Check: Fetch tenant-specific API key if available
+        byok_key = None
+        if tenant_id and db:
+            from app.models.llm import LLMBudget
+            result = await db.execute(select(LLMBudget).where(LLMBudget.tenant_id == tenant_id))
+            budget = result.scalar_one_or_none()
+            if budget:
+                if effective_provider == "openai":
+                    byok_key = budget.openai_api_key
+                elif effective_provider in ["claude", "anthropic"]:
+                    byok_key = budget.claude_api_key
+                elif effective_provider == "google":
+                    byok_key = budget.google_api_key
+                elif effective_provider == "groq":
+                    byok_key = budget.groq_api_key
+
         # Build the chain: Prompt -> LLM
-        chain = self.prompt | self.llm
+        # We need to ensure self.llm matches the effective_provider if they differ or if BYOK is used
+        
+        current_llm = self.llm
+        if effective_provider != get_settings().LLM_PROVIDER or byok_key:
+             from app.services.llm.factory import LLMFactory
+             current_llm = LLMFactory.create(effective_provider, api_key=byok_key)
+
+        chain = self.prompt | current_llm
         
         # Invoke the chain
         response = await chain.ainvoke({"cost_data": formatted_data})
@@ -142,10 +184,11 @@ class FinOpsAnalyzer:
                 tracker = UsageTracker(db)
                 await tracker.record(
                     tenant_id=tenant_id,
-                    provider=provider,
-                    model=model,
+                    provider=effective_provider,
+                    model=effective_model,
                     input_tokens=input_tokens,
                     output_tokens=output_tokens,
+                    is_byok=byok_key is not None,
                     request_type="cost_analysis",
                 )
             except Exception as e:
@@ -168,7 +211,7 @@ class FinOpsAnalyzer:
                         message=f"*Issue:* {top_anomaly['issue']}\n*Impact:* {top_anomaly['cost_impact']}\n*Severity:* {top_anomaly['severity']}",
                         severity="critical" if top_anomaly['severity'] == "high" else "warning"
                     )
-        except json.JSONDecodeError:
-            pass  # If response isn't valid JSON, skip alerting
+        except json.JSONDecodeError as e:
+            logger.warning("llm_response_json_parse_failed", error=str(e))
             
         return self._strip_markdown(response.content)

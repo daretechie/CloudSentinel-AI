@@ -11,14 +11,13 @@
 <script lang="ts">
   import '../app.css';
   import { createSupabaseBrowserClient } from '$lib/supabase';
-  import { onMount } from 'svelte';
   import { invalidate } from '$app/navigation';
   import { page } from '$app/stores';
   
-  export let data;
+  let { data, children } = $props();
   
   const supabase = createSupabaseBrowserClient();
-  let sidebarOpen = true;
+  let sidebarOpen = $state(true);
   
   // Navigation items
   const navItems = [
@@ -36,7 +35,7 @@
     return $page.url.pathname.startsWith(href);
   }
   
-  onMount(() => {
+  $effect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
         invalidate('supabase:auth');
@@ -99,7 +98,7 @@
           <button 
             type="button"
             class="btn btn-ghost p-2"
-            on:click={() => sidebarOpen = !sidebarOpen}
+            onclick={() => sidebarOpen = !sidebarOpen}
             aria-label="Toggle sidebar"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -117,7 +116,7 @@
       
       <!-- Page Content -->
       <div class="p-6 page-enter">
-        <slot />
+        {@render children()}
       </div>
     </main>
   {:else}
@@ -136,7 +135,7 @@
     </header>
     
     <main class="page-enter">
-      <slot />
+      {@render children()}
     </main>
   {/if}
 </div>
@@ -144,7 +143,6 @@
 <style>
   /* Custom Tailwind classes for this component */
   .bg-ink-950 { background-color: var(--color-ink-950); }
-  .bg-ink-900 { background-color: var(--color-ink-900); }
   .border-ink-800 { border-color: var(--color-ink-800); }
   .text-ink-100 { color: var(--color-ink-100); }
   .text-ink-500 { color: var(--color-ink-500); }

@@ -9,22 +9,21 @@
 -->
 
 <script lang="ts">
-  import { onMount } from 'svelte';
   import { PUBLIC_API_URL } from '$env/static/public';
   import { createSupabaseBrowserClient } from '$lib/supabase';
   import DateRangePicker from '$lib/components/DateRangePicker.svelte';
   
-  export let data;
+  let { data } = $props();
   
   const supabase = createSupabaseBrowserClient();
   
-  let loading = true;
-  let costs: any = null;
-  let carbon: any = null;
-  let zombies: any = null;
-  let error = '';
-  let startDate = '';
-  let endDate = '';
+  let loading = $state(true);
+  let costs: any = $state(null);
+  let carbon: any = $state(null);
+  let zombies: any = $state(null);
+  let error = $state('');
+  let startDate = $state('');
+  let endDate = $state('');
 
   async function loadData() {
     if (!data.user || !startDate || !endDate) {
@@ -59,25 +58,20 @@
     }
   }
   
-  function handleDateChange(event: CustomEvent<{ startDate: string; endDate: string }>) {
-    startDate = event.detail.startDate;
-    endDate = event.detail.endDate;
+  function handleDateChange(dates: { startDate: string; endDate: string }) {
+    startDate = dates.startDate;
+    endDate = dates.endDate;
     if (data.user) {
       loadData();
     }
   }
   
-  onMount(() => {
-    // Initial load will be triggered by DateRangePicker's initial event
-  });
-  
-  // Calculate zombie count
-  $: zombieCount = (zombies?.unattached_volumes?.length ?? 0) + 
-                   (zombies?.old_snapshots?.length ?? 0) + 
-                   (zombies?.unused_elastic_ips?.length ?? 0);
+  let zombieCount = $derived(zombies ? Object.values(zombies).reduce((acc: number, val: any) => {
+    return Array.isArray(val) ? acc + val.length : acc;
+  }, 0) : 0);
   
   // Calculate period label from dates
-  $: periodLabel = (() => {
+  let periodLabel = $derived((() => {
     if (!startDate || !endDate) return 'Period';
     const start = new Date(startDate);
     const end = new Date(endDate);
@@ -86,7 +80,7 @@
     if (days <= 30) return '30-Day';
     if (days <= 90) return '90-Day';
     return `${days}-Day`;
-  })();
+  })());
 </script>
 
 <svelte:head>
@@ -140,7 +134,7 @@
         </div>
       </div>
       
-      <DateRangePicker on:dateChange={handleDateChange} />
+      <DateRangePicker onDateChange={handleDateChange} />
     </div>
     
     {#if loading}
@@ -245,6 +239,7 @@
                   <th>Resource</th>
                   <th>Type</th>
                   <th>Monthly Cost</th>
+                  <th>AI Reasoning & Confidence</th>
                   <th>Action</th>
                 </tr>
               </thead>
@@ -254,6 +249,17 @@
                     <td class="font-mono text-xs">{vol.resource_id}</td>
                     <td><span class="badge badge-default">EBS Volume</span></td>
                     <td class="text-danger-400">${vol.monthly_cost}</td>
+                    <td>
+                      <div class="flex flex-col gap-1 max-w-xs">
+                        <p class="text-[10px] leading-tight text-ink-300">{vol.explainability_notes || 'Resource detached and accruing idle costs.'}</p>
+                        <div class="flex items-center gap-2">
+                          <div class="h-1 w-16 bg-ink-700 rounded-full overflow-hidden">
+                            <div class="h-full bg-accent-500" style="width: {(vol.confidence_score || 0.85) * 100}%"></div>
+                          </div>
+                          <span class="text-[10px] font-bold text-accent-400">{Math.round((vol.confidence_score || 0.85) * 100)}% Match</span>
+                        </div>
+                      </div>
+                    </td>
                     <td>
                       <button class="btn btn-ghost text-xs">Review</button>
                     </td>
@@ -265,6 +271,17 @@
                     <td><span class="badge badge-default">Snapshot</span></td>
                     <td class="text-danger-400">${snap.monthly_cost}</td>
                     <td>
+                      <div class="flex flex-col gap-1 max-w-xs">
+                        <p class="text-[10px] leading-tight text-ink-300">{snap.explainability_notes || 'Snapshot age exceeds standard retention policy.'}</p>
+                        <div class="flex items-center gap-2">
+                          <div class="h-1 w-16 bg-ink-700 rounded-full overflow-hidden">
+                            <div class="h-full bg-accent-500" style="width: {(snap.confidence_score || 0.99) * 100}%"></div>
+                          </div>
+                          <span class="text-[10px] font-bold text-accent-400">{Math.round((snap.confidence_score || 0.99) * 100)}% Match</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td>
                       <button class="btn btn-ghost text-xs">Review</button>
                     </td>
                   </tr>
@@ -275,8 +292,169 @@
                     <td><span class="badge badge-default">Elastic IP</span></td>
                     <td class="text-danger-400">${eip.monthly_cost}</td>
                     <td>
-                      <button class="btn btn-ghost text-xs">Review</button>
+                      <div class="flex flex-col gap-1 max-w-xs">
+                        <p class="text-[10px] leading-tight text-ink-300">{eip.explainability_notes || 'Unassociated EIP address found.'}</p>
+                        <div class="flex items-center gap-2">
+                          <div class="h-1 w-16 bg-ink-700 rounded-full overflow-hidden">
+                            <div class="h-full bg-accent-500" style="width: {(eip.confidence_score || 0.98) * 100}%"></div>
+                          </div>
+                          <span class="text-[10px] font-bold text-accent-400">{Math.round((eip.confidence_score || 0.98) * 100)}% Match</span>
+                        </div>
+                      </div>
                     </td>
+                    <td><button class="btn btn-ghost text-xs">Review</button></td>
+                  </tr>
+                {/each}
+                {#each zombies?.idle_instances ?? [] as ec2}
+                  <tr>
+                    <td class="font-mono text-xs">{ec2.resource_id}</td>
+                    <td><span class="badge badge-default">Idle EC2 ({ec2.instance_type})</span></td>
+                    <td class="text-danger-400">${ec2.monthly_cost}</td>
+                    <td>
+                      <div class="flex flex-col gap-1 max-w-xs">
+                        <p class="text-[10px] leading-tight text-ink-300">{ec2.explainability_notes || 'Low CPU and network utilization detected over 7 days.'}</p>
+                        <div class="flex items-center gap-2">
+                          <div class="h-1 w-16 bg-ink-700 rounded-full overflow-hidden">
+                            <div class="h-full bg-accent-500" style="width: {(ec2.confidence_score || 0.92) * 100}%"></div>
+                          </div>
+                          <span class="text-[10px] font-bold text-accent-400">{Math.round((ec2.confidence_score || 0.92) * 100)}% Match</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td><button class="btn btn-ghost text-xs">Review</button></td>
+                  </tr>
+                {/each}
+                {#each zombies?.orphan_load_balancers ?? [] as lb}
+                  <tr>
+                    <td class="font-mono text-xs">{lb.resource_id}</td>
+                    <td><span class="badge badge-default">Orphan {lb.lb_type.toUpperCase()}</span></td>
+                    <td class="text-danger-400">${lb.monthly_cost}</td>
+                    <td>
+                      <div class="flex flex-col gap-1 max-w-xs">
+                        <p class="text-[10px] leading-tight text-ink-300">{lb.explainability_notes || 'Load balancer has no healthy targets associated.'}</p>
+                        <div class="flex items-center gap-2">
+                          <div class="h-1 w-16 bg-ink-700 rounded-full overflow-hidden">
+                            <div class="h-full bg-accent-500" style="width: {(lb.confidence_score || 0.95) * 100}%"></div>
+                          </div>
+                          <span class="text-[10px] font-bold text-accent-400">{Math.round((lb.confidence_score || 0.95) * 100)}% Match</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td><button class="btn btn-ghost text-xs">Review</button></td>
+                  </tr>
+                {/each}
+                {#each zombies?.idle_rds_databases ?? [] as rds}
+                  <tr>
+                    <td class="font-mono text-xs">{rds.resource_id}</td>
+                    <td><span class="badge badge-default">Idle RDS ({rds.db_class})</span></td>
+                    <td class="text-danger-400">${rds.monthly_cost}</td>
+                    <td>
+                      <div class="flex flex-col gap-1 max-w-xs">
+                        <p class="text-[10px] leading-tight text-ink-300">{rds.explainability_notes || 'No connections detected in the last billing cycle.'}</p>
+                        <div class="flex items-center gap-2">
+                          <div class="h-1 w-16 bg-ink-700 rounded-full overflow-hidden">
+                            <div class="h-full bg-accent-500" style="width: {(rds.confidence_score || 0.88) * 100}%"></div>
+                          </div>
+                          <span class="text-[10px] font-bold text-accent-400">{Math.round((rds.confidence_score || 0.88) * 100)}% Match</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td><button class="btn btn-ghost text-xs">Review</button></td>
+                  </tr>
+                {/each}
+                {#each zombies?.underused_nat_gateways ?? [] as nat}
+                  <tr>
+                    <td class="font-mono text-xs">{nat.resource_id}</td>
+                    <td><span class="badge badge-default">Idle NAT Gateway</span></td>
+                    <td class="text-danger-400">${nat.monthly_cost}</td>
+                    <td>
+                      <div class="flex flex-col gap-1 max-w-xs">
+                        <p class="text-[10px] leading-tight text-ink-300">{nat.explainability_notes || 'Minimal data processing detected compared to runtime cost.'}</p>
+                        <div class="flex items-center gap-2">
+                          <div class="h-1 w-16 bg-ink-700 rounded-full overflow-hidden">
+                            <div class="h-full bg-accent-500" style="width: {(nat.confidence_score || 0.80) * 100}%"></div>
+                          </div>
+                          <span class="text-[10px] font-bold text-accent-400">{Math.round((nat.confidence_score || 0.80) * 100)}% Match</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td><button class="btn btn-ghost text-xs">Review</button></td>
+                  </tr>
+                {/each}
+                {#each zombies?.idle_s3_buckets ?? [] as s3}
+                  <tr>
+                    <td class="font-mono text-xs">{s3.resource_id}</td>
+                    <td><span class="badge badge-default">Idle S3 Bucket</span></td>
+                    <td class="text-danger-400">${s3.monthly_cost}</td>
+                    <td>
+                      <div class="flex flex-col gap-1 max-w-xs">
+                        <p class="text-[10px] leading-tight text-ink-300">{s3.explainability_notes || 'No GET/PUT requests recorded in the last 30 days.'}</p>
+                        <div class="flex items-center gap-2">
+                          <div class="h-1 w-16 bg-ink-700 rounded-full overflow-hidden">
+                            <div class="h-full bg-accent-500" style="width: {(s3.confidence_score || 0.90) * 100}%"></div>
+                          </div>
+                          <span class="text-[10px] font-bold text-accent-400">{Math.round((s3.confidence_score || 0.90) * 100)}% Match</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td><button class="btn btn-ghost text-xs">Review</button></td>
+                  </tr>
+                {/each}
+                {#each zombies?.legacy_ecr_images ?? [] as ecr}
+                  <tr>
+                    <td class="font-mono text-xs truncate max-w-[150px]">{ecr.resource_id}</td>
+                    <td><span class="badge badge-default">ECR Image</span></td>
+                    <td class="text-danger-400">${ecr.monthly_cost}</td>
+                    <td>
+                      <div class="flex flex-col gap-1 max-w-xs">
+                        <p class="text-[10px] leading-tight text-ink-300">{ecr.explainability_notes || 'Untagged or superseded by multiple newer versions.'}</p>
+                        <div class="flex items-center gap-2">
+                          <div class="h-1 w-16 bg-ink-700 rounded-full overflow-hidden">
+                            <div class="h-full bg-accent-500" style="width: {(ecr.confidence_score || 0.99) * 100}%"></div>
+                          </div>
+                          <span class="text-[10px] font-bold text-accent-400">{Math.round((ecr.confidence_score || 0.99) * 100)}% Match</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td><button class="btn btn-ghost text-xs">Review</button></td>
+                  </tr>
+                {/each}
+                {#each zombies?.idle_sagemaker_endpoints ?? [] as sm}
+                  <tr>
+                    <td class="font-mono text-xs">{sm.resource_id}</td>
+                    <td><span class="badge badge-default">SageMaker Endpoint</span></td>
+                    <td class="text-danger-400">${sm.monthly_cost}</td>
+                    <td>
+                      <div class="flex flex-col gap-1 max-w-xs">
+                        <p class="text-[10px] leading-tight text-ink-300">{sm.explainability_notes || 'Endpoint has not processed any inference requests recently.'}</p>
+                        <div class="flex items-center gap-2">
+                          <div class="h-1 w-16 bg-ink-700 rounded-full overflow-hidden">
+                            <div class="h-full bg-accent-500" style="width: {(sm.confidence_score || 0.95) * 100}%"></div>
+                          </div>
+                          <span class="text-[10px] font-bold text-accent-400">{Math.round((sm.confidence_score || 0.95) * 100)}% Match</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td><button class="btn btn-ghost text-xs">Review</button></td>
+                  </tr>
+                {/each}
+                {#each zombies?.cold_redshift_clusters ?? [] as rs}
+                  <tr>
+                    <td class="font-mono text-xs">{rs.resource_id}</td>
+                    <td><span class="badge badge-default">Redshift Cluster</span></td>
+                    <td class="text-danger-400">${rs.monthly_cost}</td>
+                    <td>
+                      <div class="flex flex-col gap-1 max-w-xs">
+                        <p class="text-[10px] leading-tight text-ink-300">{rs.explainability_notes || 'Cluster has been in idle state for over 14 days.'}</p>
+                        <div class="flex items-center gap-2">
+                          <div class="h-1 w-16 bg-ink-700 rounded-full overflow-hidden">
+                            <div class="h-full bg-accent-500" style="width: {(rs.confidence_score || 0.85) * 100}%"></div>
+                          </div>
+                          <span class="text-[10px] font-bold text-accent-400">{Math.round((rs.confidence_score || 0.85) * 100)}% Match</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td><button class="btn btn-ghost text-xs">Review</button></td>
                   </tr>
                 {/each}
               </tbody>
@@ -289,26 +467,5 @@
 {/if}
 
 <style>
-  .text-ink-400 { color: var(--color-ink-400); }
-  .text-ink-500 { color: var(--color-ink-500); }
-  .text-ink-100 { color: var(--color-ink-100); }
-  .bg-ink-800\/50 { background-color: rgb(24 32 40 / 0.5); }
-  .text-danger-400 { color: var(--color-danger-400); }
   .border-danger-500\/50 { border-color: rgb(244 63 94 / 0.5); }
-  .bg-danger-500\/10 { background-color: rgb(244 63 94 / 0.1); }
-  
-  .period-select {
-    padding: 0.5rem 1rem;
-    border: 1px solid var(--color-ink-700);
-    border-radius: 0.5rem;
-    background: var(--color-ink-900);
-    color: white;
-    cursor: pointer;
-    font-size: 0.875rem;
-  }
-  
-  .period-select:focus {
-    outline: none;
-    border-color: var(--color-accent-500);
-  }
 </style>

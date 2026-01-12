@@ -300,6 +300,50 @@ body {
   opacity: 1;
 }
 
+/* ===== COMPONENT: Glassmorphism & Bento ===== */
+.glass-panel {
+  background: rgba(15, 19, 24, 0.7); /* ink-900 with opacity */
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+  transition: all var(--duration-normal) var(--ease-out);
+}
+
+.glass-panel:hover {
+  background: rgba(15, 19, 24, 0.85);
+  border-color: rgba(255, 255, 255, 0.15);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+}
+
+.bento-grid {
+  display: grid;
+  grid-template-columns: repeat(1, 1fr);
+  gap: var(--space-4);
+  grid-auto-flow: dense;
+}
+
+@media (min-width: 768px) {
+  .bento-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .bento-grid {
+    grid-template-columns: repeat(4, 1fr);
+    grid-template-rows: auto auto;
+  }
+  
+  /* Bento Spans */
+  .col-span-2 { grid-column: span 2; }
+  .col-span-3 { grid-column: span 3; }
+  .col-span-4 { grid-column: span 4; }
+  .row-span-2 { grid-row: span 2; }
+}
+
 /* ===== COMPONENT: Inputs ===== */
 .input {
   width: 100%;

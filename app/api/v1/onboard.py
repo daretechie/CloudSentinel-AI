@@ -23,6 +23,9 @@ async def onboard(
         raise HTTPException(400, "Already onboarded")
     
     # 2. Create Tenant
+    if len(request.tenant_name) < 3:
+        raise HTTPException(400, "Tenant name must be at least 3 characters")
+        
     tenant = Tenant(name=request.tenant_name)
     db.add(tenant)
     await db.flush()  # Get tenant.id

@@ -8,6 +8,7 @@ Called after every LLM API call to track token usage.
 from uuid import UUID
 from decimal import Decimal
 from sqlalchemy.ext.asyncio import AsyncSession
+from datetime import datetime, timezone
 import structlog
 
 from app.models.llm import LLMUsage
@@ -20,17 +21,24 @@ LLM_PRICING = {
     "groq": {
         "llama-3.3-70b-versatile": {"input": 0.59, "output": 0.79},
         "llama-3.1-8b-instant": {"input": 0.05, "output": 0.08},
-        "mixtral-8x7b-32768": {"input": 0.24, "output": 0.24},
+        "deepseek-v3": {"input": 0.14, "output": 0.28},
     },
     "openai": {
         "gpt-4o": {"input": 2.50, "output": 10.00},
         "gpt-4o-mini": {"input": 0.15, "output": 0.60},
-        "gpt-4-turbo": {"input": 10.00, "output": 30.00},
+        "o1-mini": {"input": 3.00, "output": 12.00},
+        "o1-preview": {"input": 15.00, "output": 60.00},
     },
     "anthropic": {
+        "claude-3-7-sonnet": {"input": 3.00, "output": 15.00},
         "claude-3-5-sonnet": {"input": 3.00, "output": 15.00},
-        "claude-3-haiku": {"input": 0.25, "output": 1.25},
+        "claude-3-5-haiku": {"input": 0.25, "output": 1.25},
         "claude-3-opus": {"input": 15.00, "output": 75.00},
+    },
+    "google": {
+        "gemini-2.0-flash": {"input": 0.10, "output": 0.40},
+        "gemini-1.5-pro": {"input": 1.00, "output": 3.00},
+        "gemini-1.5-flash": {"input": 0.05, "output": 0.15},
     },
 }
 
@@ -91,6 +99,7 @@ class UsageTracker:
         model: str,
         input_tokens: int,
         output_tokens: int,
+        is_byok: bool = False,
         request_type: str = "unknown",
     ) -> LLMUsage:
         """
@@ -102,6 +111,7 @@ class UsageTracker:
             model: Specific model used
             input_tokens: Tokens in prompt
             output_tokens: Tokens in response
+            is_byok: True if user's personal key was used
             request_type: What this call was for
         
         Returns:
@@ -117,6 +127,7 @@ class UsageTracker:
             output_tokens=output_tokens,
             total_tokens=input_tokens + output_tokens,
             cost_usd=cost,
+            is_byok=is_byok,
             request_type=request_type,
         )
         
@@ -145,10 +156,9 @@ class UsageTracker:
         Returns:
             Total cost in USD for current month
         """
-        from datetime import datetime
         from sqlalchemy import select, func, extract
         
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         
         result = await self.db.execute(
             select(func.sum(LLMUsage.cost_usd))
@@ -167,7 +177,6 @@ class UsageTracker:
         from sqlalchemy import select
         from app.models.llm import LLMBudget
         from app.core.config import get_settings
-        from datetime import datetime
         
         # Get tenant's budget settings
         result = await self.db.execute(
@@ -190,10 +199,23 @@ class UsageTracker:
             usage_percent = Decimal("0")
         
         # Check if threshold crossed and alert not already sent this month
-        now = datetime.utcnow()
-        current_month = f"{now.year}-{now.month:02d}"
+        now = datetime.now(timezone.utc)
         
-        if usage_percent >= threshold_percent and budget.alert_sent_at != current_month:
+        # Check if we already sent an alert this month
+        already_sent_this_month = False
+        if budget.alert_sent_at:
+            # Type safety: if it's still a string (pre-migration data), handle it
+            # But normally it will be a datetime object now
+            if isinstance(budget.alert_sent_at, datetime):
+                if budget.alert_sent_at.year == now.year and budget.alert_sent_at.month == now.month:
+                    already_sent_this_month = True
+            else:
+                # Fallback for string month format if migration is pending
+                current_month_str = f"{now.year}-{now.month:02d}"
+                if str(budget.alert_sent_at) == current_month_str:
+                    already_sent_this_month = True
+        
+        if usage_percent >= threshold_percent and not already_sent_this_month:
             # Send Slack alert
             settings = get_settings()
             if settings.SLACK_BOT_TOKEN and settings.SLACK_CHANNEL_ID:
@@ -215,6 +237,6 @@ class UsageTracker:
                     usage_percent=float(usage_percent),
                 )
             
-            # Update alert_sent_at to avoid duplicate alerts
-            budget.alert_sent_at = current_month
+            # Update alert_sent_at to now
+            budget.alert_sent_at = now
             await self.db.commit()

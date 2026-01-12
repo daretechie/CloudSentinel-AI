@@ -39,6 +39,15 @@ class RemediationAction(str, Enum):
     RELEASE_ELASTIC_IP = "release_elastic_ip"
     STOP_INSTANCE = "stop_instance"
     TERMINATE_INSTANCE = "terminate_instance"
+    DELETE_S3_BUCKET = "delete_s3_bucket"
+    DELETE_ECR_IMAGE = "delete_ecr_image"
+    DELETE_SAGEMAKER_ENDPOINT = "delete_sagemaker_endpoint"
+    DELETE_REDSHIFT_CLUSTER = "delete_redshift_cluster"
+    DELETE_LOAD_BALANCER = "delete_load_balancer"
+    STOP_RDS_INSTANCE = "stop_rds_instance"
+    DELETE_RDS_INSTANCE = "delete_rds_instance"
+    DELETE_NAT_GATEWAY = "delete_nat_gateway"
+    MANUAL_REVIEW = "manual_review"
 
 
 class RemediationRequest(Base):
@@ -78,6 +87,10 @@ class RemediationRequest(Base):
     
     # Financial impact
     estimated_monthly_savings = Column(Numeric(10, 2), nullable=True)
+    
+    # AI Explainability
+    confidence_score = Column(Numeric(3, 2), nullable=True) # 0.00 to 1.00
+    explainability_notes = Column(String(1000), nullable=True) # AI Reasoning
     
     # Backup options (for safe delete)
     create_backup = Column(Boolean, default=False)

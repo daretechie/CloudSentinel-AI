@@ -4,7 +4,7 @@ Manages per-tenant notification preferences.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 import structlog
@@ -12,6 +12,7 @@ import structlog
 from app.core.auth import CurrentUser, get_current_user
 from app.db.session import get_db
 from app.models.notification_settings import NotificationSettings
+from app.models.remediation_settings import RemediationSettings
 
 logger = structlog.get_logger()
 router = APIRouter(prefix="/settings", tags=["Settings"])
@@ -32,8 +33,7 @@ class NotificationSettingsResponse(BaseModel):
     alert_on_budget_exceeded: bool
     alert_on_zombie_detected: bool
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class NotificationSettingsUpdate(BaseModel):
@@ -190,8 +190,7 @@ class CarbonSettingsResponse(BaseModel):
     email_enabled: bool
     email_recipients: str | None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class CarbonSettingsUpdate(BaseModel):
@@ -201,6 +200,60 @@ class CarbonSettingsUpdate(BaseModel):
     default_region: str = Field("us-east-1", description="Default AWS region for carbon intensity")
     email_enabled: bool = Field(False, description="Enable email notifications for carbon alerts")
     email_recipients: str | None = Field(None, description="Comma-separated email addresses")
+
+
+# ============================================================
+# LLM Settings Schemas
+# ============================================================
+
+class LLMSettingsResponse(BaseModel):
+    """Response for LLM budget and selection settings."""
+    monthly_limit_usd: float
+    alert_threshold_percent: int
+    hard_limit: bool
+    preferred_provider: str
+    preferred_model: str
+    
+    # API Key status (True if key is set, but don't return the actual key for security)
+    has_openai_key: bool = False
+    has_claude_key: bool = False
+    has_google_key: bool = False
+    has_groq_key: bool = False
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class LLMSettingsUpdate(BaseModel):
+    """Request to update LLM settings."""
+    monthly_limit_usd: float = Field(10.0, ge=0, description="Monthly USD budget for AI")
+    alert_threshold_percent: int = Field(80, ge=0, le=100, description="Warning threshold %")
+    hard_limit: bool = Field(False, description="Block requests if budget exceeded")
+    preferred_provider: str = Field("groq", pattern="^(openai|claude|google|groq)$")
+    preferred_model: str = Field("llama-3.3-70b-versatile")
+    
+    # Optional API Key Overrides
+    openai_api_key: str | None = Field(None, max_length=255)
+    claude_api_key: str | None = Field(None, max_length=255)
+    google_api_key: str | None = Field(None, max_length=255)
+    groq_api_key: str | None = Field(None, max_length=255)
+
+
+# ============================================================
+# ActiveOps (Remediation) Settings Schemas
+# ============================================================
+
+class ActiveOpsSettingsResponse(BaseModel):
+    """Response for ActiveOps (remediation) settings."""
+    auto_pilot_enabled: bool
+    min_confidence_threshold: float
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ActiveOpsSettingsUpdate(BaseModel):
+    """Request to update ActiveOps settings."""
+    auto_pilot_enabled: bool = Field(False, description="Enable autonomous remediation")
+    min_confidence_threshold: float = Field(0.95, ge=0.5, le=1.0, description="Minimum AI confidence (0.5-1.0)")
 
 
 # ============================================================
@@ -286,6 +339,197 @@ async def update_carbon_settings(
         tenant_id=str(current_user.tenant_id),
         budget_kg=settings.carbon_budget_kg,
         threshold=settings.alert_threshold_percent,
+    )
+    
+    return settings
+
+
+# ============================================================
+# LLM Settings Endpoints
+# ============================================================
+
+@router.get("/llm", response_model=LLMSettingsResponse)
+async def get_llm_settings(
+    current_user: CurrentUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Get LLM budget and selection settings for the current tenant.
+    """
+    from app.models.llm import LLMBudget
+    
+    result = await db.execute(
+        select(LLMBudget).where(
+            LLMBudget.tenant_id == current_user.tenant_id
+        )
+    )
+    settings = result.scalar_one_or_none()
+    
+    # Create default budget if not exists
+    if not settings:
+        settings = LLMBudget(
+            tenant_id=current_user.tenant_id,
+            monthly_limit_usd=10.0,
+            alert_threshold_percent=80,
+            preferred_provider="groq",
+            preferred_model="llama-3.3-70b-versatile",
+        )
+        db.add(settings)
+        await db.commit()
+        await db.refresh(settings)
+        
+        logger.info(
+            "llm_settings_created",
+            tenant_id=str(current_user.tenant_id),
+        )
+    
+    # Map model flags for response
+    return {
+        "monthly_limit_usd": float(settings.monthly_limit_usd),
+        "alert_threshold_percent": settings.alert_threshold_percent,
+        "hard_limit": settings.hard_limit,
+        "preferred_provider": settings.preferred_provider,
+        "preferred_model": settings.preferred_model,
+        "has_openai_key": bool(settings.openai_api_key),
+        "has_claude_key": bool(settings.claude_api_key),
+        "has_google_key": bool(settings.google_api_key),
+        "has_groq_key": bool(settings.groq_api_key),
+    }
+
+
+@router.put("/llm", response_model=LLMSettingsResponse)
+async def update_llm_settings(
+    data: LLMSettingsUpdate,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Update LLM budget and selection settings for the current tenant.
+    """
+    from app.models.llm import LLMBudget
+    
+    result = await db.execute(
+        select(LLMBudget).where(
+            LLMBudget.tenant_id == current_user.tenant_id
+        )
+    )
+    settings = result.scalar_one_or_none()
+    
+    if not settings:
+        settings = LLMBudget(
+            tenant_id=current_user.tenant_id,
+            **data.model_dump()
+        )
+        db.add(settings)
+    else:
+        for key, value in data.model_dump().items():
+            setattr(settings, key, value)
+    
+    await db.commit()
+    await db.refresh(settings)
+    
+    logger.info(
+        "llm_settings_updated",
+        tenant_id=str(current_user.tenant_id),
+        provider=settings.preferred_provider,
+        model=settings.preferred_model,
+    )
+    
+    # Map model flags for response
+    return {
+        "monthly_limit_usd": float(settings.monthly_limit_usd),
+        "alert_threshold_percent": settings.alert_threshold_percent,
+        "hard_limit": settings.hard_limit,
+        "preferred_provider": settings.preferred_provider,
+        "preferred_model": settings.preferred_model,
+        "has_openai_key": bool(settings.openai_api_key),
+        "has_claude_key": bool(settings.claude_api_key),
+        "has_google_key": bool(settings.google_api_key),
+        "has_groq_key": bool(settings.groq_api_key),
+    }
+
+
+@router.get("/llm/models")
+async def get_llm_models():
+    """Returns available LLM providers and models."""
+    from app.services.llm.usage_tracker import LLM_PRICING
+    
+    result = {}
+    for provider, models in LLM_PRICING.items():
+        result[provider] = list(models.keys())
+    
+    return result
+
+
+# ============================================================
+# ActiveOps Settings Endpoints
+# ============================================================
+
+@router.get("/activeops", response_model=ActiveOpsSettingsResponse)
+async def get_activeops_settings(
+    current_user: CurrentUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Get ActiveOps (Autonomous Remediation) settings for the current tenant.
+    """
+    result = await db.execute(
+        select(RemediationSettings).where(
+            RemediationSettings.tenant_id == current_user.tenant_id
+        )
+    )
+    settings = result.scalar_one_or_none()
+    
+    # Create default settings if not exists
+    if not settings:
+        settings = RemediationSettings(
+            tenant_id=current_user.tenant_id,
+            auto_pilot_enabled=False,
+            min_confidence_threshold=0.95,
+        )
+        db.add(settings)
+        await db.commit()
+        await db.refresh(settings)
+        
+        logger.info("activeops_settings_created", tenant_id=str(current_user.tenant_id))
+    
+    return settings
+
+
+@router.put("/activeops", response_model=ActiveOpsSettingsResponse)
+async def update_activeops_settings(
+    data: ActiveOpsSettingsUpdate,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Update ActiveOps settings for the current tenant.
+    """
+    result = await db.execute(
+        select(RemediationSettings).where(
+            RemediationSettings.tenant_id == current_user.tenant_id
+        )
+    )
+    settings = result.scalar_one_or_none()
+    
+    if not settings:
+        settings = RemediationSettings(
+            tenant_id=current_user.tenant_id,
+            **data.model_dump()
+        )
+        db.add(settings)
+    else:
+        for key, value in data.model_dump().items():
+            setattr(settings, key, value)
+    
+    await db.commit()
+    await db.refresh(settings)
+    
+    logger.info(
+        "activeops_settings_updated",
+        tenant_id=str(current_user.tenant_id),
+        auto_pilot=settings.auto_pilot_enabled,
+        threshold=float(settings.min_confidence_threshold)
     )
     
     return settings

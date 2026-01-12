@@ -30,6 +30,7 @@ class CurrentUser(BaseModel):
     id: UUID
     email: str
     tenant_id: Optional[UUID] = None
+    role: str = "member"  # owner, admin, member
 
 
 def decode_jwt(token: str) -> dict:
@@ -119,48 +120,75 @@ async def get_current_user(
             detail="Invalid token payload",
         )
 
-    # Fetch user from DB
-    result = await db.execute(select(User).where(User.id == UUID(user_id)))
-    user = result.scalar_one_or_none()
-    
-    # Handle not found
-    if user is None:
-      raise HTTPException(403, "User not found. Complete Onboarding first.")
-    
-    logger.info("user_authenticated", user_id=str(user.id), email=user.email)
-    
-    return CurrentUser(id=user.id, email=user.email, tenant_id=user.tenant_id)
-
-
-
-
-async def get_current_user_optional(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
-) -> Optional[CurrentUser]:
-    """
-    Same as get_current_user but returns None instead of 401.
-    
-    Use for endpoints that work with or without auth:
-        @app.get("/public-data")
-        async def get_data(user: Optional[CurrentUser] = Depends(get_current_user_optional)):
-            if user:
-                return private_data
-            return public_data
-    """
-    if credentials is None:
-        return None
-    
     try:
-        payload = decode_jwt(credentials.credentials)
-        user_id = payload.get("sub")
-        email = payload.get("email")
+        # Fetch user from DB
+        result = await db.execute(select(User).where(User.id == UUID(user_id)))
+        user = result.scalar_one_or_none()
         
-        if not user_id:
-            return None
+        # Handle not found
+        if user is None:
+          raise HTTPException(403, "User not found. Complete Onboarding first.")
         
-        return CurrentUser(id=UUID(user_id), email=email)
-    except HTTPException:
-        return None
+        logger.info("user_authenticated", user_id=str(user.id), email=user.email, role=user.role)
+        
+        return CurrentUser(
+            id=user.id, 
+            email=user.email, 
+            tenant_id=user.tenant_id,
+            role=user.role
+        )
+    except Exception as e:
+        with open("error_auth.txt", "w") as f:
+            import traceback
+            traceback.print_exc(file=f)
+        logger.error("auth_failed", error=str(e))
+        raise e
+
+
+
+
+
+def requires_role(required_role: str):
+    """
+    FastAPI dependency for RBAC.
+    
+    Usage:
+        @router.post("/admin-only")
+        async def admin_only(user: CurrentUser = Depends(requires_role("admin"))):
+            ...
+    
+    Access Levels:
+    - owner: full access (super user)
+    - admin: configuration and remediation
+    - member: read-only cost viewing
+    """
+    def role_checker(user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
+        # Owner bypasses all role checks
+        if user.role == "owner":
+            return user
+            
+        # Check hierarchy
+        # owner > admin > member
+        role_hierarchy = {"owner": 100, "admin": 50, "member": 10}
+        
+        user_level = role_hierarchy.get(user.role, 0)
+        required_level = role_hierarchy.get(required_role, 10)
+        
+        if user_level < required_level:
+            logger.warning(
+                "insufficient_permissions", 
+                user_id=str(user.id), 
+                user_role=user.role, 
+                required_role=required_role
+            )
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Insufficient permissions. Required role: {required_role}"
+            )
+            
+        return user
+        
+    return role_checker
 
 
 

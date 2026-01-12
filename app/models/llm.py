@@ -12,10 +12,12 @@ Why this matters:
 """
 
 from uuid import uuid4
-from sqlalchemy import Column, String, Integer, Numeric, ForeignKey
+from sqlalchemy import Column, String, Integer, Numeric, ForeignKey, Boolean, DateTime
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
+from sqlalchemy.ext.hybrid import hybrid_property
 
+from app.core.security import encrypt_string, decrypt_string
 from app.db.base import Base
 
 
@@ -80,6 +82,10 @@ class LLMUsage(Base):
     # Useful for analytics: "80% of cost comes from daily_analysis"
     request_type = Column(String(50), nullable=True)
     
+    # is_byok: True if the user's personal API key was used
+    # Important for billing: Platform fees vs Token costs
+    is_byok = Column(Boolean, nullable=False, default=False)
+    
     # created_at is inherited from Base (automatic timestamp)
     # updated_at is inherited from Base (automatic on update)
     
@@ -92,6 +98,7 @@ class LLMUsage(Base):
         return f"<LLMUsage {self.model} ${self.cost_usd:.6f}>"
 
 
+
 class LLMBudget(Base):
     """
     Tracks monthly LLM usage budget per tenant.
@@ -100,14 +107,7 @@ class LLMBudget(Base):
     - Soft alerts: Notify when usage hits threshold (e.g., 80%)
     - Hard limits: Optionally block requests when budget exceeded
     - Cost control: Prevent surprise AI bills
-    
-    Example:
-        budget = LLMBudget(
-            tenant_id=tenant.id,
-            monthly_limit_usd=Decimal("10.00"),
-            alert_threshold_percent=80,
-            hard_limit=False,  # Alert only, don't block
-        )
+    - BYOK: Securely store tenant API keys with transparent encryption
     """
     
     __tablename__ = "llm_budgets"
@@ -125,18 +125,59 @@ class LLMBudget(Base):
     )
     
     # Monthly limit in USD (e.g., $10.00)
-    # Numeric(10,2): Up to $99,999,999.99
     monthly_limit_usd = Column(Numeric(10, 2), nullable=False, default=10.00)
     
     # Alert threshold percentage (e.g., 80 = alert at 80% usage)
     alert_threshold_percent = Column(Integer, nullable=False, default=80)
     
     # Hard limit: If True, block LLM requests when budget exceeded
-    # If False, just alert but allow requests to continue
-    hard_limit = Column(String(10), nullable=False, default="false")
+    hard_limit = Column(Boolean, nullable=False, default=False)
     
-    # Track if alert has been sent this month (avoid spam)
-    alert_sent_at = Column(String(50), nullable=True)
+    # AI Strategy: Per-tenant model and provider selection
+    preferred_provider = Column(String(50), nullable=False, default="groq")
+    preferred_model = Column(String(100), nullable=False, default="llama-3.3-70b-versatile")
+    
+    # Underlying columns for API Key Overrides (storing encrypted data)
+    _openai_api_key = Column("openai_api_key", String(512), nullable=True)
+    _claude_api_key = Column("claude_api_key", String(512), nullable=True)
+    _google_api_key = Column("google_api_key", String(512), nullable=True)
+    _groq_api_key = Column("groq_api_key", String(512), nullable=True)
+    
+    # Hybrid properties for transparent encryption/decryption
+    @hybrid_property
+    def openai_api_key(self):
+        return decrypt_string(self._openai_api_key)
+        
+    @openai_api_key.setter
+    def openai_api_key(self, value):
+        self._openai_api_key = encrypt_string(value) if value else None
+
+    @hybrid_property
+    def claude_api_key(self):
+        return decrypt_string(self._claude_api_key)
+        
+    @claude_api_key.setter
+    def claude_api_key(self, value):
+        self._claude_api_key = encrypt_string(value) if value else None
+
+    @hybrid_property
+    def google_api_key(self):
+        return decrypt_string(self._google_api_key)
+        
+    @google_api_key.setter
+    def google_api_key(self, value):
+        self._google_api_key = encrypt_string(value) if value else None
+
+    @hybrid_property
+    def groq_api_key(self):
+        return decrypt_string(self._groq_api_key)
+        
+    @groq_api_key.setter
+    def groq_api_key(self, value):
+        self._groq_api_key = encrypt_string(value) if value else None
+    
+    # Track when alert was sent (avoid spam)
+    alert_sent_at = Column(DateTime(timezone=True), nullable=True)
     
     # Relationship
     tenant = relationship("Tenant", back_populates="llm_budget")

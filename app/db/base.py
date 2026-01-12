@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy import MetaData
 from sqlalchemy.types import TIMESTAMP
@@ -16,9 +16,13 @@ class Base(DeclarativeBase):
     metadata = MetaData(naming_convention=naming_convention)
     
     # Mixin for audit columns
-    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=datetime.utcnow)
+    # Using lambda for defaults ensures fresh UTC timestamps at creation
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), 
+        default=lambda: datetime.now(timezone.utc)
+    )
     updated_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), 
-        default=datetime.utcnow, 
-        onupdate=datetime.utcnow
+        default=lambda: datetime.now(timezone.utc), 
+        onupdate=lambda: datetime.now(timezone.utc)
     )

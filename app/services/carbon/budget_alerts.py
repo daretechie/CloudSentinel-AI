@@ -165,10 +165,19 @@ class CarbonBudgetService:
         sent_any = False
         
         # Send Slack notification
-        if app_settings.SLACK_BOT_TOKEN and app_settings.SLACK_CHANNEL_ID:
+        from app.models.notification_settings import NotificationSettings
+        notif_result = await self.db.execute(
+            select(NotificationSettings).where(NotificationSettings.tenant_id == tenant_id)
+        )
+        notif_settings = notif_result.scalar_one_or_none()
+        
+        if app_settings.SLACK_BOT_TOKEN and (app_settings.SLACK_CHANNEL_ID or (notif_settings and notif_settings.slack_channel_override)):
             try:
                 from app.services.notifications import SlackService
-                slack = SlackService(app_settings.SLACK_BOT_TOKEN, app_settings.SLACK_CHANNEL_ID)
+                channel = (notif_settings.slack_channel_override if notif_settings and notif_settings.slack_channel_override 
+                          else app_settings.SLACK_CHANNEL_ID)
+                
+                slack = SlackService(app_settings.SLACK_BOT_TOKEN, channel)
                 
                 status = budget_status["alert_status"]
                 severity = "critical" if status == "exceeded" else "warning"

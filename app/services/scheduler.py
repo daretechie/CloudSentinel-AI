@@ -1,12 +1,20 @@
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime, timezone
 import time
 import structlog
 from prometheus_client import Counter, Histogram
-from app.services.adapters.aws import AWSAdapter
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+
+import asyncio
+from app.services.adapters.aws_multitenant import MultiTenantAWSAdapter
 from app.services.llm.factory import LLMFactory
 from app.services.llm.analyzer import FinOpsAnalyzer
+from app.services.carbon.calculator import CarbonCalculator
+from app.services.zombies.detector import ZombieDetector
+from app.models.tenant import Tenant
+from app.models.aws_connection import AWSConnection
 from app.core.config import get_settings
 
 logger = structlog.get_logger()
@@ -32,127 +40,146 @@ class SchedulerService:
         self.settings = get_settings()
         self._last_run_success: bool | None = None
         self._last_run_time: str | None = None
+        
+        # Setup DB session for background jobs
+        self.engine = create_async_engine(self.settings.DATABASE_URL)
+        self.session_maker = async_sessionmaker(self.engine, expire_on_commit=False)
+        self.semaphore = asyncio.Semaphore(10)  # Limit concurrency to 10 tenants
 
     async def daily_analysis_job(self):
         """
-        The actual job that runs every morning.
-        Fetches yesterday's costs -> Analyzes -> Logs Results.
+        Multitenant analysis job.
+        Iterates through all tenants -> Analyzes each -> Logs/Notify.
         """
         job_name = "daily_finops_scan"
         start_time = time.time()
         
         logger.info("scheduler_job_starting", job=job_name)
 
-        # 1. Calculate Date Range
-        today = date.today()
-        yesterday = today - timedelta(days=1)
-
-        # 2. Initialize Components
-        adapter = AWSAdapter()
-        llm = LLMFactory.create(self.settings.LLM_PROVIDER)
-        analyzer = FinOpsAnalyzer(llm)
-
-        # 3. Execute Workflow
         try:
-            costs = await adapter.get_daily_costs(yesterday, today)
-            if not costs:
-                logger.warning("scheduler_job_no_data", job=job_name)
-                SCHEDULER_JOB_RUNS.labels(job_name=job_name, status="success").inc()
-                self._last_run_success = True
-                self._last_run_time = today.isoformat()
-                return
+            # 1. Get all tenants using a short-lived session
+            async with self.session_maker() as db:
+                result = await db.execute(select(Tenant))
+                tenants = result.scalars().all()
+                
+            logger.info("scheduler_scanning_tenants", count=len(tenants))
+            
+            today = date.today()
+            yesterday = today - timedelta(days=1)
+            
+            # Process tenants in parallel with a semaphore limit
+            # Note: Each task will open its OWN session now
+            tasks = [self._process_tenant_wrapper(tenant, yesterday, today) for tenant in tenants]
+            await asyncio.gather(*tasks)
 
-            analysis = await analyzer.analyze(costs)
-            
-            # Calculate total cost
-            total_cost = sum(c.get("amount", 0) for c in costs)
-            
-            # Send Slack digest if configured
-            if self.settings.SLACK_BOT_TOKEN and self.settings.SLACK_CHANNEL_ID:
-                from app.services.notifications import SlackService
-                from app.services.carbon import CarbonCalculator
-                import json
-                
-                slack = SlackService(self.settings.SLACK_BOT_TOKEN, self.settings.SLACK_CHANNEL_ID)
-                
-                # Calculate carbon footprint from actual cost data
-                carbon_calc = CarbonCalculator()
-                carbon_result = carbon_calc.calculate_from_costs(costs)
-                carbon_kg = carbon_result.get("total_co2_kg", 0)
-                
-                # Count zombies from analysis
-                try:
-                    result = json.loads(analysis)
-                    zombie_count = len(result.get("zombie_resources", []))
-                except json.JSONDecodeError:
-                    zombie_count = 0
-                
-                await slack.send_digest({
-                    "total_cost": total_cost,
-                    "carbon_kg": carbon_kg,
-                    "zombie_count": zombie_count,
-                    "period": f"{yesterday.isoformat()} - {today.isoformat()}"
-                })
-
-            # Log success with key metrics
-            logger.info(
-                "scheduler_job_complete",
-                job=job_name,
-                cost_records=len(costs),
-                analysis_length=len(analysis)
-            )
-            
             SCHEDULER_JOB_RUNS.labels(job_name=job_name, status="success").inc()
             self._last_run_success = True
-            self._last_run_time = today.isoformat()
+            self._last_run_time = datetime.now(timezone.utc).isoformat()
 
         except Exception as e:
             logger.error("scheduler_job_failed", job=job_name, error=str(e))
             SCHEDULER_JOB_RUNS.labels(job_name=job_name, status="failure").inc()
             self._last_run_success = False
-            self._last_run_time = today.isoformat()
-            raise  # Re-raise so APScheduler knows it failed
+            self._last_run_time = datetime.now(timezone.utc).isoformat()
+            # Don't raise, let the loop handle individual tenant failures
 
         finally:
             duration = time.time() - start_time
             SCHEDULER_JOB_DURATION.labels(job_name=job_name).observe(duration)
             logger.info("scheduler_job_duration", job=job_name, seconds=round(duration, 2))
 
-    async def send_daily_slack_digest(self):
-        """Send daily cost digest to Slack."""
-        job_name = "slack_daily_digest"
-        logger.info("scheduler_job_starting", job=job_name)
-    
+    async def _process_tenant_wrapper(self, tenant: Tenant, start_date: date, end_date: date):
+        """Wrapper to apply semaphore to tenant processing."""
+        async with self.semaphore:
+            # Critical: Create a NEW session for this task to avoid shared state corruption
+            async with self.session_maker() as db:
+                await self._process_tenant(db, tenant, start_date, end_date)
+
+    async def _process_tenant(self, db: AsyncSession, tenant: Tenant, start_date: date, end_date: date):
+        """Process a single tenant's analysis."""
+        from app.models.notification_settings import NotificationSettings
+        
         try:
-            # Skip if Slack not configured
-            if not self.settings.SLACK_BOT_TOKEN or not self.settings.SLACK_CHANNEL_ID:
-                logger.info("slack_not_configured_skipping")
+            logger.info("processing_tenant", tenant_id=str(tenant.id), name=tenant.name)
+            
+            # 1. Check Notification Settings
+            result = await db.execute(
+                select(NotificationSettings).where(NotificationSettings.tenant_id == tenant.id)
+            )
+            notif_settings = result.scalar_one_or_none()
+            
+            # Logic: If digest is disabled, we still perform analysis (for dashboard)
+            # but we skip the "Notify" step.
+            # In a more advanced version, we'd check if it's the right "hour" or "day"
+            # for the tenant's specific schedule.
+            
+            # 2. Get AWS connections for this tenant
+            result = await db.execute(
+                select(AWSConnection).where(AWSConnection.tenant_id == tenant.id)
+            )
+            connections = result.scalars().all()
+            
+            if not connections:
+                logger.info("tenant_no_connections", tenant_id=str(tenant.id))
                 return
+
+            llm = LLMFactory.create(self.settings.LLM_PROVIDER)
+            analyzer = FinOpsAnalyzer(llm)
+            carbon_calc = CarbonCalculator()
             
-            # 1. Fetch yesterday's data
-            today = date.today()
-            yesterday = today - timedelta(days=1)
-            adapter = AWSAdapter()
-            
-            # Get costs
-            costs = await adapter.get_daily_costs(yesterday, today)
-            total_cost = sum(c.get("amount", 0) for c in costs) if costs else 0
-            
-            # 2. Send digest
-            from app.services.notifications import SlackService
-            slack = SlackService(self.settings.SLACK_BOT_TOKEN, self.settings.SLACK_CHANNEL_ID)
-            
-            await slack.send_digest({
-                "total_cost": total_cost,
-                "carbon_kg": 0,  # TODO: fetch from carbon service
-                "zombie_count": 0,  # TODO: fetch from zombie service
-                "period": f"{yesterday.isoformat()} - {today.isoformat()}"
-            })
-            
-            logger.info("scheduler_job_complete", job=job_name)
-            
+            for conn in connections:
+                try:
+                    # Use MultiTenant adapter
+                    adapter = MultiTenantAWSAdapter(conn)
+                    costs = await adapter.get_daily_costs(start_date, end_date)
+                    
+                    if not costs:
+                        continue
+
+                    # 1. LLM Analysis
+                    # analyzer internally records usage to DB
+                    await analyzer.analyze(costs, tenant_id=tenant.id, db=db)
+                    
+                    # 2. Carbon Calculation
+                    carbon_result = carbon_calc.calculate_from_costs(costs, region=conn.region)
+                    
+                    # 3. Zombie Detection
+                    detector = ZombieDetector(region=conn.region, credentials=adapter._get_credentials())
+                    zombie_result = await detector.scan_all()
+                    
+                    # 4. Notify if enabled in settings
+                    if notif_settings and notif_settings.slack_enabled:
+                        # Only send digest if configured (daily or weekly)
+                        if notif_settings.digest_schedule in ["daily", "weekly"]:
+                            settings = get_settings()
+                            if settings.SLACK_BOT_TOKEN and settings.SLACK_CHANNEL_ID:
+                                # In multi-tenant, channel might be overriden
+                                channel = notif_settings.slack_channel_override or settings.SLACK_CHANNEL_ID
+                                
+                                from app.services.notifications import SlackService
+                                slack = SlackService(settings.SLACK_BOT_TOKEN, channel)
+                                
+                                zombie_count = sum(len(items) for items in zombie_result.values() if isinstance(items, list))
+                                
+                                # Calculate total cost for digest from the costs list
+                                # corrected parsing logic for AWS CE response
+                                total_cost = 0.0
+                                for day in costs:
+                                    total_cost += float(day.get("Total", {}).get("UnblendedCost", {}).get("Amount", 0))
+                                
+                                await slack.send_digest({
+                                    "tenant_name": tenant.name,
+                                    "total_cost": total_cost,
+                                    "carbon_kg": carbon_result.get("total_co2_kg", 0),
+                                    "zombie_count": zombie_count,
+                                    "period": f"{start_date.isoformat()} - {end_date.isoformat()}"
+                                })
+
+                except Exception as e:
+                    logger.error("tenant_connection_failed", tenant_id=str(tenant.id), connection_id=str(conn.id), error=str(e))
+
         except Exception as e:
-            logger.error("scheduler_job_failed", job=job_name, error=str(e))
+            logger.error("tenant_processing_failed", tenant_id=str(tenant.id), error=str(e))
 
     def start(self):
         """
@@ -172,10 +199,65 @@ class SchedulerService:
             max_instances=1,  # Prevent overlapping runs
             misfire_grace_time=3600,  # 1 hour grace period for missed jobs
         )
+        
+        # Weekly Auto-Remediation (Friday 8PM)
+        remediation_trigger = CronTrigger(day_of_week="fri", hour=20, minute=0, timezone="UTC")
+        self.scheduler.add_job(
+            self.auto_remediation_job,
+            trigger=remediation_trigger,
+            id="weekly_remediation_sweep",
+            replace_existing=True,
+            max_instances=1
+        )
 
         
         self.scheduler.start()
-        logger.info("scheduler_started", schedule=f"{hour:02d}:{minute:02d} UTC")
+
+    async def auto_remediation_job(self):
+        """
+        Weekly job: Runs autonomous remediation engine in Dry-Run or Auto-Pilot mode.
+        """
+        # 1. Get all connections
+        async with self.session_maker() as db:
+            result = await db.execute(select(AWSConnection))
+            connections = result.scalars().all()
+            
+        logger.info("scheduler_remediating_connections", count=len(connections))
+        
+        # Limit concurrency to avoid API throttling
+        sema = asyncio.Semaphore(5)
+        
+        async def sema_wrapper(conn):
+            async with sema:
+                # Open NEW session per remediation task
+                async with self.session_maker() as db:
+                    await self._run_single_tenant_remediation(db, conn)
+
+        tasks = [sema_wrapper(conn) for conn in connections]
+        await asyncio.gather(*tasks)
+                
+        logger.info("scheduler_auto_remediation_complete")
+
+    async def _run_single_tenant_remediation(self, db, connection):
+        """Execute remediation for a single tenant."""
+        from app.services.remediation.autonomous import AutonomousRemediationEngine
+        from app.services.adapters.aws_multitenant import MultiTenantAWSAdapter
+        
+        tenant_id = connection.tenant_id
+        # Default to DRY RUN for safety until fully production ready
+        
+        try:
+            adapter = MultiTenantAWSAdapter(connection)
+            creds = adapter._get_credentials()
+            
+            engine = AutonomousRemediationEngine(db, tenant_id)
+            result = await engine.run_autonomous_sweep(
+                region=connection.region,
+                credentials=creds
+            )
+            logger.info("tenant_remediation_complete", tenant=str(tenant_id), stats=result)
+        except Exception as e:
+            logger.error("tenant_remediation_failed", tenant=str(tenant_id), error=str(e))
 
     def stop(self):
         """

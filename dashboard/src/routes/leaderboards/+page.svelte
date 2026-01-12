@@ -8,23 +8,22 @@
 -->
 
 <script lang="ts">
-  import { onMount } from 'svelte';
   import { PUBLIC_API_URL } from '$env/static/public';
   import { createSupabaseBrowserClient } from '$lib/supabase';
   
-  export let data;
+  let { data } = $props();
   
   const supabase = createSupabaseBrowserClient();
   
-  let loading = true;
-  let error = '';
-  let period = '30d';
+  let loading = $state(true);
+  let error = $state('');
+  let period = $state('30d');
   
-  let leaderboard = {
+  let leaderboard = $state({
     period: 'Last 30 Days',
     entries: [] as { rank: number; user_email: string; savings_usd: number; remediation_count: number }[],
     total_team_savings: 0,
-  };
+  });
   
   async function getHeaders() {
     const { data: { session } } = await supabase.auth.getSession();
@@ -67,7 +66,7 @@
     return name;
   }
   
-  onMount(() => {
+  $effect(() => {
     if (data.user) {
       loadLeaderboard();
     } else {
@@ -76,9 +75,11 @@
   });
   
   // Reload when period changes
-  $: if (period && data.user && !loading) {
-    loadLeaderboard();
-  }
+  $effect(() => {
+    if (period && data.user && !loading) {
+      loadLeaderboard();
+    }
+  });
 </script>
 
 <svelte:head>

@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, AsyncMock
 from datetime import date
 from app.services.adapters.aws import AWSAdapter
 from botocore.exceptions import ClientError
@@ -7,10 +7,10 @@ from botocore.exceptions import ClientError
 @pytest.mark.asyncio
 async def test_get_daily_costs_success():
   # 1. Arrange (Setup the Mock)
-  mock_boto = MagicMock()
+  mock_client = AsyncMock()
 
   # Simulate AWS JSON response
-  mock_boto.get_cost_and_usage.return_value = {
+  mock_client.get_cost_and_usage.return_value = {
     "ResultsByTime": [
       {
         "TimePeriod": {
@@ -24,8 +24,16 @@ async def test_get_daily_costs_success():
     ]
   }
 
-  # Patch 'boto3.client' so when AWSAdapter calls it, it gets our mock
-  with patch("boto3.client", return_value=mock_boto):
+  # Mock Context Manager
+  mock_cm = MagicMock()
+  mock_cm.__aenter__.return_value = mock_client
+  mock_cm.__aexit__.return_value = None
+
+  # Patch 'aioboto3.Session'
+  with patch("aioboto3.Session") as mock_session_cls:
+    mock_session = mock_session_cls.return_value
+    mock_session.client.return_value = mock_cm
+
     adapter = AWSAdapter()
     
     # 2. Act (Run the code)
@@ -38,8 +46,8 @@ async def test_get_daily_costs_success():
 @pytest.mark.asyncio
 async def test_get_daily_costs_failure():
   # 1. Arrange: Mark it crash
-  mock_boto = MagicMock()
-  mock_boto.get_cost_and_usage.side_effect = ClientError(
+  mock_client = AsyncMock()
+  mock_client.get_cost_and_usage.side_effect = ClientError(
     {
       "Error": {
         "Code": "AccessDenied",
@@ -48,7 +56,14 @@ async def test_get_daily_costs_failure():
     }, "get_cost_and_usage"
   )
 
-  with patch("boto3.client", return_value=mock_boto):
+  mock_cm = MagicMock()
+  mock_cm.__aenter__.return_value = mock_client
+  mock_cm.__aexit__.return_value = None
+
+  with patch("aioboto3.Session") as mock_session_cls:
+    mock_session = mock_session_cls.return_value
+    mock_session.client.return_value = mock_cm
+
     adapter = AWSAdapter()
     
     # 2. Act (Run the code)

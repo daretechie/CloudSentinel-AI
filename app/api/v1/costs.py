@@ -1,0 +1,124 @@
+from datetime import date
+from typing import Annotated
+from fastapi import APIRouter, Depends, Query, HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+import structlog
+
+from app.core.auth import get_current_user, CurrentUser, requires_role
+from app.db.session import get_db
+from app.models.aws_connection import AWSConnection
+from app.services.adapters.aws_multitenant import MultiTenantAWSAdapter
+from app.services.llm.factory import LLMFactory
+from app.services.llm.analyzer import FinOpsAnalyzer
+
+from app.models.llm import LLMUsage
+
+router = APIRouter(tags=["Costs & Analysis"])
+logger = structlog.get_logger()
+
+@router.get("/costs")
+async def get_costs(
+  start_date: date,
+  end_date: date,
+  user: Annotated[CurrentUser, Depends(requires_role("member"))],
+  db: AsyncSession = Depends(get_db)
+):
+  """Retrieves daily cloud costs for a specified date range."""
+  result = await db.execute(
+    select(AWSConnection).where(AWSConnection.tenant_id == user.tenant_id)
+  )
+  connection = result.scalar_one_or_none()
+  
+  if not connection:
+    logger.warning("no_aws_connection", tenant_id=str(user.tenant_id))
+    return {
+      "total_cost": 0,
+      "breakdown": [],
+      "start_date": start_date.isoformat(),
+      "end_date": end_date.isoformat(),
+      "error": "No AWS connection found."
+    }
+  
+  adapter = MultiTenantAWSAdapter(connection)
+  results = await adapter.get_daily_costs(start_date, end_date)
+  
+  # Simple total calculation for response
+  total = 0
+  if results and not (isinstance(results[0], dict) and "Error" in results[0]):
+      for day in results:
+          # AWS Cost Explorer format: day['Total']['UnblendedCost']['Amount']
+          for metric in day.get("Total", {}).values():
+              total += float(metric.get("Amount", 0))
+
+  return {
+    "total_cost": total,
+    "breakdown": results,
+    "start_date": start_date.isoformat(),
+    "end_date": end_date.isoformat(),
+  }
+
+from app.core.dependencies import get_analyzer
+
+@router.get("/analyze")
+async def analyze_costs(
+  start_date: date,
+  end_date: date,
+  analyzer: Annotated[FinOpsAnalyzer, Depends(get_analyzer)],
+  user: Annotated[CurrentUser, Depends(requires_role("member"))],
+  db: AsyncSession = Depends(get_db)
+):
+  """AI-powered analysis of cloud costs."""
+  result = await db.execute(
+    select(AWSConnection).where(AWSConnection.tenant_id == user.tenant_id)
+  )
+  connection = result.scalar_one_or_none()
+  
+  if not connection:
+    return {"analysis": "No AWS connection found."}
+  
+  adapter = MultiTenantAWSAdapter(connection)
+  cost_data = await adapter.get_daily_costs(start_date, end_date)
+  
+  logger.info("starting_sentinel_analysis", start=start_date, end=end_date)
+  
+  insights = await analyzer.analyze(
+      cost_data,
+      tenant_id=user.tenant_id,
+      db=db,
+  )
+  
+  return {"analysis": insights}
+
+@router.get("/llm/usage")
+async def get_llm_usage(
+    user: Annotated[CurrentUser, Depends(requires_role("member"))],
+    db: AsyncSession = Depends(get_db),
+    limit: int = Query(default=50, le=200),
+):
+    """Get LLM usage history for the tenant."""
+    result = await db.execute(
+        select(LLMUsage)
+        .where(LLMUsage.tenant_id == user.tenant_id)
+        .order_by(LLMUsage.created_at.desc())
+        .limit(limit)
+    )
+    records = result.scalars().all()
+    
+    return {
+        "usage": [
+            {
+                "id": str(r.id),
+                "model": r.model,
+                "provider": r.provider,
+                "input_tokens": r.input_tokens,
+                "output_tokens": r.output_tokens,
+                "total_tokens": r.total_tokens,
+                "cost_usd": float(r.cost_usd) if r.cost_usd else 0,
+                "request_type": r.request_type,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+            }
+            for r in records
+        ],
+        "count": len(records),
+    }

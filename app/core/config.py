@@ -11,18 +11,20 @@ class Settings(BaseSettings):
     AWS_ACCESS_KEY_ID: Optional[str] = None
     AWS_SECRET_ACCESS_KEY: Optional[str] = None
     AWS_DEFAULT_REGION: str = "us-east-1"
-
-    # OpenAI Credentials
+    
+    # Security
+    CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://localhost:5174", "http://localhost:3000"]
+    ENCRYPTION_KEY: Optional[str] = None
     OPENAI_API_KEY: Optional[str] = None
-    OPENAI_MODEL: str = "gpt-3.5-turbo"
+    OPENAI_MODEL: str = "gpt-4o" # High performance for complex analysis
 
     # Claude Credentials
     CLAUDE_API_KEY: Optional[str] = None
-    CLAUDE_MODEL: str = "claude-3-5-sonnet-20240620"
+    CLAUDE_MODEL: str = "claude-3-7-sonnet"
 
     # Google Gemini Credentials
     GOOGLE_API_KEY: Optional[str] = None
-    GOOGLE_MODEL: str = "gemini-2.0-flash-exp"
+    GOOGLE_MODEL: str = "gemini-2.0-flash"
 
     # Groq Credentials
     GROQ_API_KEY: Optional[str] = None
@@ -55,6 +57,9 @@ class Settings(BaseSettings):
     SMTP_USER: Optional[str] = None
     SMTP_PASSWORD: Optional[str] = None
     SMTP_FROM: str = "alerts@cloudsentinel.io"
+    
+    # Encryption
+    ENCRYPTION_KEY: Optional[str] = None
     
     model_config = SettingsConfigDict(
         env_file=".env", 

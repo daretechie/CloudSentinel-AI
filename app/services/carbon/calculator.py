@@ -108,17 +108,35 @@ class CarbonCalculator:
         # Sum up costs and estimate energy
         for record in cost_data:
             try:
-                cost_amount = Decimal(
-                    record.get("Total", {})
-                    .get("UnblendedCost", {})
-                    .get("Amount", "0")
-                )
-                # Only count positive costs (gross usage should be positive)
-                if cost_amount > 0:
-                    total_cost_usd += cost_amount
-                    # Estimate energy using default factor
-                    energy_factor = Decimal(str(SERVICE_ENERGY_FACTORS["default"]))
-                    total_energy_kwh += cost_amount * energy_factor
+                # Case 1: Grouped data (e.g. by Service)
+                groups = record.get("Groups", [])
+                if groups:
+                    for group in groups:
+                        service = group.get("Keys", ["default"])[0]
+                        cost_amount = Decimal(
+                            group.get("Metrics", {})
+                            .get("UnblendedCost", {})
+                            .get("Amount", "0")
+                        )
+                        if cost_amount > 0:
+                            total_cost_usd += cost_amount
+                            # Get factor for this specific service or use default
+                            factor_key = service if service in SERVICE_ENERGY_FACTORS else "default"
+                            energy_factor = Decimal(str(SERVICE_ENERGY_FACTORS[factor_key]))
+                            total_energy_kwh += cost_amount * energy_factor
+                
+                # Case 2: Flat data (un-grouped)
+                else:
+                    cost_amount = Decimal(
+                        record.get("Total", {})
+                        .get("UnblendedCost", {})
+                        .get("Amount", "0")
+                    )
+                    if cost_amount > 0:
+                        total_cost_usd += cost_amount
+                        energy_factor = Decimal(str(SERVICE_ENERGY_FACTORS["default"]))
+                        total_energy_kwh += cost_amount * energy_factor
+                        
             except (KeyError, TypeError, ValueError) as e:
                 logger.warning("carbon_calc_skip_record", error=str(e))
                 continue
@@ -172,6 +190,9 @@ class CarbonCalculator:
             # Methodology metadata
             "methodology": "CloudSentinel 2026 (CCF + AWS CCFT v3.0.0)",
             "includes_embodied_emissions": True,
+            
+            # Projections
+            "forecast_30d": self.forecast_emissions(float(total_co2_kg) / 30 if total_co2_kg > 0 else 0)
         }
         
         logger.info(
@@ -228,3 +249,34 @@ class CarbonCalculator:
                 })
         
         return recommendations[:5]  # Top 5 greenest alternatives
+
+    def forecast_emissions(
+        self, 
+        current_daily_co2_kg: float, 
+        days: int = 30, 
+        region_trend_factor: float = 0.99  # Assuming 1% monthly grid improvement (optimistic) or flat
+    ) -> Dict[str, Any]:
+        """
+        Predict future emissions based on current workload and grid trends.
+        
+        Args:
+            current_daily_co2_kg: Current daily emission rate.
+            days: Number of days to forecast.
+            region_trend_factor: Monthly grid efficiency improvement (default 0.99 = 1% better).
+            
+        Returns:
+            Dict with forecasted totals and trend description.
+        """
+        # Simple projection
+        baseline_projection = current_daily_co2_kg * days
+        
+        # Adjusted projection (accounting for grid improvements or degradation)
+        projected_co2_kg = baseline_projection * region_trend_factor
+        
+        return {
+            "forecast_days": days,
+            "baseline_co2_kg": round(baseline_projection, 2),
+            "projected_co2_kg": round(projected_co2_kg, 2),
+            "trend_factor": region_trend_factor,
+            "description": f"Forecast for next {days} days based on current usage.",
+        }

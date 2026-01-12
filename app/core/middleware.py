@@ -1,0 +1,50 @@
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.types import ASGIApp
+from fastapi import Request
+import uuid
+import structlog
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        from app.core.config import get_settings
+        settings = get_settings()
+        
+        response = await call_next(request)
+        
+        # [Existing security header logic ...]
+        if settings.DEBUG:
+             response.headers["Strict-Transport-Security"] = "max-age=0"
+        else:
+             response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains; preload"
+        
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        
+        csp_policy = (
+            "default-src 'self'; "
+            "img_src 'self' data: https:; "
+            "script_src 'self'; "
+            "style_src 'self' 'unsafe-inline'; "
+            "connect-src 'self' http://localhost:8000 http://127.0.0.1:8000; "
+            "frame-ancestors 'none';"
+        )
+        response.headers["Content-Security-Policy"] = csp_policy
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+
+        return response
+
+class RequestIDMiddleware(BaseHTTPMiddleware):
+    """
+    Injects a unique X-Request-ID into the logs and response.
+    Improves observability for cross-service tracing.
+    """
+    async def dispatch(self, request: Request, call_next):
+        request_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
+        
+        # Log injection via contextvars (supported by structlog)
+        structlog.contextvars.clear_contextvars()
+        structlog.contextvars.bind_contextvars(request_id=request_id)
+        
+        response = await call_next(request)
+        response.headers["X-Request-ID"] = request_id
+        return response

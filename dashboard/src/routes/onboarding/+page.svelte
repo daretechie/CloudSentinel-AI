@@ -1,23 +1,24 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
   import { createSupabaseBrowserClient } from '$lib/supabase';
   
   // State management
-  let currentStep = 1;
-  let selectedTab: 'cloudformation' | 'terraform' = 'cloudformation';
-  let externalId = '';
-  let cloudformationYaml = '';
-  let terraformHcl = '';
-  let permissionsSummary: string[] = [];
-  let roleArn = '';
-  let awsAccountId = '';
-  let isLoading = false;
-  let isVerifying = false;
-  let error = '';
-  let success = false;
-  let copied = false;
+  let currentStep = $state(1);
+  let selectedTab: 'cloudformation' | 'terraform' = $state('cloudformation');
+  let externalId = $state('');
+  let cloudformationYaml = $state('');
+  let terraformHcl = $state('');
+  let permissionsSummary: string[] = $state([]);
+  let roleArn = $state('');
+  let awsAccountId = $state('');
+  let isLoading = $state(false);
+  let isVerifying = $state(false);
+  let error = $state('');
+  let success = $state(false);
+  let copied = $state(false);
   
-  const API_URL = 'http://localhost:8002';
+  import { PUBLIC_API_URL } from '$env/static/public';
+  
+  const API_URL = PUBLIC_API_URL;
   const supabase = createSupabaseBrowserClient();
   
   // Get access token from Supabase session
@@ -140,7 +141,7 @@
     }
   }
   
-  onMount(() => {
+  $effect(() => {
     getTemplates();
   });
 </script>
@@ -173,14 +174,14 @@
           <button 
             class="tab" 
             class:active={selectedTab === 'cloudformation'}
-            on:click={() => selectedTab = 'cloudformation'}
+            onclick={() => selectedTab = 'cloudformation'}
           >
             ☁️ CloudFormation
           </button>
           <button 
             class="tab" 
             class:active={selectedTab === 'terraform'}
-            on:click={() => selectedTab = 'terraform'}
+            onclick={() => selectedTab = 'terraform'}
           >
             🏗️ Terraform
           </button>
@@ -188,7 +189,7 @@
         
         <!-- External ID display -->
         <div class="info-box">
-          <label>🔐 Your External ID (embedded in template)</label>
+          <div class="label-text">🔐 Your External ID (embedded in template)</div>
           <code class="external-id">{externalId}</code>
         </div>
         
@@ -197,10 +198,10 @@
           <div class="code-header">
             <span>{selectedTab === 'cloudformation' ? 'cloudsentinel-role.yaml' : 'cloudsentinel-role.tf'}</span>
             <div class="code-actions">
-              <button class="icon-btn" on:click={copyTemplate}>
+              <button class="icon-btn" onclick={copyTemplate}>
                 {copied ? '✅ Copied!' : '📋 Copy'}
               </button>
-              <button class="icon-btn" on:click={downloadTemplate}>
+              <button class="icon-btn" onclick={downloadTemplate}>
                 📥 Download
               </button>
             </div>
@@ -229,7 +230,7 @@
           </ol>
         </div>
         
-        <button class="primary-btn" on:click={proceedToVerify}>
+        <button class="primary-btn" onclick={proceedToVerify}>
           I've deployed the stack → Verify Connection
         </button>
       {/if}
@@ -265,13 +266,13 @@
       
       <button 
         class="primary-btn" 
-        on:click={verifyConnection}
+        onclick={verifyConnection}
         disabled={isVerifying}
       >
         {isVerifying ? '⏳ Verifying...' : '✅ Verify Connection'}
       </button>
       
-      <button class="secondary-btn" on:click={() => currentStep = 1}>
+      <button class="secondary-btn" onclick={() => currentStep = 1}>
         ← Back to Template
       </button>
     </div>
@@ -475,7 +476,7 @@
     margin: 1rem 0;
   }
   
-  label {
+  label, .label-text {
     display: block;
     margin-bottom: 0.5rem;
     font-weight: 500;

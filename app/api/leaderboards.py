@@ -2,7 +2,7 @@
 Leaderboards API Endpoints for CloudSentinel.
 Shows team savings rankings ("Who saved the most?").
 """
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
@@ -51,33 +51,36 @@ async def get_leaderboard(
     Get the savings leaderboard for the current tenant.
     
     Shows who has approved the most cost-saving remediations.
-    
-    Args:
-        period: Time period - 7d, 30d, 90d, or all
     """
+    from app.models.tenant import User
+    from app.models.remediation import RemediationStatus
+    
     # Calculate date range
     if period == "all":
         start_date = None
     else:
         days = int(period.replace("d", ""))
-        start_date = datetime.utcnow() - timedelta(days=days)
+        start_date = datetime.now(timezone.utc) - timedelta(days=days)
     
-    # Query approved remediations grouped by approver
-    query = select(
-        RemediationRequest.approved_by,
-        func.sum(RemediationRequest.estimated_savings).label("total_savings"),
-        func.count(RemediationRequest.id).label("count"),
-    ).where(
-        RemediationRequest.tenant_id == current_user.tenant_id,
-        RemediationRequest.status == "approved",
-    ).group_by(
-        RemediationRequest.approved_by
-    ).order_by(
-        func.sum(RemediationRequest.estimated_savings).desc()
+    # Query COMPLETED remediations grouped by approver
+    # Join with User table to get email instead of UUID
+    query = (
+        select(
+            User.email.label("user_email"),
+            func.sum(RemediationRequest.estimated_monthly_savings).label("total_savings"),
+            func.count(RemediationRequest.id).label("count"),
+        )
+        .join(User, RemediationRequest.reviewed_by_user_id == User.id)
+        .where(
+            RemediationRequest.tenant_id == current_user.tenant_id,
+            RemediationRequest.status == RemediationStatus.COMPLETED,
+        )
+        .group_by(User.email)
+        .order_by(func.sum(RemediationRequest.estimated_monthly_savings).desc())
     )
     
     if start_date:
-        query = query.where(RemediationRequest.approved_at >= start_date)
+        query = query.where(RemediationRequest.created_at >= start_date)
     
     result = await db.execute(query)
     rows = result.fetchall()
@@ -92,13 +95,10 @@ async def get_leaderboard(
         
         entries.append(LeaderboardEntry(
             rank=rank,
-            user_email=row.approved_by or "Unknown",
+            user_email=row.user_email,
             savings_usd=savings,
             remediation_count=row.count,
         ))
-    
-    # If no entries, show encouraging message via empty list
-    # Frontend will handle this gracefully
     
     period_labels = {
         "7d": "Last 7 Days",

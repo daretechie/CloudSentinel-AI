@@ -11,12 +11,12 @@
   import { createSupabaseBrowserClient } from '$lib/supabase';
   import { goto, invalidateAll } from '$app/navigation';
   
-  let email = '';
-  let password = '';
-  let loading = false;
-  let error = '';
-  let success = '';
-  let mode: 'login' | 'signup' = 'login';
+  let email = $state('');
+  let password = $state('');
+  let loading = $state(false);
+  let error = $state('');
+  let success = $state('');
+  let mode: 'login' | 'signup' = $state('login');
   
   const supabase = createSupabaseBrowserClient();
   
@@ -87,7 +87,7 @@
       {/if}
       
       <!-- Form -->
-      <form on:submit|preventDefault={handleSubmit} class="space-y-4">
+      <form onsubmit={handleSubmit} class="space-y-4">
         <div>
           <label for="email" class="label">Email</label>
           <input
@@ -133,7 +133,7 @@
           Don't have an account?
           <button 
             type="button"
-            on:click={() => mode = 'signup'} 
+            onclick={() => mode = 'signup'} 
             class="text-accent-400 hover:underline font-medium"
           >
             Sign up
@@ -142,7 +142,7 @@
           Already have an account?
           <button 
             type="button"
-            on:click={() => mode = 'login'} 
+            onclick={() => mode = 'login'} 
             class="text-accent-400 hover:underline font-medium"
           >
             Sign in

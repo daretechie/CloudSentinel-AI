@@ -9,6 +9,15 @@ import ssl
 
 from app.db.base import Base
 # Import all models so Base knows about them!
+from app.models.llm import LLMUsage, LLMBudget  # noqa: F401
+from app.models.carbon_settings import CarbonSettings  # noqa: F401
+from app.models.aws_connection import AWSConnection  # noqa: F401
+from app.models.cloud import CostRecord  # noqa: F401
+from app.models.notification_settings import NotificationSettings  # noqa: F401
+from app.models.remediation import RemediationRequest  # noqa: F401
+from app.models.remediation_settings import RemediationSettings  # noqa: F401
+from app.models.tenant import User, Tenant  # noqa: F401
+
 from app.core.config import get_settings
 from sqlalchemy.ext.asyncio import create_async_engine
 

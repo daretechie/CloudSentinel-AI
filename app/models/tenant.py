@@ -14,8 +14,6 @@ class Tenant(Base):
     
     # Relationships
     users: Mapped[list["User"]] = relationship(back_populates="tenant", cascade="all, delete")
-
-        # Add this line in the Tenant class
     llm_usage = relationship("LLMUsage", back_populates="tenant", cascade="all, delete-orphan")
     llm_budget = relationship("LLMBudget", back_populates="tenant", uselist=False, cascade="all, delete-orphan")
     aws_connections = relationship("AWSConnection", back_populates="tenant", cascade="all, delete-orphan")

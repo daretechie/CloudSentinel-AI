@@ -8,18 +8,18 @@
 -->
 
 <script lang="ts">
-  import { createEventDispatcher, onMount } from 'svelte';
-  
-  const dispatch = createEventDispatcher<{
-    dateChange: { startDate: string; endDate: string };
+  let { 
+    value = $bindable('30d'),
+    onDateChange
+  } = $props<{
+    value?: string;
+    onDateChange?: (dates: { startDate: string; endDate: string }) => void;
   }>();
   
-  export let value: string = '30d'; // Default preset
-  
-  let showCustom = false;
-  let customStartDate = '';
-  let customEndDate = '';
-  let initialized = false;
+  let showCustom = $state(false);
+  let customStartDate = $state('');
+  let customEndDate = $state('');
+  let initialized = $state(false);
   
   // Preset options
   const presets = [
@@ -43,37 +43,35 @@
     value = preset;
     showCustom = false;
     const dates = getDatesFromPreset(preset);
-    dispatch('dateChange', dates);
+    onDateChange?.(dates);
   }
   
   function toggleCustom() {
     showCustom = !showCustom;
     if (showCustom) {
-      // Initialize with last 30 days if not set
       if (!customStartDate || !customEndDate) {
         const dates = getDatesFromPreset('30d');
         customStartDate = dates.startDate;
         customEndDate = dates.endDate;
       }
       value = 'custom';
-      // Don't dispatch here - wait for Apply button click
     }
   }
   
   function applyCustomRange() {
     if (customStartDate && customEndDate) {
-      dispatch('dateChange', {
+      onDateChange?.({
         startDate: customStartDate,
         endDate: customEndDate,
       });
     }
   }
   
-  // Initialize with default dates on mount
-  onMount(() => {
+  // Initialize with default dates
+  $effect(() => {
     if (!initialized) {
       const dates = getDatesFromPreset(value);
-      dispatch('dateChange', dates);
+      onDateChange?.(dates);
       initialized = true;
     }
   });
@@ -86,7 +84,7 @@
       <button
         class="preset-btn"
         class:active={value === preset.value && !showCustom}
-        on:click={() => selectPreset(preset.value)}
+        onclick={() => selectPreset(preset.value)}
       >
         {preset.label}
       </button>
@@ -94,7 +92,7 @@
     <button
       class="preset-btn"
       class:active={showCustom}
-      on:click={toggleCustom}
+      onclick={toggleCustom}
     >
       📅 Custom
     </button>
@@ -124,7 +122,7 @@
         <button 
           class="apply-btn"
           disabled={!customStartDate || !customEndDate}
-          on:click={applyCustomRange}
+          onclick={applyCustomRange}
         >
           Apply
         </button>

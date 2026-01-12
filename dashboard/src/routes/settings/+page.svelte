@@ -9,22 +9,23 @@
 -->
 
 <script lang="ts">
-  import { onMount } from 'svelte';
   import { PUBLIC_API_URL } from '$env/static/public';
   import { createSupabaseBrowserClient } from '$lib/supabase';
+  console.log('PUBLIC_API_URL:', PUBLIC_API_URL);
+
   
-  export let data;
+  let { data } = $props();
   
   const supabase = createSupabaseBrowserClient();
   
-  let loading = true;
-  let saving = false;
-  let testing = false;
-  let error = '';
-  let success = '';
+  let loading = $state(true);
+  let saving = $state(false);
+  let testing = $state(false);
+  let error = $state('');
+  let success = $state('');
   
   // Settings state
-  let settings = {
+  let settings = $state({
     slack_enabled: true,
     slack_channel_override: '',
     digest_schedule: 'daily',
@@ -33,12 +34,46 @@
     alert_on_budget_warning: true,
     alert_on_budget_exceeded: true,
     alert_on_zombie_detected: true,
-  };
+  });
+  
+  // LLM Settings state
+  let llmSettings = $state({
+    monthly_limit_usd: 10.0,
+    alert_threshold_percent: 80,
+    hard_limit: false,
+    preferred_provider: 'groq',
+    preferred_model: 'llama-3.3-70b-versatile',
+    openai_api_key: '',
+    claude_api_key: '',
+    google_api_key: '',
+    groq_api_key: '',
+    has_openai_key: false,
+    has_claude_key: false,
+    has_google_key: false,
+    has_groq_key: false,
+  });
+  let loadingLLM = $state(true);
+  let savingLLM = $state(false);
+  
+  // ActiveOps (Remediation) settings
+  let activeOpsSettings = $state({
+    auto_pilot_enabled: false,
+    min_confidence_threshold: 0.95,
+  });
+  let loadingActiveOps = $state(true);
+  let savingActiveOps = $state(false);
+  
+  let providerModels = $state({
+    groq: [],
+    openai: [],
+    anthropic: [],
+    google: [],
+  });
   
   // AWS Connection state
-  let awsConnection: any = null;
-  let loadingAWS = true;
-  let disconnecting = false;
+  let awsConnection: any = $state(null);
+  let loadingAWS = $state(true);
+  let disconnecting = $state(false);
   
   async function getHeaders() {
     const { data: { session } } = await supabase.auth.getSession();
@@ -123,9 +158,13 @@
       if (res.ok) {
         const connections = await res.json();
         awsConnection = connections.length > 0 ? connections[0] : null;
+      } else {
+        const data = await res.json();
+        throw new Error(data.detail || `Error ${res.status}: Failed to load connection`);
       }
     } catch (e: any) {
       console.error('Failed to load AWS connection:', e);
+      error = e.message; // Show in UI!
     } finally {
       loadingAWS = false;
     }
@@ -168,15 +207,15 @@
   }
   
   // Carbon settings state
-  let carbonSettings = {
+  let carbonSettings = $state({
     carbon_budget_kg: 100,
     alert_threshold_percent: 80,
     default_region: 'us-east-1',
     email_enabled: false,
     email_recipients: '',
-  };
-  let loadingCarbon = true;
-  let savingCarbon = false;
+  });
+  let loadingCarbon = $state(true);
+  let savingCarbon = $state(false);
   
   async function loadCarbonSettings() {
     try {
@@ -219,16 +258,116 @@
       savingCarbon = false;
     }
   }
+
+  async function loadModels() {
+    try {
+      const res = await fetch(`${PUBLIC_API_URL}/settings/llm/models`);
+      if (res.ok) {
+        providerModels = await res.json();
+      }
+    } catch (e) {
+      console.error('Failed to load LLM models:', e);
+    }
+  }
+
+  async function loadLLMSettings() {
+    try {
+      const headers = await getHeaders();
+      const res = await fetch(`${PUBLIC_API_URL}/settings/llm`, { headers });
+      
+      if (res.ok) {
+        llmSettings = await res.json();
+      }
+    } catch (e: any) {
+      console.error('Failed to load LLM settings:', e);
+    } finally {
+      loadingLLM = false;
+    }
+  }
+
+  async function saveLLMSettings() {
+    savingLLM = true;
+    error = '';
+    success = '';
+    
+    try {
+      const headers = await getHeaders();
+      const res = await fetch(`${PUBLIC_API_URL}/settings/llm`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify(llmSettings),
+      });
+      
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.detail || 'Failed to save LLM settings');
+      }
+      
+      success = 'AI strategy settings saved!';
+      setTimeout(() => success = '', 3000);
+    } catch (e: any) {
+      error = e.message;
+    } finally {
+      savingLLM = false;
+    }
+  }
+
+  async function loadActiveOpsSettings() {
+    try {
+      const headers = await getHeaders();
+      const res = await fetch(`${PUBLIC_API_URL}/settings/activeops`, { headers });
+      
+      if (res.ok) {
+        activeOpsSettings = await res.json();
+      }
+    } catch (e: any) {
+      console.error('Failed to load ActiveOps settings:', e);
+    } finally {
+      loadingActiveOps = false;
+    }
+  }
+
+  async function saveActiveOpsSettings() {
+    savingActiveOps = true;
+    error = '';
+    success = '';
+    
+    try {
+      const headers = await getHeaders();
+      const res = await fetch(`${PUBLIC_API_URL}/settings/activeops`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify(activeOpsSettings),
+      });
+      
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.detail || 'Failed to save ActiveOps settings');
+      }
+      
+      success = 'ActiveOps / Auto-Pilot settings saved!';
+      setTimeout(() => success = '', 3000);
+    } catch (e: any) {
+      error = e.message;
+    } finally {
+      savingActiveOps = false;
+    }
+  }
   
-  onMount(() => {
+  $effect(() => {
     if (data.user) {
       loadSettings();
       loadAWSConnection();
       loadCarbonSettings();
+      loadModels();
+      loadLLMSettings();
+      loadActiveOpsSettings();
     } else {
       loading = false;
       loadingAWS = false;
       loadingCarbon = false;
+      loadingLLM = false;
+      loadingActiveOps = false;
     }
   });
 </script>
@@ -292,7 +431,7 @@
           <div class="pt-4 border-t border-ink-700">
             <button 
               class="btn btn-danger" 
-              on:click={disconnectAWS}
+              onclick={disconnectAWS}
               disabled={disconnecting}
             >
               {disconnecting ? '⏳ Disconnecting...' : '🔌 Disconnect AWS Account'}
@@ -380,13 +519,179 @@
             </div>
           {/if}
           
-          <button class="btn btn-primary" on:click={saveCarbonSettings} disabled={savingCarbon}>
+          <button class="btn btn-primary" onclick={saveCarbonSettings} disabled={savingCarbon}>
             {savingCarbon ? '⏳ Saving...' : '💾 Save Carbon Settings'}
           </button>
         </div>
       {/if}
     </div>
     
+    <!-- AI Strategy Settings -->
+    <div class="card stagger-enter">
+      <h2 class="text-lg font-semibold mb-5 flex items-center gap-2">
+        <span>🤖</span> AI Strategy
+      </h2>
+      
+      {#if loadingLLM}
+        <div class="skeleton h-4 w-48"></div>
+      {:else}
+        <div class="space-y-4">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="form-group">
+              <label for="provider">Preferred Provider</label>
+              <select id="provider" bind:value={llmSettings.preferred_provider} class="select" 
+                onchange={() => llmSettings.preferred_model = providerModels[llmSettings.preferred_provider as keyof typeof providerModels][0]}>
+                <option value="groq">Groq (Ultra-Fast)</option>
+                <option value="openai">OpenAI (Gold Standard)</option>
+                <option value="anthropic">Anthropic (Claude)</option>
+                <option value="google">Google (Gemini)</option>
+              </select>
+            </div>
+            
+            <div class="form-group">
+              <label for="model">AI Model</label>
+              <select id="model" bind:value={llmSettings.preferred_model} class="select">
+                {#each providerModels[llmSettings.preferred_provider as keyof typeof providerModels] as model}
+                  <option value={model}>{model}</option>
+                {/each}
+              </select>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="form-group">
+              <label for="llm_budget">Monthly AI Budget (USD)</label>
+              <input 
+                type="number" 
+                id="llm_budget"
+                bind:value={llmSettings.monthly_limit_usd}
+                min="0"
+                step="1"
+              />
+            </div>
+            
+            <div class="form-group">
+              <label for="llm_alert_threshold">Alert Threshold (%)</label>
+              <input 
+                type="number" 
+                id="llm_alert_threshold"
+                bind:value={llmSettings.alert_threshold_percent}
+                min="0"
+                max="100"
+              />
+            </div>
+          </div>
+
+
+          <div class="space-y-4 pt-4 border-t border-ink-700">
+            <h3 class="text-sm font-semibold text-accent-400 uppercase tracking-wider">Bring Your Own Key (Optional)</h3>
+            <p class="text-xs text-ink-400">Provide your own API key to pay the provider directly. The platform will still track usage for your awareness.</p>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div class="form-group">
+                <label for="openai_key">OpenAI API Key {llmSettings.has_openai_key ? '✅' : ''}</label>
+                <input 
+                  type="password" 
+                  id="openai_key"
+                  bind:value={llmSettings.openai_api_key}
+                  placeholder={llmSettings.has_openai_key ? '••••••••••••••••' : 'sk-...'}
+                />
+              </div>
+              <div class="form-group">
+                <label for="claude_key">Claude API Key {llmSettings.has_claude_key ? '✅' : ''}</label>
+                <input 
+                  type="password" 
+                  id="claude_key"
+                  bind:value={llmSettings.claude_api_key}
+                  placeholder={llmSettings.has_claude_key ? '••••••••••••••••' : 'sk-ant-...'}
+                />
+              </div>
+              <div class="form-group">
+                <label for="google_key">Google AI (Gemini) Key {llmSettings.has_google_key ? '✅' : ''}</label>
+                <input 
+                  type="password" 
+                  id="google_key"
+                  bind:value={llmSettings.google_api_key}
+                  placeholder={llmSettings.has_google_key ? '••••••••••••••••' : 'AIza...'}
+                />
+              </div>
+              <div class="form-group">
+                <label for="groq_key">Groq API Key {llmSettings.has_groq_key ? '✅' : ''}</label>
+                <input 
+                  type="password" 
+                  id="groq_key"
+                  bind:value={llmSettings.groq_api_key}
+                  placeholder={llmSettings.has_groq_key ? '••••••••••••••••' : 'gsk_...'}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="flex items-center gap-3 cursor-pointer">
+              <input type="checkbox" bind:checked={llmSettings.hard_limit} class="toggle" />
+              <span>Enable Hard Limit (Block AI analysis if budget exceeded)</span>
+            </label>
+          </div>
+          
+          <button class="btn btn-primary" onclick={saveLLMSettings} disabled={savingLLM}>
+            {savingLLM ? '⏳ Saving...' : '💾 Save AI Strategy'}
+          </button>
+        </div>
+      {/if}
+    </div>
+
+    <!-- ActiveOps (Remediation) Settings -->
+    <div class="card stagger-enter">
+      <h2 class="text-lg font-semibold mb-3 flex items-center gap-2">
+        <span>⚡</span> ActiveOps (Autonomous Remediation)
+      </h2>
+      <p class="text-xs text-ink-400 mb-5">Enable AI to automatically remediate high-confidence zombie resources during weekly sweeps.</p>
+      
+      {#if loadingActiveOps}
+        <div class="skeleton h-4 w-48"></div>
+      {:else}
+        <div class="space-y-6">
+          <div class="p-4 rounded-lg bg-warning-900/10 border border-warning-900/30">
+            <h4 class="text-sm font-bold text-warning-400 mb-1">⚠️ Safety Disclaimer</h4>
+            <p class="text-xs text-warning-500 leading-relaxed">
+              Auto-Pilot mode allows CloudSentinel to perform destructive actions (deletion) on identified resources. 
+              Always ensure you have regular backups. Actions are only taken if the AI confidence exceeds the specified threshold.
+            </p>
+          </div>
+
+          <label class="flex items-center gap-3 cursor-pointer">
+            <input type="checkbox" bind:checked={activeOpsSettings.auto_pilot_enabled} class="toggle toggle-warning" />
+            <span class="font-medium {activeOpsSettings.auto_pilot_enabled ? 'text-white' : 'text-ink-400'}">
+              Enable Auto-Pilot (Weekly Autonomous Deletion)
+            </span>
+          </label>
+          
+          <div class="form-group">
+            <label for="confidence_threshold">Min Confidence Threshold: {Math.round(activeOpsSettings.min_confidence_threshold * 100)}%</label>
+            <input 
+              type="range" 
+              id="confidence_threshold"
+              bind:value={activeOpsSettings.min_confidence_threshold}
+              min="0.5"
+              max="1.0"
+              step="0.01"
+              class="range"
+              disabled={!activeOpsSettings.auto_pilot_enabled}
+            />
+            <div class="flex justify-between text-[10px] text-ink-500 mt-1">
+              <span>Riskier (50%)</span>
+              <span>Ultra-Safe (100%)</span>
+            </div>
+          </div>
+          
+          <button class="btn btn-primary" onclick={saveActiveOpsSettings} disabled={savingActiveOps}>
+            {savingActiveOps ? '⏳ Saving...' : '💾 Save ActiveOps Settings'}
+          </button>
+        </div>
+      {/if}
+    </div>
+
     <!-- Slack Settings -->
     <div class="card stagger-enter">
       <h2 class="text-lg font-semibold mb-5 flex items-center gap-2">
@@ -413,7 +718,7 @@
         
         <button 
           class="btn btn-secondary" 
-          on:click={testSlack}
+          onclick={testSlack}
           disabled={!settings.slack_enabled || testing}
         >
           {testing ? '⏳ Sending...' : '🧪 Send Test Notification'}
@@ -486,7 +791,7 @@
     
     <!-- Save Button -->
     <div class="flex justify-end">
-      <button class="btn btn-primary" on:click={saveSettings} disabled={saving}>
+      <button class="btn btn-primary" onclick={saveSettings} disabled={saving}>
         {saving ? '⏳ Saving...' : '💾 Save Settings'}
       </button>
     </div>
@@ -558,6 +863,38 @@
   
   .toggle:checked::after {
     transform: translateX(1.5rem);
+  }
+
+  .toggle-warning:checked {
+    background: var(--color-warning-500);
+  }
+  
+  .range {
+    width: 100%;
+    height: 0.5rem;
+    background: var(--color-ink-700);
+    border-radius: 999px;
+    appearance: none;
+    outline: none;
+  }
+
+  .range::-webkit-slider-thumb {
+    appearance: none;
+    width: 1.25rem;
+    height: 1.25rem;
+    background: var(--color-accent-400);
+    border-radius: 50%;
+    cursor: pointer;
+    transition: transform 0.1s;
+  }
+
+  .range::-webkit-slider-thumb:hover {
+    transform: scale(1.1);
+  }
+
+  .range:disabled::-webkit-slider-thumb {
+    background: var(--color-ink-500);
+    cursor: not-allowed;
   }
   
   .btn {

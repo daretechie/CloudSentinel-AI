@@ -38,6 +38,7 @@ def setup_logging():
   logging.basicConfig(
     format="%(message)s",
     stream=sys.stdout,
+    # filename="debug.log",
     level=min_level,
   )
 

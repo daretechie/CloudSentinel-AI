@@ -11,6 +11,10 @@ from unittest.mock import MagicMock, AsyncMock, patch
 from decimal import Decimal
 from uuid import uuid4
 from app.services.llm.usage_tracker import UsageTracker, LLM_PRICING
+from app.models.tenant import Tenant
+from app.models.aws_connection import AWSConnection
+from app.models.llm import LLMBudget, LLMUsage
+from app.models.notification_settings import NotificationSettings
 
 
 class TestCalculateCost:
@@ -134,7 +138,9 @@ class TestRecordUsage:
     @pytest.mark.asyncio
     async def test_record_creates_usage_entry(self):
         """Test that record creates a usage entry in the database."""
-        mock_db = AsyncMock()
+        mock_db = MagicMock()
+        mock_db.commit = AsyncMock()
+        mock_db.refresh = AsyncMock()
         tracker = UsageTracker(mock_db)
         
         tenant_id = uuid4()
