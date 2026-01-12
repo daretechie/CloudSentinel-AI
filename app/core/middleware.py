@@ -1,5 +1,4 @@
 from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.types import ASGIApp
 from fastapi import Request
 import uuid
 import structlog
@@ -11,7 +10,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         
         response = await call_next(request)
         
-        # [Existing security header logic ...]
+        # HSTS: Disable in debug mode for local development
         if settings.DEBUG:
              response.headers["Strict-Transport-Security"] = "max-age=0"
         else:
@@ -20,12 +19,18 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         
+        # CSP connect-src: Restrict based on environment
+        if settings.DEBUG:
+            connect_src = "'self' http://localhost:8000 http://127.0.0.1:8000"
+        else:
+            connect_src = "'self'"
+        
         csp_policy = (
             "default-src 'self'; "
-            "img_src 'self' data: https:; "
-            "script_src 'self'; "
-            "style_src 'self' 'unsafe-inline'; "
-            "connect-src 'self' http://localhost:8000 http://127.0.0.1:8000; "
+            "img-src 'self' data: https:; "
+            "script-src 'self'; "
+            "style-src 'self' 'unsafe-inline'; "
+            f"connect-src {connect_src}; "
             "frame-ancestors 'none';"
         )
         response.headers["Content-Security-Policy"] = csp_policy

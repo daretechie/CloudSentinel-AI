@@ -7,11 +7,6 @@ authors = [
 ]
 requires-python = ">=3.12"
 
-[project.urls]
-Homepage = "https://github.com/Valdrix-AI/valdrix"
-Repository = "https://github.com/Valdrix-AI/valdrix"
-Issues = "https://github.com/Valdrix-AI/valdrix/issues"
-
 dependencies = [
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.32.0",
@@ -28,7 +23,6 @@ dependencies = [
     "langchain-groq>=0.2.0",
     "langchain-google-genai>=2.0.0",
     "httpx>=0.28.0",
-    # Database (add these for Phase 1)
     "sqlalchemy[asyncio]>=2.0.36",
     "asyncpg>=0.30.0",
     "alembic>=1.14.0",
@@ -40,6 +34,11 @@ dependencies = [
     "nvidia-ml-py>=12.535.133",
     "aioboto3>=15.5.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/Valdrix-AI/valdrix"
+Repository = "https://github.com/Valdrix-AI/valdrix"
+Issues = "https://github.com/Valdrix-AI/valdrix/issues"
 
 [project.optional-dependencies]
 dev = [

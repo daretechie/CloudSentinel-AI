@@ -1,15 +1,14 @@
 from datetime import date
 from typing import Annotated
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 import structlog
 
-from app.core.auth import get_current_user, CurrentUser, requires_role
+from app.core.auth import CurrentUser, requires_role
 from app.db.session import get_db
 from app.models.aws_connection import AWSConnection
 from app.services.adapters.aws_multitenant import MultiTenantAWSAdapter
-from app.services.llm.factory import LLMFactory
 from app.services.llm.analyzer import FinOpsAnalyzer
 
 from app.models.llm import LLMUsage

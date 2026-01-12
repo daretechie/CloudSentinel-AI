@@ -144,7 +144,8 @@ class SchedulerService:
                     carbon_result = carbon_calc.calculate_from_costs(costs, region=conn.region)
                     
                     # 3. Zombie Detection
-                    detector = ZombieDetector(region=conn.region, credentials=adapter._get_credentials())
+                    creds = await adapter._get_credentials()
+                    detector = ZombieDetector(region=conn.region, credentials=creds)
                     zombie_result = await detector.scan_all()
                     
                     # 4. Notify if enabled in settings
@@ -248,7 +249,7 @@ class SchedulerService:
         
         try:
             adapter = MultiTenantAWSAdapter(connection)
-            creds = adapter._get_credentials()
+            creds = await adapter._get_credentials()
             
             engine = AutonomousRemediationEngine(db, tenant_id)
             result = await engine.run_autonomous_sweep(

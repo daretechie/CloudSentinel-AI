@@ -11,10 +11,6 @@ from unittest.mock import MagicMock, AsyncMock, patch
 from decimal import Decimal
 from uuid import uuid4
 from app.services.llm.usage_tracker import UsageTracker, LLM_PRICING
-from app.models.tenant import Tenant
-from app.models.aws_connection import AWSConnection
-from app.models.llm import LLMBudget, LLMUsage
-from app.models.notification_settings import NotificationSettings
 
 
 class TestCalculateCost:

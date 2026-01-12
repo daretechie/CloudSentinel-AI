@@ -13,7 +13,7 @@ Usage:
         tenant_id=tenant.id,
         aws_account_id="123456789012",
         role_arn="arn:aws:iam::123456789012:role/ValdrixReadOnly",
-        external_id="cs-abc123-xyz789",
+        external_id="vx-abc123-xyz789",
         region="us-east-1"
     )
 """
@@ -78,7 +78,7 @@ class AWSConnection(Base):
     external_id = Column(
         StringEncryptedType(String(64), _encryption_key, AesEngine, "pkcs5"), 
         nullable=False, 
-        default=lambda: f"cs-{secrets.token_hex(16)}"
+        default=lambda: f"vx-{secrets.token_hex(16)}"
     )
     
     # region: Default AWS region for Cost Explorer queries
@@ -107,4 +107,4 @@ class AWSConnection(Base):
     @classmethod
     def generate_external_id(cls) -> str:
         """Generate a unique external ID for a new connection."""
-        return f"cs-{secrets.token_hex(16)}"
+        return f"vx-{secrets.token_hex(16)}"

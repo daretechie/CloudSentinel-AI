@@ -8,7 +8,6 @@ Full production implementation with:
 4. Audit trail for compliance
 """
 
-import asyncio
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -20,7 +19,7 @@ from sqlalchemy import select
 import structlog
 
 from app.models.remediation import RemediationRequest, RemediationStatus, RemediationAction
-from app.services.zombies.zombie_plugin import ZombiePlugin, ESTIMATED_COSTS
+from app.services.zombies.zombie_plugin import ZombiePlugin
 from app.services.zombies.plugins import (
     UnattachedVolumesPlugin, OldSnapshotsPlugin, IdleS3BucketsPlugin,
     UnusedElasticIpsPlugin, IdleInstancesPlugin,

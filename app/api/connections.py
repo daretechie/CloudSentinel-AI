@@ -20,12 +20,11 @@ from sqlalchemy import select
 from pydantic import BaseModel, Field, ConfigDict
 import structlog
 import aioboto3
-import boto3  # retained for sync scripts if necessary, but unused here now
 from botocore.exceptions import ClientError
 
 from app.db.session import get_db
 from app.models.aws_connection import AWSConnection
-from app.core.auth import get_current_user, CurrentUser, requires_role
+from app.core.auth import CurrentUser, requires_role
 
 logger = structlog.get_logger()
 router = APIRouter(prefix="/connections/aws", tags=["connections"])
@@ -39,7 +38,7 @@ class AWSConnectionCreate(BaseModel):
     """Request body for creating a new AWS connection."""
     aws_account_id: str = Field(..., pattern=r"^\d{12}$", description="12-digit AWS account ID")
     role_arn: str = Field(..., description="Full ARN of the IAM role to assume")
-    external_id: str = Field(..., pattern=r"^cs-[a-f0-9]{32}$", description="External ID from setup step")
+    external_id: str = Field(..., pattern=r"^vx-[a-f0-9]{32}$", description="External ID from setup step")
     region: str = Field(default="us-east-1", description="AWS region for Cost Explorer")
 
 

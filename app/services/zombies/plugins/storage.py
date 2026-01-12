@@ -76,7 +76,7 @@ class UnattachedVolumesPlugin(ZombiePlugin):
                                 "recommendation": "Delete if no longer needed",
                                 "action": "delete_volume",
                                 "supports_backup": True,
-                                "explainability_notes": f"Volume is 'available' (detached) and has had 0 IOPS in the last 7 days.",
+                                "explainability_notes": "Volume is 'available' (detached) and has had 0 IOPS in the last 7 days.",
                                 "confidence_score": 0.98 if total_ops == 0 else 0.85
                             })
         except ClientError as e:

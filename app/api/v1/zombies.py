@@ -1,4 +1,4 @@
-from typing import Annotated, Optional, List, Any
+from typing import Annotated, Optional
 from uuid import UUID
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -7,7 +7,7 @@ from pydantic import BaseModel
 import structlog
 
 from app.core.config import get_settings
-from app.core.auth import get_current_user, CurrentUser, requires_role
+from app.core.auth import CurrentUser, requires_role
 from app.db.session import get_db
 from app.models.aws_connection import AWSConnection
 from app.services.adapters.aws_multitenant import MultiTenantAWSAdapter
