@@ -5,7 +5,7 @@ import time
 import structlog
 from prometheus_client import Counter, Histogram
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
 
 import asyncio
 from app.services.adapters.aws_multitenant import MultiTenantAWSAdapter
@@ -35,15 +35,27 @@ SCHEDULER_JOB_DURATION = Histogram(
 
 
 class SchedulerService:
-    def __init__(self):
+    """
+    Background job scheduler for Valdrix.
+    
+    Uses APScheduler with AsyncIOScheduler for non-blocking job execution.
+    Receives session_maker via dependency injection for proper connection pooling.
+    """
+    
+    def __init__(self, session_maker: async_sessionmaker[AsyncSession]):
+        """
+        Initialize the scheduler with an injected session factory.
+        
+        Args:
+            session_maker: SQLAlchemy async session factory (from app.db.session)
+        """
         self.scheduler = AsyncIOScheduler()
         self.settings = get_settings()
         self._last_run_success: bool | None = None
         self._last_run_time: str | None = None
         
-        # Setup DB session for background jobs
-        self.engine = create_async_engine(self.settings.DATABASE_URL)
-        self.session_maker = async_sessionmaker(self.engine, expire_on_commit=False)
+        # Use injected session factory (shared with FastAPI)
+        self.session_maker = session_maker
         self.semaphore = asyncio.Semaphore(10)  # Limit concurrency to 10 tenants
 
     async def daily_analysis_job(self):

@@ -68,12 +68,14 @@ async def test_scheduler_concurrency():
         await asyncio.sleep(0.1)
         return {"zombies": 1}
 
-    scheduler = SchedulerService()
-    
-    # Mock the session maker context manager
+    # Create mock session maker for DI
+    mock_session_maker = MagicMock()
     mock_cm = AsyncMock()
     mock_cm.__aenter__.return_value = mock_db
-    scheduler.session_maker = MagicMock(return_value=mock_cm)
+    mock_cm.__aexit__.return_value = None
+    mock_session_maker.return_value = mock_cm
+    
+    scheduler = SchedulerService(session_maker=mock_session_maker)
     
     with patch('app.services.scheduler.select'):
         mock_result = MagicMock()

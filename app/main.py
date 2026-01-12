@@ -51,7 +51,9 @@ async def lifespan(app: FastAPI):
     tracker.start()
     app.state.emissions_tracker = tracker
 
-    scheduler = SchedulerService()
+    # Pass shared session factory to scheduler (DI pattern)
+    from app.db.session import async_session_maker
+    scheduler = SchedulerService(session_maker=async_session_maker)
     scheduler.start()
     app.state.scheduler = scheduler
     

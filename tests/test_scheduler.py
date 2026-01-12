@@ -16,34 +16,44 @@ from uuid import uuid4
 from app.services.scheduler import SchedulerService
 
 
+def create_mock_session_maker():
+    """Create a mock session maker for testing."""
+    mock_session = AsyncMock()
+    mock_session_maker = MagicMock()
+    mock_cm = AsyncMock()
+    mock_cm.__aenter__.return_value = mock_session
+    mock_cm.__aexit__.return_value = None
+    mock_session_maker.return_value = mock_cm
+    return mock_session_maker
+
+
 class TestSchedulerInstantiation:
     """Tests for SchedulerService initialization."""
     
     def test_creates_scheduler(self):
         """Should create APScheduler instance."""
-        scheduler = SchedulerService()
+        mock_session_maker = create_mock_session_maker()
+        scheduler = SchedulerService(session_maker=mock_session_maker)
         assert scheduler.scheduler is not None
     
-    def test_creates_engine(self):
-        """Should create async SQLAlchemy engine."""
-        scheduler = SchedulerService()
-        assert scheduler.engine is not None
-    
-    def test_creates_session_maker(self):
-        """Should create async session maker."""
-        scheduler = SchedulerService()
-        assert scheduler.session_maker is not None
+    def test_stores_session_maker(self):
+        """Should store the injected session_maker."""
+        mock_session_maker = create_mock_session_maker()
+        scheduler = SchedulerService(session_maker=mock_session_maker)
+        assert scheduler.session_maker is mock_session_maker
     
     def test_creates_semaphore(self):
         """Should create semaphore for concurrency control."""
-        scheduler = SchedulerService()
+        mock_session_maker = create_mock_session_maker()
+        scheduler = SchedulerService(session_maker=mock_session_maker)
         assert scheduler.semaphore is not None
         # Default limit is 10
         assert scheduler.semaphore._value == 10
     
     def test_initial_status(self):
         """Initial run status should be None."""
-        scheduler = SchedulerService()
+        mock_session_maker = create_mock_session_maker()
+        scheduler = SchedulerService(session_maker=mock_session_maker)
         assert scheduler._last_run_success is None
         assert scheduler._last_run_time is None
 
@@ -53,26 +63,30 @@ class TestSchedulerStatus:
     
     def test_returns_dict(self):
         """Should return status dictionary."""
-        scheduler = SchedulerService()
+        mock_session_maker = create_mock_session_maker()
+        scheduler = SchedulerService(session_maker=mock_session_maker)
         status = scheduler.get_status()
         assert isinstance(status, dict)
     
     def test_contains_running_flag(self):
         """Should contain running flag."""
-        scheduler = SchedulerService()
+        mock_session_maker = create_mock_session_maker()
+        scheduler = SchedulerService(session_maker=mock_session_maker)
         status = scheduler.get_status()
         assert "running" in status
     
     def test_contains_last_run_info(self):
         """Should contain last run information."""
-        scheduler = SchedulerService()
+        mock_session_maker = create_mock_session_maker()
+        scheduler = SchedulerService(session_maker=mock_session_maker)
         status = scheduler.get_status()
         assert "last_run_success" in status
         assert "last_run_time" in status
     
     def test_contains_job_list(self):
         """Should list registered jobs."""
-        scheduler = SchedulerService()
+        mock_session_maker = create_mock_session_maker()
+        scheduler = SchedulerService(session_maker=mock_session_maker)
         status = scheduler.get_status()
         assert "jobs" in status
         assert isinstance(status["jobs"], list)
@@ -84,7 +98,8 @@ class TestSchedulerStart:
     
     async def test_registers_daily_job(self):
         """Should register daily analysis job."""
-        scheduler = SchedulerService()
+        mock_session_maker = create_mock_session_maker()
+        scheduler = SchedulerService(session_maker=mock_session_maker)
         scheduler.start()
         
         # Get job IDs
@@ -95,7 +110,8 @@ class TestSchedulerStart:
     
     async def test_registers_weekly_remediation_job(self):
         """Should register weekly remediation job."""
-        scheduler = SchedulerService()
+        mock_session_maker = create_mock_session_maker()
+        scheduler = SchedulerService(session_maker=mock_session_maker)
         scheduler.start()
         
         job_ids = [j.id for j in scheduler.scheduler.get_jobs()]
@@ -105,7 +121,8 @@ class TestSchedulerStart:
     
     async def test_scheduler_is_running(self):
         """Scheduler should be running after start()."""
-        scheduler = SchedulerService()
+        mock_session_maker = create_mock_session_maker()
+        scheduler = SchedulerService(session_maker=mock_session_maker)
         scheduler.start()
         
         assert scheduler.scheduler.running is True
@@ -119,7 +136,8 @@ class TestSchedulerStop:
     
     async def test_stop_calls_shutdown(self):
         """stop() should call scheduler.shutdown()."""
-        scheduler = SchedulerService()
+        mock_session_maker = create_mock_session_maker()
+        scheduler = SchedulerService(session_maker=mock_session_maker)
         scheduler.start()
         
         # Stop should not raise
@@ -135,7 +153,8 @@ class TestDailyAnalysisJob:
     
     async def test_fetches_all_tenants(self):
         """Should query all tenants from database."""
-        scheduler = SchedulerService()
+        mock_session_maker = create_mock_session_maker()
+        scheduler = SchedulerService(session_maker=mock_session_maker)
         
         # Mock session and tenant query
         mock_db = AsyncMock()
@@ -155,7 +174,8 @@ class TestDailyAnalysisJob:
     
     async def test_updates_last_run_status(self):
         """Should update last_run_success after completion."""
-        scheduler = SchedulerService()
+        mock_session_maker = create_mock_session_maker()
+        scheduler = SchedulerService(session_maker=mock_session_maker)
         
         # Mock empty tenant list
         mock_db = AsyncMock()
@@ -175,7 +195,8 @@ class TestDailyAnalysisJob:
     
     async def test_processes_multiple_tenants(self):
         """Should process all tenants."""
-        scheduler = SchedulerService()
+        mock_session_maker = create_mock_session_maker()
+        scheduler = SchedulerService(session_maker=mock_session_maker)
         
         # Mock 2 tenants
         mock_tenants = [MagicMock(id=uuid4(), name="Tenant1"), MagicMock(id=uuid4(), name="Tenant2")]
@@ -200,3 +221,4 @@ class TestDailyAnalysisJob:
         # Both tenants were processed
         assert call_count[0] == 2
         assert scheduler._last_run_success is True
+
