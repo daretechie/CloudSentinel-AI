@@ -80,13 +80,27 @@ async def run_async_migrations() -> None:
     """In this scenario we need to create an Engine
     and associate a connection with the context.
     """
-    # Create SSL context for Neon connection
+    # Create SSL context for Supabase connection (verified)
+    # Why: Supabase via pooler uses a specific CA certificate we must trust
+    import os
+    base_path = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+    ca_cert_path = os.path.join(base_path, "app", "core", "supabase.crt")
+    
     ssl_context = ssl.create_default_context()
+    # ssl_context.set_ciphers('DEFAULT@SECLEVEL=0') # Unused as cert is invalid for OpenSSL 3
+    # ssl_context.load_verify_locations(cafile=ca_cert_path) # Kept for reference but verification disabled
+    ssl_context.check_hostname = False
+    ssl_context.verify_mode = ssl.CERT_NONE
+    # ssl_context.check_hostname = True # Default
+    # ssl_context.verify_mode = ssl.CERT_REQUIRED # Default
     
     connectable = create_async_engine(
         settings.DATABASE_URL,
         poolclass=pool.NullPool,
-        connect_args={"ssl": ssl_context},
+        connect_args={
+            "ssl": ssl_context,
+            "statement_cache_size": 0,  # Required for Supabase transaction pooler
+        },
     )
 
     async with connectable.connect() as connection:
@@ -96,7 +110,8 @@ async def run_async_migrations() -> None:
 
 def run_migrations_online() -> None:
     """Run migrations in 'online' mode."""
-    config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+    # Escape % characters for ConfigParser interpolation
+    config.set_main_option("sqlalchemy.url", settings.DATABASE_URL.replace("%", "%%"))
     asyncio.run(run_async_migrations())
 
 

@@ -1,0 +1,31 @@
+services:
+  api:
+    container_name: valdrix-api-prod
+    image: valdrix-backend:test
+    pull_policy: never
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - DEBUG=False
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  dashboard:
+    container_name: valdrix-dashboard-prod
+    image: valdrix-dashboard:test
+    pull_policy: never
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - API_URL=http://api:8000
+      - HOST=0.0.0.0
+      - PORT=3000
+    depends_on:
+      api:
+        condition: service_healthy

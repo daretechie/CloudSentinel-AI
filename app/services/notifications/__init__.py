@@ -1,3 +1,3 @@
-from .slack import SlackService
+from .slack import SlackService, get_slack_service
 
-__all__ = ["SlackService"]
+__all__ = ["SlackService", "get_slack_service"]

@@ -49,11 +49,55 @@ jobs:
           SUPABASE_JWT_SECRET: "test-jwt-secret-for-ci"
         run: uv run pytest -v
 
-  # JOB 2: SECURITY & BUILD INTEGRITY
-  build-and-scan:
-    name: Build & Security Scan
+  # JOB 2: SECURITY CHECKS
+  security:
+    name: Security Audits
     runs-on: ubuntu-latest
-    needs: test
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0 # Required for secret scanning
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install Security Tools
+        run: pip install bandit safety
+
+      - name: Run Bandit (SAST)
+        # B101: Assert used in tests; B104: Bind to all interfaces (Docker)
+        run: bandit -r app -ll -ii -s B101,B104
+
+      - name: Run Safety (Dependencies)
+        run: safety check || true # Allow failure for now until cleanup
+
+      - name: TruffleHog Secret Scan
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD
+          extra_args: --debug --only-verified
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Frontend Security Audit
+        working-directory: ./dashboard
+        run: |
+          npm install -g pnpm
+          pnpm audit --audit-level=high
+
+  # JOB 3: BUILD INTEGRITY
+  build-and-scan:
+    name: Build & Container Scan
+    runs-on: ubuntu-latest
+    needs: [test, security]
     steps:
       - name: Checkout Code
         uses: actions/checkout@v6

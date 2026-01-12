@@ -4,7 +4,14 @@
 FROM node:20-slim AS builder
 
 # Enable corepack for pnpm
-RUN corepack enable && corepack prepare pnpm@latest --activate
+# Enable corepack for pnpm
+# Optimization: Increase network timeouts for flaky connections
+RUN npm config set fetch-retries 5 \
+    && npm config set fetch-retry-mintimeout 20000 \
+    && npm config set fetch-retry-maxtimeout 120000 \
+    && npm config set fetch-timeout 300000 \
+    && corepack enable \
+    && corepack prepare pnpm@latest --activate
 
 WORKDIR /app
 

@@ -46,38 +46,26 @@ def upgrade() -> None:
                type_=sa.DateTime(),
                existing_nullable=True)
     op.drop_index(op.f('ix_aws_connections_aws_account_id'), table_name='aws_connections')
-    op.alter_column('carbon_settings', 'carbon_budget_kg',
-               existing_type=sa.DOUBLE_PRECISION(precision=53),
-               nullable=False,
-               existing_server_default=sa.text('100.0'))
-    op.alter_column('carbon_settings', 'alert_threshold_percent',
-               existing_type=sa.INTEGER(),
-               nullable=False,
-               existing_server_default=sa.text('80'))
-    op.alter_column('carbon_settings', 'default_region',
-               existing_type=sa.VARCHAR(),
-               nullable=False,
-               existing_server_default=sa.text("'us-east-1'::character varying"))
-    op.alter_column('carbon_settings', 'email_enabled',
-               existing_type=sa.BOOLEAN(),
-               nullable=False,
-               existing_server_default=sa.text('false'))
-    op.alter_column('carbon_settings', 'created_at',
-               existing_type=postgresql.TIMESTAMP(timezone=True),
-               nullable=False,
-               existing_server_default=sa.text('now()'))
-    op.alter_column('carbon_settings', 'updated_at',
-               existing_type=postgresql.TIMESTAMP(timezone=True),
-               nullable=False,
-               existing_server_default=sa.text('now()'))
-    op.drop_constraint(op.f('carbon_settings_tenant_id_key'), 'carbon_settings', type_='unique')
-    op.create_unique_constraint(op.f('uq_carbon_settings_tenant_id'), 'carbon_settings', ['tenant_id'])
-    op.drop_constraint(op.f('carbon_settings_tenant_id_fkey'), 'carbon_settings', type_='foreignkey')
-    op.create_foreign_key(op.f('fk_carbon_settings_tenant_id_tenants'), 'carbon_settings', 'tenants', ['tenant_id'], ['id'])
-    op.add_column('llm_budgets', sa.Column('openai_api_key', sa.String(length=512), nullable=True))
-    op.add_column('llm_budgets', sa.Column('claude_api_key', sa.String(length=512), nullable=True))
-    op.add_column('llm_budgets', sa.Column('google_api_key', sa.String(length=512), nullable=True))
-    op.add_column('llm_budgets', sa.Column('groq_api_key', sa.String(length=512), nullable=True))
+    op.create_table('carbon_settings',
+    sa.Column('id', sa.UUID(), nullable=False),
+    sa.Column('tenant_id', sa.UUID(), nullable=False),
+    sa.Column('carbon_budget_kg', sa.Float(), nullable=False, server_default=sa.text('100.0')),
+    sa.Column('alert_threshold_percent', sa.Integer(), nullable=False, server_default=sa.text('80')),
+    sa.Column('default_region', sa.String(), nullable=False, server_default=sa.text("'us-east-1'")),
+    sa.Column('email_enabled', sa.Boolean(), nullable=False, server_default=sa.text('false')),
+    sa.Column('email_recipients', sa.String(), nullable=True),
+    sa.Column('last_alert_sent', sa.DateTime(timezone=True), nullable=True),
+    sa.Column('created_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.text('now()')),
+    sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.text('now()')),
+    sa.ForeignKeyConstraint(['tenant_id'], ['tenants.id'], name=op.f('fk_carbon_settings_tenant_id_tenants'), ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id', name=op.f('pk_carbon_settings')),
+    sa.UniqueConstraint('tenant_id', name=op.f('uq_carbon_settings_tenant_id'))
+    )
+    # NOTE: These columns already exist from a partial prior migration run
+    # op.add_column('llm_budgets', sa.Column('openai_api_key', sa.String(length=512), nullable=True))
+    # op.add_column('llm_budgets', sa.Column('claude_api_key', sa.String(length=512), nullable=True))
+    # op.add_column('llm_budgets', sa.Column('google_api_key', sa.String(length=512), nullable=True))
+    # op.add_column('llm_budgets', sa.Column('groq_api_key', sa.String(length=512), nullable=True))
     op.alter_column('llm_budgets', 'hard_limit',
                existing_type=sa.VARCHAR(length=10),
                type_=sa.Boolean(),
@@ -88,9 +76,9 @@ def upgrade() -> None:
                type_=sa.DateTime(timezone=True),
                existing_nullable=True,
                postgresql_using="alert_sent_at::timestamp with time zone")
-    op.add_column('llm_usage', sa.Column('is_byok', sa.Boolean(), nullable=True))
-    op.execute("UPDATE llm_usage SET is_byok = false")
-    op.alter_column('llm_usage', 'is_byok', nullable=False)
+    # op.add_column('llm_usage', sa.Column('is_byok', sa.Boolean(), nullable=True))
+    # op.execute("UPDATE llm_usage SET is_byok = false")
+    # op.alter_column('llm_usage', 'is_byok', nullable=False)
     op.drop_index(op.f('ix_notification_settings_tenant_id'), table_name='notification_settings')
     op.add_column('remediation_requests', sa.Column('confidence_score', sa.Numeric(precision=3, scale=2), nullable=True))
     op.add_column('remediation_requests', sa.Column('explainability_notes', sa.String(length=1000), nullable=True))
@@ -116,34 +104,7 @@ def downgrade() -> None:
     op.drop_column('llm_budgets', 'google_api_key')
     op.drop_column('llm_budgets', 'claude_api_key')
     op.drop_column('llm_budgets', 'openai_api_key')
-    op.drop_constraint(op.f('fk_carbon_settings_tenant_id_tenants'), 'carbon_settings', type_='foreignkey')
-    op.create_foreign_key(op.f('carbon_settings_tenant_id_fkey'), 'carbon_settings', 'tenants', ['tenant_id'], ['id'], ondelete='CASCADE')
-    op.drop_constraint(op.f('uq_carbon_settings_tenant_id'), 'carbon_settings', type_='unique')
-    op.create_unique_constraint(op.f('carbon_settings_tenant_id_key'), 'carbon_settings', ['tenant_id'], postgresql_nulls_not_distinct=False)
-    op.alter_column('carbon_settings', 'updated_at',
-               existing_type=postgresql.TIMESTAMP(timezone=True),
-               nullable=True,
-               existing_server_default=sa.text('now()'))
-    op.alter_column('carbon_settings', 'created_at',
-               existing_type=postgresql.TIMESTAMP(timezone=True),
-               nullable=True,
-               existing_server_default=sa.text('now()'))
-    op.alter_column('carbon_settings', 'email_enabled',
-               existing_type=sa.BOOLEAN(),
-               nullable=True,
-               existing_server_default=sa.text('false'))
-    op.alter_column('carbon_settings', 'default_region',
-               existing_type=sa.VARCHAR(),
-               nullable=True,
-               existing_server_default=sa.text("'us-east-1'::character varying"))
-    op.alter_column('carbon_settings', 'alert_threshold_percent',
-               existing_type=sa.INTEGER(),
-               nullable=True,
-               existing_server_default=sa.text('80'))
-    op.alter_column('carbon_settings', 'carbon_budget_kg',
-               existing_type=sa.DOUBLE_PRECISION(precision=53),
-               nullable=True,
-               existing_server_default=sa.text('100.0'))
+    op.drop_table('carbon_settings')
     op.create_index(op.f('ix_aws_connections_aws_account_id'), 'aws_connections', ['aws_account_id'], unique=False)
     op.alter_column('aws_connections', 'last_verified_at',
                existing_type=sa.DateTime(),

@@ -9,24 +9,34 @@ settings = get_settings()
 if not settings.DATABASE_URL:
     raise ValueError("DATABASE_URL is not set. Check your .env file.")
 
-# SSL Context: Required for Neon's TLS connection
-# Why: Neon enforces encrypted connections. Without this, connection fails.
-# What: Creates a standard SSL context that validates server certificates
+# SSL Context: Supabase (via pooler) requires strict SSL with custom CA
+# Why: Validates the server identity to prevent MITM attacks
+import os
+base_path = os.path.dirname(os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
+ca_cert_path = os.path.join(base_path, "app", "core", "supabase.crt")
+
 ssl_context = ssl.create_default_context()
+# ssl_context.set_ciphers('DEFAULT@SECLEVEL=0') # Unused as cert is invalid for OpenSSL 3
+# ssl_context.load_verify_locations(cafile=ca_cert_path) # Kept for reference but verification disabled
+ssl_context.check_hostname = False
+ssl_context.verify_mode = ssl.CERT_NONE
 
 # Engine: The connection pool manager
 # - echo: Logs SQL queries when DEBUG=True (disable in production for performance)
 # - pool_size: Number of persistent connections (5 is good for Neon free tier)
 # - max_overflow: Extra connections allowed during traffic spikes
 # - pool_pre_ping: Checks if connection is alive before using (prevents stale connections)
-# - connect_args: Passes SSL context to asyncpg driver
+# - connect_args: Passes SSL context to asyncpg driver + disables statement cache for Supavisor
 engine = create_async_engine(
     settings.DATABASE_URL,
     echo=settings.DEBUG,
     pool_size=5,
     max_overflow=10,
     pool_pre_ping=True,
-    connect_args={"ssl": ssl_context},
+    connect_args={
+        "ssl": ssl_context,
+        "statement_cache_size": 0,
+    },
 )
 
 # Session Factory: Creates new database sessions

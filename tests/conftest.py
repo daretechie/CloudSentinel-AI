@@ -39,4 +39,34 @@ async def db() -> AsyncGenerator[AsyncSession, None]:
     """
     async with async_session_maker() as session:
         yield session
-        await session.rollback()
+@pytest.fixture(scope="session", autouse=True)
+def mock_settings():
+    """
+    Globally override settings for all tests to ensure isolation from .env
+    and valid encryption keys.
+    """
+    from app.core.config import get_settings, Settings
+    from cryptography.fernet import Fernet
+    from app.main import app
+    
+    # Generate a valid key for testing
+    test_key = Fernet.generate_key().decode()
+    
+    # Create mock settings
+    start_settings = Settings(
+        DATABASE_URL="postgresql+asyncpg://test:test@localhost/test",
+        SUPABASE_JWT_SECRET="test-secret",
+        ENCRYPTION_KEY=test_key,
+        # Add other critical defaults here
+    )
+    
+    # Override the dependency
+    app.dependency_overrides[get_settings] = lambda: start_settings
+    
+    # Also patch the global settings object in security.py if it's imported at module Level
+    # Ideally, code should use dependencies, but for models relying on global import:
+    with  pytest.MonkeyPatch.context() as mp:
+        mp.setattr("app.core.security.settings", start_settings)
+        yield start_settings
+    
+    app.dependency_overrides.clear()

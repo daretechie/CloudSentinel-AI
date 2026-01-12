@@ -1,0 +1,156 @@
+import pytest
+from unittest.mock import MagicMock, AsyncMock, patch
+from datetime import date, datetime, timezone, timedelta
+from app.services.adapters.aws_multitenant import MultiTenantAWSAdapter
+from app.models.aws_connection import AWSConnection
+from botocore.exceptions import ClientError
+
+# Sample Connection Data
+MOCK_CX = AWSConnection(
+    tenant_id="test-tenant",
+    account_name="test-account",
+    aws_account_id="123456789012",
+    role_arn="arn:aws:iam::123456789012:role/CloudSentinelRole",
+    external_id="test-external-id", 
+    region="us-east-1"
+)
+
+@pytest.fixture
+def adapter():
+    return MultiTenantAWSAdapter(MOCK_CX)
+
+@pytest.mark.asyncio
+async def test_get_credentials_success(adapter):
+    """Verify STS AssumeRole credential fetching."""
+    mock_sts = AsyncMock()
+    mock_sts.assume_role.return_value = {
+        "Credentials": {
+            "AccessKeyId": "ASIA...",
+            "SecretAccessKey": "secret...",
+            "SessionToken": "token...",
+            "Expiration": datetime.now(timezone.utc) + timedelta(hours=1)
+        }
+    }
+
+    # Mock the session.client context manager
+    mock_session = MagicMock()
+    mock_session.client.return_value.__aenter__.return_value = mock_sts
+    
+    with patch.object(adapter, 'session', mock_session):
+        creds = await adapter._get_credentials()
+        
+        assert creds["AccessKeyId"] == "ASIA..."
+        assert adapter._credentials is not None
+        mock_sts.assume_role.assert_called_once_with(
+            RoleArn=MOCK_CX.role_arn,
+            RoleSessionName="ValdrixCostFetch",
+            ExternalId=MOCK_CX.external_id,
+            DurationSeconds=3600,
+        )
+
+@pytest.mark.asyncio
+async def test_get_credentials_cached(adapter):
+    """Verify credentials are reused if not expired."""
+    # Set valid credentials
+    adapter._credentials = {"AccessKeyId": "CACHED"}
+    adapter._credentials_expire_at = datetime.now(timezone.utc) + timedelta(minutes=30)
+    
+    mock_session = MagicMock() # Should not be used
+    
+    with patch.object(adapter, 'session', mock_session):
+        creds = await adapter._get_credentials()
+        assert creds["AccessKeyId"] == "CACHED"
+        mock_session.client.assert_not_called()
+
+@pytest.mark.asyncio
+async def test_get_credentials_expired(adapter):
+    """Verify credentials are refreshed if expired."""
+    # Set expired credentials
+    adapter._credentials = {"AccessKeyId": "EXPIRED"}
+    adapter._credentials_expire_at = datetime.now(timezone.utc) - timedelta(minutes=5)
+    
+    mock_sts = AsyncMock()
+    mock_sts.assume_role.return_value = {
+        "Credentials": {
+            "AccessKeyId": "NEW",
+            "Expiration": datetime.now(timezone.utc) + timedelta(hours=1)
+        }
+    }
+    
+    mock_session = MagicMock()
+    mock_session.client.return_value.__aenter__.return_value = mock_sts
+    
+    with patch.object(adapter, 'session', mock_session):
+        creds = await adapter._get_credentials()
+        assert creds["AccessKeyId"] == "NEW"
+        mock_session.client.assert_called_once()
+
+@pytest.mark.asyncio
+async def test_get_daily_costs_success(adapter):
+    """Verify Cost Explorer usage fetching."""
+    # Mock Credentials
+    adapter._credentials = {"AccessKeyId": "TEST", "SecretAccessKey": "SECRET", "SessionToken": "TOKEN"}
+    adapter._credentials_expire_at = datetime.now(timezone.utc) + timedelta(hours=1)
+    
+    mock_ce = AsyncMock()
+    mock_ce.get_cost_and_usage.return_value = {
+        "ResultsByTime": [{"TimePeriod": {"Start": "2024-01-01"}, "Total": {"UnblendedCost": {"Amount": "100"}}}]
+    }
+    
+    mock_session = MagicMock()
+    mock_session.client.return_value.__aenter__.return_value = mock_ce
+    
+    with patch.object(adapter, 'session', mock_session):
+        results = await adapter.get_daily_costs(date(2024, 1, 1), date(2024, 1, 2))
+        
+        assert len(results) == 1
+        assert results[0]["Total"]["UnblendedCost"]["Amount"] == "100"
+        
+        # Verify client calls
+        call_kwargs = mock_ce.get_cost_and_usage.call_args[1]
+        assert call_kwargs["TimePeriod"]["Start"] == "2024-01-01"
+        assert "UnblendedCost" in call_kwargs["Metrics"]
+
+@pytest.mark.asyncio
+async def test_get_daily_costs_pagination(adapter):
+    """Verify Cost Explorer pagination."""
+    adapter._credentials = {"AccessKeyId": "TEST", "SecretAccessKey": "SECRET", "SessionToken": "TOKEN"}
+    adapter._credentials_expire_at = datetime.now(timezone.utc) + timedelta(hours=1)
+    
+    mock_ce = AsyncMock()
+    # First response with token
+    mock_ce.get_cost_and_usage.side_effect = [
+        {"ResultsByTime": [{"A": 1}], "NextPageToken": "page2"},
+        {"ResultsByTime": [{"B": 2}]} # Second response without token
+    ]
+    
+    mock_session = MagicMock()
+    mock_session.client.return_value.__aenter__.return_value = mock_ce
+    
+    with patch.object(adapter, 'session', mock_session):
+        results = await adapter.get_daily_costs(date(2024, 1, 1), date(2024, 1, 2))
+        assert len(results) == 2
+        assert mock_ce.get_cost_and_usage.call_count == 2
+
+@pytest.mark.asyncio
+async def test_get_daily_costs_error_handling(adapter):
+    """Verify graceful error reporting on API failure."""
+    adapter._credentials = {"AccessKeyId": "TEST", "SecretAccessKey": "SECRET", "SessionToken": "TOKEN"}
+    adapter._credentials_expire_at = datetime.now(timezone.utc) + timedelta(hours=1)
+    
+    mock_ce = AsyncMock()
+    mock_ce.get_cost_and_usage.side_effect = ClientError(
+        {"Error": {"Code": "AccessDenied", "Message": "Boom"}}, 
+        "get_cost_and_usage"
+    )
+    
+    mock_session = MagicMock()
+    mock_session.client.return_value.__aenter__.return_value = mock_ce
+    
+    with patch.object(adapter, 'session', mock_session):
+        results = await adapter.get_daily_costs(date(2024, 1, 1), date(2024, 1, 2))
+        
+        # Should return list with error dict
+        assert len(results) == 1
+        assert "Error" in results[0]
+        assert results[0]["Code"] == "AccessDenied"

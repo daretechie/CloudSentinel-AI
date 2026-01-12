@@ -58,29 +58,15 @@ async def scan_zombies(
     detector = ZombieDetector(region=region, credentials=credentials)
     zombies = await detector.scan_all()
     
-    # Notification logic
-    zombie_count = sum(len(items) for items in zombies.values() if isinstance(items, list))
-    if zombie_count > 0:
-        settings = get_settings()
-        if settings.SLACK_BOT_TOKEN and settings.SLACK_CHANNEL_ID:
-            try:
-                from app.services.notifications import SlackService
-                slack = SlackService(settings.SLACK_BOT_TOKEN, settings.SLACK_CHANNEL_ID)
-                estimated_savings = zombies.get("total_monthly_waste", 0.0)
-                
-                summary_lines = []
-                for cat, items in zombies.items():
-                    if isinstance(items, list) and len(items) > 0:
-                        label = cat.replace("_", " ").title()
-                        summary_lines.append(f"• {label}: {len(items)}")
-                
-                await slack.send_alert(
-                    title="Zombie Resources Detected!",
-                    message=f"Found *{zombie_count} zombies*.\n" + "\n".join(summary_lines) + f"\n💰 Savings: *${estimated_savings:.2f}/mo*",
-                    severity="warning"
-                )
-            except Exception as e:
-                logger.error("zombie_slack_alert_failed", error=str(e))
+    # Notification logic - use centralized helper
+    try:
+        from app.services.notifications import get_slack_service
+        slack = get_slack_service()
+        if slack:
+            estimated_savings = zombies.get("total_monthly_waste", 0.0)
+            await slack.notify_zombies(zombies, estimated_savings)
+    except Exception as e:
+        logger.error("zombie_slack_alert_failed", error=str(e))
     
     return zombies
 

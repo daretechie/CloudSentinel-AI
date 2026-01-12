@@ -30,11 +30,15 @@ WORKDIR /app
 RUN useradd --create-home --shell /bin/bash appuser
 
 # Copy installed packages from builder
+# Copy installed packages from builder
 COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 
-# Copy application code
-COPY app ./app
+# Copy application code with ownership
+COPY --chown=appuser:appuser app ./app
+
+# Create data directory for local storage (if needed)
+RUN mkdir -p data && chown appuser:appuser data
 
 # Switch to non-root user
 USER appuser

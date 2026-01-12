@@ -111,3 +111,74 @@ class SlackService:
         except SlackApiError as e:
             logger.error(f"Slack digest error: {e.response['error']}")
             return False
+    
+    async def notify_zombies(self, zombies: dict[str, Any], estimated_savings: float = 0.0) -> bool:
+        """
+        Send zombie detection alert.
+        
+        Args:
+            zombies: Dict of zombie categories to lists of resources
+            estimated_savings: Estimated monthly savings in dollars
+        """
+        zombie_count = sum(len(items) for items in zombies.values() if isinstance(items, list))
+        if zombie_count == 0:
+            return True  # No zombies, nothing to report
+        
+        summary_lines = []
+        for cat, items in zombies.items():
+            if isinstance(items, list) and len(items) > 0:
+                label = cat.replace("_", " ").title()
+                summary_lines.append(f"• {label}: {len(items)}")
+        
+        message = (
+            f"Found *{zombie_count} zombie resources*.\n" +
+            "\n".join(summary_lines) +
+            f"\n💰 Estimated Savings: *${estimated_savings:.2f}/mo*"
+        )
+        
+        return await self.send_alert(
+            title="Zombie Resources Detected!",
+            message=message,
+            severity="warning"
+        )
+    
+    async def notify_budget_alert(
+        self, 
+        current_spend: float, 
+        budget_limit: float, 
+        percent_used: float
+    ) -> bool:
+        """
+        Send budget threshold alert.
+        
+        Args:
+            current_spend: Current spend amount
+            budget_limit: Budget limit
+            percent_used: Percentage of budget used (0-100)
+        """
+        severity = "critical" if percent_used >= 100 else "warning"
+        
+        message = (
+            f"*Current Spend:* ${current_spend:.2f}\n"
+            f"*Budget Limit:* ${budget_limit:.2f}\n"
+            f"*Usage:* {percent_used:.1f}%"
+        )
+        
+        return await self.send_alert(
+            title="Budget Alert Threshold Reached",
+            message=message,
+            severity=severity
+        )
+
+
+def get_slack_service():
+    """
+    Factory function to get a configured SlackService instance.
+    Returns None if Slack is not configured.
+    """
+    from app.core.config import get_settings
+    settings = get_settings()
+    
+    if settings.SLACK_BOT_TOKEN and settings.SLACK_CHANNEL_ID:
+        return SlackService(settings.SLACK_BOT_TOKEN, settings.SLACK_CHANNEL_ID)
+    return None

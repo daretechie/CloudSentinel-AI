@@ -82,6 +82,11 @@ Instrumentator().instrument(app).expose(app)
 # Middleware
 app.add_middleware(RequestIDMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
+
+# Add timeout middleware (5 minutes for long zombie scans)
+from app.core.timeout import TimeoutMiddleware
+app.add_middleware(TimeoutMiddleware, timeout_seconds=300)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ORIGINS,
