@@ -1,37 +1,37 @@
-# CloudSentinel - Read-Only IAM Role for Cost Analysis
+# Valdrix - Read-Only IAM Role for Cost Analysis
 #
-# This Terraform module creates an IAM role that allows CloudSentinel to read
+# This Terraform module creates an IAM role that allows Valdrix to read
 # your AWS cost data. The role uses cross-account AssumeRole with
 # an External ID for security.
 #
 # Usage:
-#   module "cloudsentinel" {
-#     source      = "./cloudsentinel"
-#     external_id = "cs-YOUR_EXTERNAL_ID_HERE"
+#   module "valdrix" {
+#     source      = "./valdrix"
+#     external_id = "vx-YOUR_EXTERNAL_ID_HERE"
 #   }
 #
-# After apply, copy the role_arn output to CloudSentinel dashboard.
+# After apply, copy the role_arn output to Valdrix dashboard.
 
 variable "external_id" {
-  description = "The External ID provided by CloudSentinel. Required for security."
+  description = "The External ID provided by Valdrix. Required for security."
   type        = string
 
   validation {
-    condition     = can(regex("^cs-[a-f0-9]{32}$", var.external_id))
-    error_message = "External ID must be in format 'cs-' followed by 32 hex characters."
+    condition     = can(regex("^vx-[a-f0-9]{32}$", var.external_id))
+    error_message = "External ID must be in format 'vx-' followed by 32 hex characters."
   }
 }
 
-variable "cloudsentinel_account_id" {
-  description = "CloudSentinel's AWS Account ID (provided by CloudSentinel)"
+variable "valdrix_account_id" {
+  description = "Valdrix's AWS Account ID (provided by Valdrix)"
   type        = string
-  default     = "YOUR_CLOUDSENTINEL_ACCOUNT_ID"  # Replace with actual account ID
+  default     = "YOUR_VALDRIX_ACCOUNT_ID"  # Replace with actual account ID
 }
 
-# IAM Role for CloudSentinel
-resource "aws_iam_role" "cloudsentinel" {
-  name               = "CloudSentinelReadOnly"
-  description        = "Allows CloudSentinel to read cost data for analysis"
+# IAM Role for Valdrix
+resource "aws_iam_role" "valdrix" {
+  name               = "ValdrixReadOnly"
+  description        = "Allows Valdrix to read cost data for analysis"
   max_session_duration = 3600  # 1 hour
 
   assume_role_policy = jsonencode({
@@ -40,7 +40,7 @@ resource "aws_iam_role" "cloudsentinel" {
       {
         Effect = "Allow"
         Principal = {
-          AWS = "arn:aws:iam::${var.cloudsentinel_account_id}:root"
+          AWS = "arn:aws:iam::${var.valdrix_account_id}:root"
         }
         Action = "sts:AssumeRole"
         Condition = {
@@ -53,15 +53,15 @@ resource "aws_iam_role" "cloudsentinel" {
   })
 
   tags = {
-    Purpose   = "CloudSentinel-CostAnalysis"
-    ManagedBy = "CloudSentinel"
+    Purpose   = "Valdrix-CostAnalysis"
+    ManagedBy = "Valdrix"
   }
 }
 
 # Cost Explorer Read-Only Policy
 resource "aws_iam_role_policy" "cost_explorer" {
-  name = "CloudSentinelCostExplorerReadOnly"
-  role = aws_iam_role.cloudsentinel.id
+  name = "ValdrixCostExplorerReadOnly"
+  role = aws_iam_role.valdrix.id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -106,11 +106,11 @@ resource "aws_iam_role_policy" "cost_explorer" {
 
 # Outputs
 output "role_arn" {
-  description = "The ARN of the CloudSentinel role. Copy this to CloudSentinel dashboard."
-  value       = aws_iam_role.cloudsentinel.arn
+  description = "The ARN of the Valdrix role. Copy this to Valdrix dashboard."
+  value       = aws_iam_role.valdrix.arn
 }
 
 output "role_name" {
-  description = "The name of the CloudSentinel role."
-  value       = aws_iam_role.cloudsentinel.name
+  description = "The name of the Valdrix role."
+  value       = aws_iam_role.valdrix.name
 }

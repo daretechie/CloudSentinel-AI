@@ -332,7 +332,7 @@ class RemediationService:
                         {
                             "ResourceType": "snapshot",
                             "Tags": [
-                                {"Key": "CloudSentinel", "Value": "remediation-backup"},
+                                {"Key": "Valdrix", "Value": "remediation-backup"},
                                 {"Key": "RetentionDays", "Value": str(retention_days)},
                                 {"Key": "OriginalVolume", "Value": volume_id},
                             ],

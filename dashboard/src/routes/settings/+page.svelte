@@ -175,7 +175,7 @@
     
     const confirmed = confirm(
       'Are you sure you want to disconnect your AWS account?\n\n' +
-      'This will delete the connection from CloudSentinel. ' +
+      'This will delete the connection from Valdrix. ' +
       'You will need to go through onboarding again to reconnect.'
     );
     
@@ -373,7 +373,7 @@
 </script>
 
 <svelte:head>
-  <title>Settings | CloudSentinel</title>
+  <title>Settings | Valdrix</title>
 </svelte:head>
 
 <div class="space-y-8">
@@ -424,7 +424,7 @@
           <div class="text-sm text-ink-400 space-y-1">
             <p><strong>Account:</strong> {awsConnection.aws_account_id}</p>
             <p><strong>Region:</strong> {awsConnection.region}</p>
-            <p><strong>Role:</strong> {awsConnection.role_arn?.split('/').pop() || 'CloudSentinelReadOnly'}</p>
+            <p><strong>Role:</strong> {awsConnection.role_arn?.split('/').pop() || 'ValdrixReadOnly'}</p>
             <p><strong>Status:</strong> {awsConnection.status}</p>
           </div>
           
@@ -655,7 +655,7 @@
           <div class="p-4 rounded-lg bg-warning-900/10 border border-warning-900/30">
             <h4 class="text-sm font-bold text-warning-400 mb-1">⚠️ Safety Disclaimer</h4>
             <p class="text-xs text-warning-500 leading-relaxed">
-              Auto-Pilot mode allows CloudSentinel to perform destructive actions (deletion) on identified resources. 
+              Auto-Pilot mode allows Valdrix to perform destructive actions (deletion) on identified resources. 
               Always ensure you have regular backups. Actions are only taken if the AI confidence exceeds the specified threshold.
             </p>
           </div>

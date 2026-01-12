@@ -55,7 +55,7 @@
 </script>
 
 <svelte:head>
-  <title>{mode === 'login' ? 'Sign In' : 'Create Account'} | CloudSentinel</title>
+  <title>{mode === 'login' ? 'Sign In' : 'Create Account'} | Valdrix</title>
 </svelte:head>
 
 <div class="min-h-[85vh] flex items-center justify-center px-4">

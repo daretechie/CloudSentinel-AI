@@ -3,7 +3,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Optional
 
 class Settings(BaseSettings):
-    APP_NAME: str = "CloudSentinel"
+    APP_NAME: str = "Valdrix"
     VERSION: str = "0.1.0"
     DEBUG: bool = False
     
@@ -56,7 +56,7 @@ class Settings(BaseSettings):
     SMTP_PORT: int = 587
     SMTP_USER: Optional[str] = None
     SMTP_PASSWORD: Optional[str] = None
-    SMTP_FROM: str = "alerts@cloudsentinel.io"
+    SMTP_FROM: str = "alerts@valdrix.ai"
     
     # Encryption
     ENCRYPTION_KEY: Optional[str] = None

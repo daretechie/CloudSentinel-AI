@@ -1,5 +1,5 @@
 """
-Leaderboards API Endpoints for CloudSentinel.
+Leaderboards API Endpoints for Valdrix.
 Shows team savings rankings ("Who saved the most?").
 """
 from datetime import datetime, timedelta, timezone

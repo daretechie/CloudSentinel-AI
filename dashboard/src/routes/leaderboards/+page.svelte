@@ -83,7 +83,7 @@
 </script>
 
 <svelte:head>
-  <title>Leaderboards | CloudSentinel</title>
+  <title>Leaderboards | Valdrix</title>
 </svelte:head>
 
 <div class="space-y-8">

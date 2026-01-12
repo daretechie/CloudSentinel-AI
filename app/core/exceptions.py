@@ -1,7 +1,7 @@
 from typing import Optional, Dict, Any
 
-class CloudSentinelException(Exception):
-    """Base exception for all CloudSentinel errors."""
+class ValdrixException(Exception):
+    """Base exception for all Valdrix errors."""
     def __init__(
         self, 
         message: str, 
@@ -13,18 +13,18 @@ class CloudSentinelException(Exception):
         self.code = code
         self.details = details or {}
 
-class AdapterError(CloudSentinelException):
+class AdapterError(ValdrixException):
     """Raised when an external cloud adapter fails."""
     pass
 
-class AuthError(CloudSentinelException):
+class AuthError(ValdrixException):
     """Raised when authentication or authorization fails."""
     pass
 
-class ConfigurationError(CloudSentinelException):
+class ConfigurationError(ValdrixException):
     """Raised when application configuration is invalid or missing."""
     pass
 
-class ResourceNotFoundError(CloudSentinelException):
+class ResourceNotFoundError(ValdrixException):
     """Raised when a requested resource (DB record, cloud resource) is not found."""
     pass

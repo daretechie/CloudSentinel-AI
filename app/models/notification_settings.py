@@ -1,5 +1,5 @@
 """
-Notification Settings Model for CloudSentinel.
+Notification Settings Model for Valdrix.
 Stores per-tenant notification preferences.
 """
 from datetime import datetime, timezone

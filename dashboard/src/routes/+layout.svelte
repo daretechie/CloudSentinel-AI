@@ -53,7 +53,7 @@
       <!-- Logo -->
       <div class="flex items-center gap-3 px-5 py-5 border-b border-ink-800">
         <span class="text-2xl">☁️</span>
-        <span class="text-lg font-semibold text-gradient">CloudSentinel</span>
+        <span class="text-lg font-semibold text-gradient">Valdrix</span>
       </div>
       
       <!-- Navigation -->
@@ -125,7 +125,7 @@
       <nav class="container mx-auto flex items-center justify-between px-6 py-4">
         <a href="/" class="flex items-center gap-2">
           <span class="text-2xl">☁️</span>
-          <span class="text-xl font-bold text-gradient">CloudSentinel</span>
+          <span class="text-xl font-bold text-gradient">Valdrix</span>
         </a>
         
         <a href="/auth/login" class="btn btn-primary">

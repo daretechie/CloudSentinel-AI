@@ -1,8 +1,8 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: |
-  CloudSentinel - Read-Only IAM Role for Cost Analysis
+  Valdrix - Read-Only IAM Role for Cost Analysis
   
-  This template creates an IAM role that allows CloudSentinel to read
+  This template creates an IAM role that allows Valdrix to read
   your AWS cost data. The role uses cross-account AssumeRole with
   an External ID for security.
   
@@ -14,17 +14,17 @@ Parameters:
   ExternalId:
     Type: String
     Description: |
-      The External ID provided by CloudSentinel. 
+      The External ID provided by Valdrix. 
       This is required for security and prevents unauthorized access.
-    AllowedPattern: 'cs-[a-f0-9]{32}'
-    ConstraintDescription: External ID must be in format 'cs-' followed by 32 hex characters
+    AllowedPattern: 'vx-[a-f0-9]{32}'
+    ConstraintDescription: External ID must be in format 'vx-' followed by 32 hex characters
 
 Resources:
-  CloudSentinelRole:
+  ValdrixRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: CloudSentinelReadOnly
-      Description: Allows CloudSentinel to read cost data for analysis
+      RoleName: ValdrixReadOnly
+      Description: Allows Valdrix to read cost data for analysis
       MaxSessionDuration: 3600  # 1 hour (minimum for security)
       
       # Trust policy: Who can assume this role
@@ -33,7 +33,7 @@ Resources:
         Statement:
           - Effect: Allow
             Principal:
-              # CloudSentinel's AWS Account
+              # Valdrix's AWS Account
               # In production, replace with your actual AWS account ID
               AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
             Action: sts:AssumeRole
@@ -44,7 +44,7 @@ Resources:
       
       # Inline policy: What this role can do
       Policies:
-        - PolicyName: CloudSentinelCostExplorerReadOnly
+        - PolicyName: ValdrixCostExplorerReadOnly
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -81,20 +81,20 @@ Resources:
 
       Tags:
         - Key: Purpose
-          Value: CloudSentinel-CostAnalysis
+          Value: Valdrix-CostAnalysis
         - Key: ManagedBy
-          Value: CloudSentinel
+          Value: Valdrix
 
 Outputs:
   RoleArn:
-    Description: The ARN of the CloudSentinel role. Copy this to CloudSentinel dashboard.
-    Value: !GetAtt CloudSentinelRole.Arn
+    Description: The ARN of the Valdrix role. Copy this to Valdrix dashboard.
+    Value: !GetAtt ValdrixRole.Arn
     Export:
-      Name: CloudSentinelRoleArn
+      Name: ValdrixRoleArn
   
   Instructions:
     Description: Next steps
     Value: |
       1. Copy the RoleArn above
-      2. Go to CloudSentinel dashboard -> Settings -> AWS Connection
+      2. Go to Valdrix dashboard -> Settings -> AWS Connection
       3. Paste the Role ARN and click Verify

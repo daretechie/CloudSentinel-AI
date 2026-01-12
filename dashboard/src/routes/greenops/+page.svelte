@@ -122,7 +122,7 @@
 </script>
 
 <svelte:head>
-  <title>GreenOps - CloudSentinel</title>
+  <title>GreenOps - Valdrix</title>
 </svelte:head>
 
 <div class="space-y-6">

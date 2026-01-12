@@ -84,7 +84,7 @@
 </script>
 
 <svelte:head>
-  <title>Dashboard | CloudSentinel</title>
+  <title>Dashboard | Valdrix</title>
 </svelte:head>
 
 {#if !data.user}

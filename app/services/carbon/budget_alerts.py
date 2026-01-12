@@ -4,7 +4,7 @@ Carbon Budget Alerts Service
 Allows users to set monthly carbon (CO2) limits and receive 
 alerts when approaching or exceeding their budget.
 
-CloudSentinel Innovation: Bring carbon accountability to 
+Valdrix Innovation: Bring carbon accountability to 
 cloud teams with measurable targets and automated notifications.
 """
 
@@ -216,7 +216,7 @@ class CarbonBudgetService:
                         smtp_port=getattr(app_settings, 'SMTP_PORT', 587),
                         smtp_user=getattr(app_settings, 'SMTP_USER', ''),
                         smtp_password=getattr(app_settings, 'SMTP_PASSWORD', ''),
-                        from_email=getattr(app_settings, 'SMTP_FROM', 'alerts@cloudsentinel.io'),
+                        from_email=getattr(app_settings, 'SMTP_FROM', 'alerts@valdrix.io'),
                     )
                     
                     recipients = [e.strip() for e in carbon_settings.email_recipients.split(',')]

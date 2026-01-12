@@ -83,7 +83,7 @@ async def verify_aws_connection(role_arn: str, external_id: str) -> tuple[bool, 
             # Try to assume the role
             await sts_client.assume_role(
                 RoleArn=role_arn,
-                RoleSessionName="CloudSentinelVerification",
+                RoleSessionName="ValdrixVerification",
                 ExternalId=external_id,
                 DurationSeconds=900,  # Minimum duration
             )
@@ -136,14 +136,14 @@ async def get_setup_templates():
     
     # CloudFormation YAML template with external_id embedded
     cloudformation_yaml = f'''AWSTemplateFormatVersion: '2010-09-09'
-Description: CloudSentinel - Read-Only IAM Role for Cost Analysis and Resource Optimization
+Description: Valdrix - Read-Only IAM Role for Cost Analysis and Resource Optimization
 
 Resources:
-  CloudSentinelRole:
+  ValdrixRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: CloudSentinelReadOnly
-      Description: Allows CloudSentinel to read cost data and detect zombie resources
+      RoleName: ValdrixReadOnly
+      Description: Allows Valdrix to read cost data and detect zombie resources
       MaxSessionDuration: 3600
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
@@ -156,7 +156,7 @@ Resources:
               StringEquals:
                 sts:ExternalId: '{external_id}'
       Policies:
-        - PolicyName: CloudSentinelReadOnlyPolicy
+        - PolicyName: ValdrixReadOnlyPolicy
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -226,16 +226,16 @@ Resources:
 
 Outputs:
   RoleArn:
-    Description: Copy this ARN to CloudSentinel
-    Value: !GetAtt CloudSentinelRole.Arn'''
+    Description: Copy this ARN to Valdrix
+    Value: !GetAtt ValdrixRole.Arn'''
 
     # Terraform HCL template
-    terraform_hcl = f'''# CloudSentinel - IAM Role for Cost Analysis and Resource Optimization
+    terraform_hcl = f'''# Valdrix - IAM Role for Cost Analysis and Resource Optimization
 # Apply with: terraform apply
 
-resource "aws_iam_role" "cloudsentinel" {{
-  name        = "CloudSentinelReadOnly"
-  description = "Allows CloudSentinel to read cost data and detect zombie resources"
+resource "aws_iam_role" "valdrix" {{
+  name        = "ValdrixReadOnly"
+  description = "Allows Valdrix to read cost data and detect zombie resources"
   
   assume_role_policy = jsonencode({{
     Version = "2012-10-17"
@@ -250,9 +250,9 @@ resource "aws_iam_role" "cloudsentinel" {{
 
 data "aws_caller_identity" "current" {{}}
 
-resource "aws_iam_role_policy" "cloudsentinel_policy" {{
-  name = "CloudSentinelReadOnlyPolicy"
-  role = aws_iam_role.cloudsentinel.id
+resource "aws_iam_role_policy" "valdrix_policy" {{
+  name = "ValdrixReadOnlyPolicy"
+  role = aws_iam_role.valdrix.id
   
   policy = jsonencode({{
     Version = "2012-10-17"
@@ -316,7 +316,7 @@ resource "aws_iam_role_policy" "cloudsentinel_policy" {{
 }}
 
 output "role_arn" {{
-  value = aws_iam_role.cloudsentinel.arn
+  value = aws_iam_role.valdrix.arn
 }}'''
 
     return TemplateResponse(

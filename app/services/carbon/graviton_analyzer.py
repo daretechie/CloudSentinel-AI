@@ -4,7 +4,7 @@ Graviton Migration Analyzer
 Identifies EC2 instances that could benefit from migrating to 
 AWS Graviton (ARM-based) processors for up to 60% energy savings.
 
-CloudSentinel Innovation: Helps customers reduce both costs and 
+Valdrix Innovation: Helps customers reduce both costs and 
 carbon footprint by recommending Graviton migrations.
 
 References:
@@ -78,7 +78,7 @@ class GravitonAnalyzer:
     """
     Analyzes EC2 instances for Graviton migration opportunities.
     
-    CloudSentinel Innovation: Combines cost savings with carbon reduction
+    Valdrix Innovation: Combines cost savings with carbon reduction
     by recommending energy-efficient ARM-based instances.
     """
     

@@ -1,5 +1,5 @@
 """
-Slack notification service for CloudSentinel.
+Slack notification service for Valdrix.
 Sends alerts and daily digests to configured Slack channel.
 """
 import logging
@@ -101,7 +101,7 @@ class SlackService:
                     {
                         "type": "context",
                         "elements": [
-                            {"type": "mrkdwn", "text": "Powered by CloudSentinel"}
+                            {"type": "mrkdwn", "text": "Powered by Valdrix"}
                         ]
                     }
                 ]

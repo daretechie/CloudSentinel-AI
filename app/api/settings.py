@@ -1,5 +1,5 @@
 """
-Settings API Endpoints for CloudSentinel.
+Settings API Endpoints for Valdrix.
 Manages per-tenant notification preferences.
 """
 
@@ -159,7 +159,7 @@ async def test_slack_notification(
         slack = SlackService(settings.SLACK_BOT_TOKEN, settings.SLACK_CHANNEL_ID)
         success = await slack.send_alert(
             title="Test Notification",
-            message=f"This is a test alert from CloudSentinel.\n\nUser: {current_user.email}",
+            message=f"This is a test alert from Valdrix.\n\nUser: {current_user.email}",
             severity="info"
         )
         

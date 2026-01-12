@@ -1,16 +1,16 @@
 [project]
-name = "cloudsentinel"
+name = "valdrix"
 version = "0.1.0"
-description = "The Autonomous FinOps + GreenOps Guardian for Startups"
+description = "Heroic Intelligence for Cloud Spend - The Autonomous FinOps & GreenOps Guardian"
 authors = [
     { name = "Dare AbdulGoniyy", email = "adelekedare2012@gmail.com" }
 ]
 requires-python = ">=3.12"
 
 [project.urls]
-Homepage = "https://github.com/CloudSentinel/cloudsentinel"
-Repository = "https://github.com/CloudSentinel/cloudsentinel"
-Issues = "https://github.com/CloudSentinel/cloudsentinel/issues"
+Homepage = "https://github.com/Valdrix-AI/valdrix"
+Repository = "https://github.com/Valdrix-AI/valdrix"
+Issues = "https://github.com/Valdrix-AI/valdrix/issues"
 
 dependencies = [
     "fastapi>=0.115.0",

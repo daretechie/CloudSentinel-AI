@@ -21,13 +21,13 @@ logger = structlog.get_logger()
 
 # Prometheus Metrics
 SCHEDULER_JOB_RUNS = Counter(
-    "cloudsentinel_scheduler_job_runs_total",
+    "valdrix_scheduler_job_runs_total",
     "Total number of scheduled job runs",
     ["job_name", "status"]  # status: success, failure
 )
 
 SCHEDULER_JOB_DURATION = Histogram(
-    "cloudsentinel_scheduler_job_duration_seconds",
+    "valdrix_scheduler_job_duration_seconds",
     "Duration of scheduled jobs in seconds",
     ["job_name"],
     buckets=[1, 5, 10, 30, 60, 120, 300, 600]  # Up to 10 minutes

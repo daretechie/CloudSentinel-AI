@@ -63,8 +63,8 @@
   function downloadTemplate() {
     const template = selectedTab === 'cloudformation' ? cloudformationYaml : terraformHcl;
     const filename = selectedTab === 'cloudformation' 
-      ? 'cloudsentinel-role.yaml' 
-      : 'cloudsentinel-role.tf';
+      ? 'valdrix-role.yaml' 
+      : 'valdrix-role.tf';
     
     const blob = new Blob([template], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
@@ -196,7 +196,7 @@
         <!-- Template code -->
         <div class="code-container">
           <div class="code-header">
-            <span>{selectedTab === 'cloudformation' ? 'cloudsentinel-role.yaml' : 'cloudsentinel-role.tf'}</span>
+            <span>{selectedTab === 'cloudformation' ? 'valdrix-role.yaml' : 'valdrix-role.tf'}</span>
             <div class="code-actions">
               <button class="icon-btn" onclick={copyTemplate}>
                 {copied ? '✅ Copied!' : '📋 Copy'}
@@ -260,7 +260,7 @@
           type="text" 
           id="roleArn"
           bind:value={roleArn} 
-          placeholder="arn:aws:iam::123456789012:role/CloudSentinelReadOnly"
+          placeholder="arn:aws:iam::123456789012:role/ValdrixReadOnly"
         />
       </div>
       
@@ -283,7 +283,7 @@
     <div class="step-content success">
       <div class="success-icon">🎉</div>
       <h2>Connection Successful!</h2>
-      <p>CloudSentinel can now analyze your AWS costs and help you save money.</p>
+      <p>Valdrix can now analyze your AWS costs and help you save money.</p>
       
       <a href="/" class="primary-btn">
         Go to Dashboard →

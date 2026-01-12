@@ -41,7 +41,7 @@ class MultiTenantAWSAdapter(CostAdapter):
             try:
                 response = await sts_client.assume_role(
                     RoleArn=self.connection.role_arn,
-                    RoleSessionName="CloudSentinelCostFetch",
+                    RoleSessionName="ValdrixCostFetch",
                     ExternalId=self.connection.external_id,
                     DurationSeconds=3600,
                 )

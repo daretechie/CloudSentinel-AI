@@ -1,13 +1,13 @@
-# CloudSentinel 🤖🛡️
+# Valdrix 🤖🛡️
 
 <div align="center">
 
-<img src="assets/cloudsentinel_icon.png" alt="CloudSentinel Logo" width="180" />
+<img src="assets/valdrix_icon.png" alt="Valdrix Logo" width="180" />
 
-### **The Autonomous FinOps & GreenOps Guardian**
-*(a.k.a. The Zombie Hunter for your Cloud)*
+### **Take Command of Cloud Costs**
+*Heroic Intelligence for Cloud Spend*
 
-[![CI/CD Status](https://github.com/CloudSentinel/cloudsentinel/actions/workflows/ci.yml/badge.svg)](https://github.com/CloudSentinel/cloudsentinel/actions)
+[![CI/CD Status](https://github.com/Valdrix-AI/valdrix/actions/workflows/ci.yml/badge.svg)](https://github.com/Valdrix-AI/valdrix/actions)
 [![License: BSL 1.1](https://img.shields.io/badge/License-BSL%201.1-blue.svg)](LICENSE)
 [![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB.svg?logo=python&logoColor=white)](https://python.org)
 [![Svelte 5](https://img.shields.io/badge/Svelte-5-FF3E00.svg?logo=svelte&logoColor=white)](https://svelte.dev)
@@ -29,18 +29,16 @@ Before you know it, **30% of your cloud bill** is feeding resources that do... a
 The industry calls them "Idle Resources."  
 We call them **Zombies**. 🧟
 
-And they aren't just eating your budget—they're eating the planet. **CloudSentinel** is the autonomous agent designed to hunt them down, quantify their carbon impact, and put them to rest.
+And they aren't just eating your budget—they're eating the planet. **Valdrix** is the autonomous agent designed to hunt them down, quantify their carbon impact, and put them to rest.
 
 ---
 
-## ⚡ Why CloudSentinel?
+## ⚡ Why Valdrix?
 
-Most FinOps tools are glorified spreadsheets. They show you a graph and say *"Good luck."*
-
-CloudSentinel is **Agentic**. It doesn't just observe; it reasons.
+Valdrix applies AI-driven reasoning to complex cloud and SaaS spend, turning hidden inefficiencies into actionable strategies and financial clarity.
 
 ### 🧠 1. It Thinks Like a Human (But Faster)
-Instead of static rules, CloudSentinel uses **LLM-powered reasoning** (OpenAI/Anthropic/Groq) to analyze *context*.
+Instead of static rules, Valdrix uses **LLM-powered reasoning** (OpenAI/Anthropic/Groq) to analyze *context*.
 > *"Why did RDS costs spike on Tuesday?"*
 > *"Because the Staging-DB-04 was left running after the load test."*
 
@@ -54,7 +52,7 @@ Our plugin architecture hunts down the "Undead" across 11+ deep categories that 
 
 ### 🌿 3. GreenOps First
 **Every dollar wasted is carbon emitted.**
-CloudSentinel natively tracks the **CO₂ footprint** of your digital waste. We equate every "kill" to real-world impact—like trees planted or car-miles saved.
+Valdrix natively tracks the **CO₂ footprint** of your digital waste. We equate every "kill" to real-world impact—like trees planted or car-miles saved.
 
 ### 🛡️ 4. Enterprise-Grade Security
 Built for the paranoid.
@@ -66,7 +64,7 @@ Built for the paranoid.
 
 ## 🧩 The Architecture
 
-We built CloudSentinel on a **Bleeding Edge** stack designed for speed, concurrency, and delightful UX.
+We built Valdrix on a **Bleeding Edge** stack designed for speed, concurrency, and delightful UX.
 
 ```mermaid
 graph TD
@@ -74,7 +72,7 @@ graph TD
         AWS[AWS Account]
     end
 
-    subgraph "CloudSentinel Core"
+    subgraph "Valdrix Core"
         Adapter[Connector] --> Detect[🧟 Zombie Plugins]
         
         Detect --> Agent[🤖 AI Agent]
@@ -101,14 +99,14 @@ graph TD
 
 ---
 
-## � Get Started in 60 Seconds
+## 🚀 Get Started in 60 Seconds
 
 The easiest way to hunt is via Docker.
 
 ### 1. Configure the Hunter
 ```bash
-git clone https://github.com/CloudSentinel/cloudsentinel.git
-cd cloudsentinel
+git clone https://github.com/Valdrix-AI/valdrix.git
+cd valdrix
 cp .env.example .env
 # Add your OPENAI_API_KEY and DATABASE_URL
 ```
@@ -142,10 +140,10 @@ We are currently in **Phase 4: Developer Experience**.
 
 ## 📜 License & Freedom
 
-CloudSentinel is **Source Available** under the **Business Source License (BSL) 1.1**.
+Valdrix is **Source Available** under the **Business Source License (BSL) 1.1**.
 
 *   **You** (Devs, Startups, Enterprises): Free to use for your *own* infrastructure.
-*   **Them** (AWS, Managed Hosting Providers): Cannot sell CloudSentinel as a service.
+*   **Them** (AWS, Managed Hosting Providers): Cannot sell Valdrix as a service.
 *   **Freedom Date:** The code becomes fully **Apache 2.0** on *Jan 12, 2029*.
 
 ---
@@ -154,7 +152,7 @@ CloudSentinel is **Source Available** under the **Business Source License (BSL) 
 
 ### 💖 Support the Mission
 
-If CloudSentinel saved you a \$1000 bill this month, buy us a coffee (or a server).
+If Valdrix saved you a \$1000 bill this month, buy us a coffee (or a server).
 
 <a href="https://github.com/sponsors/daretechie">
   <img src="https://img.shields.io/badge/💜-Sponsor%20on%20GitHub-pink?style=for-the-badge" alt="Sponsor" />

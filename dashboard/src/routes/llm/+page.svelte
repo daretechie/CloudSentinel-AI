@@ -83,7 +83,7 @@
 </script>
 
 <svelte:head>
-  <title>LLM Usage | CloudSentinel</title>
+  <title>LLM Usage | Valdrix</title>
 </svelte:head>
 
 <div class="space-y-8">

@@ -56,7 +56,7 @@ class EmailService:
         
         try:
             status = budget_status.get("alert_status", "unknown")
-            subject = f"⚠️ CloudSentinel: Carbon Budget {'Exceeded' if status == 'exceeded' else 'Warning'}"
+            subject = f"⚠️ Valdrix: Carbon Budget {'Exceeded' if status == 'exceeded' else 'Warning'}"
             
             html_body = self._build_email_html(budget_status)
             
@@ -110,7 +110,7 @@ class EmailService:
 <body>
     <div class="container">
         <div class="header">
-            <h1>🌱 CloudSentinel Carbon Alert</h1>
+            <h1>🌱 Valdrix Carbon Alert</h1>
         </div>
         <div class="content">
             <p class="status">{status_text}</p>
@@ -130,8 +130,8 @@ class EmailService:
             </div>
             
             <p style="color: #64748b; font-size: 12px;">
-                Sent by CloudSentinel GreenOps Dashboard<br>
-                <a href="https://cloudsentinel.io/greenops">View Dashboard</a>
+                Sent by Valdrix GreenOps Dashboard<br>
+                <a href="https://valdrix.io/greenops">View Dashboard</a>
             </p>
         </div>
     </div>

@@ -188,7 +188,7 @@ class CarbonCalculator:
             "equivalencies": equivalencies,
             
             # Methodology metadata
-            "methodology": "CloudSentinel 2026 (CCF + AWS CCFT v3.0.0)",
+            "methodology": "Valdrix 2026 (CCF + AWS CCFT v3.0.0)",
             "includes_embodied_emissions": True,
             
             # Projections
@@ -229,7 +229,7 @@ class CarbonCalculator:
         """
         Recommend lower-carbon regions for workload placement.
         
-        CloudSentinel Innovation: Help users reduce emissions
+        Valdrix Innovation: Help users reduce emissions
         by migrating to greener AWS regions.
         """
         current_intensity = REGION_CARBON_INTENSITY.get(
