@@ -57,6 +57,10 @@ async def lifespan(app: FastAPI):
     scheduler.start()
     app.state.scheduler = scheduler
     
+    # Setup rate limiting
+    from app.core.rate_limit import setup_rate_limiting
+    setup_rate_limiting(app)
+    
     yield
     
     # Teardown: Stop scheduler and tracker
