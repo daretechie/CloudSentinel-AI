@@ -1,166 +1,287 @@
-# Valdrix 🤖🛡️
+<p align="center">
+  <img src="assets/valdrix_icon.png" alt="Valdrix" width="200" />
+</p>
 
-<div align="center">
+<h1 align="center">Valdrix</h1>
+<h3 align="center">Heroic Intelligence for Cloud Spend</h3>
 
-<img src="assets/valdrix_icon.png" alt="Valdrix Logo" width="180" />
+<p align="center">
+  <em>The autonomous FinOps & GreenOps agent that hunts zombie resources,<br/>
+  thinks like a human, and gives your cloud bill a second chance.</em>
+</p>
 
-### **Take Command of Cloud Costs**
-*Heroic Intelligence for Cloud Spend*
+<p align="center">
+  <a href="https://github.com/Valdrix-AI/valdrix/actions/workflows/ci.yml"><img src="https://github.com/Valdrix-AI/valdrix/actions/workflows/ci.yml/badge.svg" alt="CI/CD Status" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-BSL%201.1-blue.svg" alt="License: BSL 1.1" /></a>
+  <a href="https://python.org"><img src="https://img.shields.io/badge/Python-3.12-3776AB.svg?logo=python&logoColor=white" alt="Python 3.12" /></a>
+  <a href="https://svelte.dev"><img src="https://img.shields.io/badge/Svelte-5-FF3E00.svg?logo=svelte&logoColor=white" alt="Svelte 5" /></a>
+  <a href="https://fastapi.tiangolo.com"><img src="https://img.shields.io/badge/FastAPI-0.128+-009688.svg?logo=fastapi&logoColor=white" alt="FastAPI" /></a>
+  <a href="https://foundation.greensoftware.foundation/"><img src="https://img.shields.io/badge/GreenOps-Enabled-2ea44f.svg" alt="GreenOps" /></a>
+</p>
 
-[![CI/CD Status](https://github.com/Valdrix-AI/valdrix/actions/workflows/ci.yml/badge.svg)](https://github.com/Valdrix-AI/valdrix/actions)
-[![License: BSL 1.1](https://img.shields.io/badge/License-BSL%201.1-blue.svg)](LICENSE)
-[![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB.svg?logo=python&logoColor=white)](https://python.org)
-[![Svelte 5](https://img.shields.io/badge/Svelte-5-FF3E00.svg?logo=svelte&logoColor=white)](https://svelte.dev)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.109+-009688.svg?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
-[![GreenOps](https://img.shields.io/badge/GreenOps-Enabled-2ea44f.svg)](https://foundation.greensoftware.foundation/)
-
-<a href="#-get-started-in-60-seconds"><strong>🚀 Start Hunting</strong></a> · <a href="#-the-architecture"><strong>🧠 The Brain</strong></a> · <a href="#-roadmap"><strong>🔮 Roadmap</strong></a>
-
-</div>
-
----
-
-## 👻 Your Cloud is Haunted.
-
-It starts small. An orphan EBS volume here. An unattached Load Balancer there. A dev environment left running over the weekend.
-
-Before you know it, **30% of your cloud bill** is feeding resources that do... absolutely nothing.
-
-The industry calls them "Idle Resources."  
-We call them **Zombies**. 🧟
-
-And they aren't just eating your budget—they're eating the planet. **Valdrix** is the autonomous agent designed to hunt them down, quantify their carbon impact, and put them to rest.
+<p align="center">
+  <strong><a href="#-the-problem">The Problem</a></strong> · 
+  <strong><a href="#-the-solution">The Solution</a></strong> · 
+  <strong><a href="#-features">Features</a></strong> · 
+  <strong><a href="#-get-started">Get Started</a></strong> · 
+  <strong><a href="#-roadmap">Roadmap</a></strong>
+</p>
 
 ---
 
-## ⚡ Why Valdrix?
+## 💸 The Problem
 
-Valdrix applies AI-driven reasoning to complex cloud and SaaS spend, turning hidden inefficiencies into actionable strategies and financial clarity.
+> **"We're spending $47,000/month on AWS... and I can't explain where 30% of it goes."**  
+> — *Every engineering manager at some point*
 
-### 🧠 1. It Thinks Like a Human (But Faster)
-Instead of static rules, Valdrix uses **LLM-powered reasoning** (OpenAI/Anthropic/Groq) to analyze *context*.
-> *"Why did RDS costs spike on Tuesday?"*
-> *"Because the Staging-DB-04 was left running after the load test."*
+Here's what the industry knows but rarely admits:
 
-### 🧟 2. Deep Zombie Detection (The 11+ Types)
-Our plugin architecture hunts down the "Undead" across 11+ deep categories that other tools miss:
-*   **Compute:** Idle EC2, Forgotten SageMaker Endpoints
-*   **Storage:** Orphan EBS Volumes, Ancient Snapshots, Abandoned S3 Buckets
-*   **Network:** Unallocated Elastic IPs, Orphan ELBs, Underutilized NAT Gateways
-*   **Data:** Idle RDS Instances, Cold Redshift Clusters
-*   **Registry:** Zombie ECR Images
+- **$164 billion** in cloud spend was wasted in 2024. *(Flexera State of the Cloud Report)*
+- **30-35%** of cloud resources are idle, orphaned, or oversized. *(Gartner)*
+- The average company has **no idea** what a developer spin-up costs until the monthly invoice arrives.
 
-### 🌿 3. GreenOps First
-**Every dollar wasted is carbon emitted.**
-Valdrix natively tracks the **CO₂ footprint** of your digital waste. We equate every "kill" to real-world impact—like trees planted or car-miles saved.
+And it's not just money. Every idle EC2 instance, every orphan EBS volume, every forgotten load balancer is **burning electricity** and **emitting CO₂** for absolutely nothing.
 
-### 🛡️ 4. Enterprise-Grade Security
-Built for the paranoid.
-*   **Zero-Trust:** We assume roles via AWS STS. No long-lived keys.
-*   **Encrypted Brain:** specific LLM contexts are ephemeral and sanitized.
-*   **Human-in-the-Loop:** The AI recommends; *you* approve the kill shot.
+Most FinOps tools give you dashboards.  
+Dashboards give you graphs.  
+Graphs give you... more questions.
+
+**You don't need more graphs. You need answers.**
 
 ---
 
-## 🧩 The Architecture
+## 🛡️ The Solution
 
-We built Valdrix on a **Bleeding Edge** stack designed for speed, concurrency, and delightful UX.
+**Valdrix is different.**
 
-```mermaid
-graph TD
-    subgraph "Your Infrastructure"
-        AWS[AWS Account]
-    end
+It's not a dashboard. It's an **autonomous agent** that connects to your cloud, hunts for waste, and tells you *exactly* what to do—with receipts.
 
-    subgraph "Valdrix Core"
-        Adapter[Connector] --> Detect[🧟 Zombie Plugins]
-        
-        Detect --> Agent[🤖 AI Agent]
-        
-        Agent --> |Context| LLM[LLM Brain]
-        LLM --> |Reasoning| Agent
-        
-        Agent --> |Alerts| Slack[Slack / Teams]
-        Agent --> |Action| Remediation[🔫 Executioner]
-    end
+<p align="center">
+  <img src="https://img.shields.io/badge/Think_of_it_as-👨‍💻_A_FinOps_Analyst_That_Never_Sleeps-blueviolet?style=for-the-badge" alt="FinOps Analyst" />
+</p>
 
-    subgraph "The Dashboard (Svelte 5)"
-        UI[SaaS Console]
-        UI --> |Approve| Remediation
-    end
+### Here's how it works:
+
+1. **Connect** → One-click AWS IAM role setup. Read-only. Zero secrets stored.
+2. **Scan** → Our 11 zombie-detection plugins sweep your account every day.
+3. **Reason** → The LLM brain (GPT-4o, Claude 3.5, Groq, Gemini) analyzes context, not just metrics.
+4. **Act** → Get Slack alerts, approve remediations, and watch your bill shrink.
+
+```
+              ┌──────────────────┐
+              │   Your Cloud ☁️  │
+              └────────┬─────────┘
+                       ▼
+              ┌──────────────────┐
+              │  🔌 Valdrix Core │
+              │    (FastAPI)     │
+              └────────┬─────────┘
+                       ▼
+   ┌───────────────────┴───────────────────┐
+   │           Zombie Detection            │
+   │  EC2 · EBS · S3 · RDS · NAT · ELB    │
+   │  SageMaker · Redshift · ECR · EIPs   │
+   └───────────────────┬───────────────────┘
+                       ▼
+              ┌──────────────────┐
+              │   🧠 LLM Brain   │
+              │  (Multi-Model)   │
+              └────────┬─────────┘
+                       ▼
+   ┌───────────────────┴───────────────────┐
+   │          Slack Alerts + Dashboard     │
+   │         (Approve / Reject / Act)      │
+   └───────────────────────────────────────┘
 ```
 
-### The Tech Stack
-*   **Backend:** Python 3.12, FastAPI, Pydantic v2 (Strict typing everywhere)
-*   **Frontend:** SvelteKit (Svelte 5 Runes), TailwindCSS v4, Shadcn-Svelte
-*   **Database:** PostgreSQL (Async via SQLAlchemy), Redis (Queues)
-*   **Infrastructure:** Docker, GitHub Actions, Prometheus
-*   **GreenOps:** CodeCarbon Integration
+---
+
+## ✨ Features
+
+### 🧟 **Deep Zombie Detection**
+Not just "idle EC2." We find *everything*:
+
+| Category | What We Hunt |
+|----------|--------------|
+| **Compute** | Idle EC2 instances, forgotten SageMaker endpoints |
+| **Storage** | Orphan EBS volumes, snapshots older than 90 days, empty S3 buckets |
+| **Network** | Unallocated Elastic IPs, orphan load balancers, underused NAT gateways |
+| **Data** | Idle RDS instances, cold Redshift clusters |
+| **Registry** | Legacy ECR images with no recent pulls |
+
+**11 detection plugins.** More coming.
 
 ---
 
-## 🚀 Get Started in 60 Seconds
+### 🧠 **AI That Actually Thinks**
 
-The easiest way to hunt is via Docker.
+Other tools use static rules: *"CPU < 10% for 7 days = zombie."*
 
-### 1. Configure the Hunter
+Valdrix asks: *"Why did RDS costs spike 47% on Tuesday?"*  
+And answers: *"Because Staging-DB-04 was left running after the load test. Estimated waste: $312/month."*
+
+**Powered by your choice of:**
+- OpenAI (GPT-4o, GPT-4o-mini)
+- Anthropic (Claude 3.5 Sonnet)
+- Google (Gemini 2.0 Flash)
+- Groq (Llama 3.3 70B — fast and cheap)
+
+**Bring Your Own Key (BYOK) supported.** Keep your API costs in your own account.
+
+---
+
+### 🌿 **GreenOps Native**
+
+Every wasted dollar has a carbon cost. Valdrix calculates it.
+
+```
+Total CO₂ this month:      42.7 kg
+Equivalent to:             105 miles driven  🚗
+Trees needed to offset:    1.9 trees  🌳
+Carbon efficiency:         89 gCO₂e per $1 spent
+```
+
+**Region recommendations included.** Move to `us-west-2` and cut emissions by 94%.
+
+---
+
+### 🔔 **Slack-First Alerts**
+
+Your engineering team lives in Slack. So does Valdrix.
+
+- **Anomaly alerts** when costs spike unexpectedly
+- **Daily digests** with top savings opportunities
+- **Leaderboards** — "Who saved the most this week?"
+- **One-click approve/reject** for remediations
+
+---
+
+### 🛡️ **Enterprise-Grade Security**
+
+We're paranoid, so you don't have to be:
+
+- **Zero-Trust Architecture** — We assume IAM roles via STS. No long-lived credentials.
+- **Read-Only by Default** — Our CloudFormation/Terraform templates grant only `Describe*` and `Get*` permissions.
+- **Human-in-the-Loop** — The AI recommends; *you* approve the action.
+- **Audit Trail** — Every remediation request is logged with who requested, who approved, and when.
+
+---
+
+## 🚀 Get Started
+
+### Prerequisites
+- Docker & Docker Compose
+- An AWS account (with Cost Explorer enabled)
+- An LLM API key (OpenAI, Anthropic, Google, or Groq)
+
+### 1. Clone & Configure
+
 ```bash
 git clone https://github.com/Valdrix-AI/valdrix.git
 cd valdrix
 cp .env.example .env
-# Add your OPENAI_API_KEY and DATABASE_URL
 ```
 
-### 2. Unleash the Agent
+Edit `.env` and add:
+```env
+DATABASE_URL=postgresql+asyncpg://...
+OPENAI_API_KEY=sk-...  # or GROQ_API_KEY, etc.
+SUPABASE_JWT_SECRET=your-jwt-secret
+```
+
+### 2. Start the Stack
+
 ```bash
 docker-compose up -d
 ```
-Visit **`http://localhost:8000/docs`** to wake the API or **`http://localhost:5173`** for the Dashboard.
 
-### 3. Your First Scan
-```bash
-curl -X POST "http://localhost:8000/api/v1/zombies/scan" \
-     -H "Authorization: Bearer <YOUR_TOKEN>"
-```
+### 3. Open the Dashboard
 
----
+- **API Docs:** [http://localhost:8000/docs](http://localhost:8000/docs)
+- **Dashboard:** [http://localhost:5173](http://localhost:5173)
 
-## 🔮 Roadmap: The Future of Hunting
+### 4. Connect Your AWS Account
 
-We are currently in **Phase 4: Developer Experience**.
-
-- [x] **Core Zombie Detection** (EC2, EBS, RDS, etc.)
-- [x] **Svelte 5 Dashboard** (Dark Mode, Animations)
-- [x] **Slack Integration** (Real-time alerts)
-- [ ] **FinOps-as-Code:** GitHub Actions to block expensive PRs.
-- [ ] **Multi-Cloud:** Azure & GCP Support (Coming Phase 6).
-- [ ] **Autonomous Mode:** Trust-score based auto-remediation.
+The dashboard will guide you through deploying our read-only IAM role via CloudFormation or Terraform. Takes 60 seconds.
 
 ---
 
-## 📜 License & Freedom
+## 📊 Tech Stack
 
-Valdrix is **Source Available** under the **Business Source License (BSL) 1.1**.
-
-*   **You** (Devs, Startups, Enterprises): Free to use for your *own* infrastructure.
-*   **Them** (AWS, Managed Hosting Providers): Cannot sell Valdrix as a service.
-*   **Freedom Date:** The code becomes fully **Apache 2.0** on *Jan 12, 2029*.
+| Layer | Technology |
+|-------|------------|
+| **Backend** | Python 3.12, FastAPI, Pydantic v2, SQLAlchemy (async) |
+| **Frontend** | SvelteKit (Svelte 5 Runes), TailwindCSS v4, Shadcn-Svelte |
+| **Database** | PostgreSQL (Neon), Supabase Auth |
+| **LLM** | LangChain, OpenAI, Anthropic, Google Genai, Groq |
+| **Infra** | Docker, GitHub Actions, Prometheus |
+| **GreenOps** | CodeCarbon integration |
 
 ---
 
-<div align="center">
+## 🗺️ Roadmap
 
-### 💖 Support the Mission
+We're in **active development**. Here's where we are:
 
-If Valdrix saved you a \$1000 bill this month, buy us a coffee (or a server).
+### ✅ Done
+- [x] Multi-tenant AWS onboarding (CloudFormation + Terraform)
+- [x] 11 zombie detection plugins
+- [x] Multi-LLM analysis (OpenAI, Claude, Gemini, Groq)
+- [x] Carbon footprint calculator with regional intensity
+- [x] Slack integration (alerts, digests, leaderboards)
+- [x] SvelteKit dashboard with dark mode
+- [x] Human-in-the-loop remediation workflow
 
-<a href="https://github.com/sponsors/daretechie">
-  <img src="https://img.shields.io/badge/💜-Sponsor%20on%20GitHub-pink?style=for-the-badge" alt="Sponsor" />
-</a>
+### 🔨 In Progress
+- [ ] FinOps-as-Code (GitHub Action to preview cost changes on PRs)
+- [ ] Real-time WebSocket updates
+- [ ] Deployment to Koyeb
 
-<br/>
-<br/>
+### 🔮 Coming Soon
+- [ ] Azure & GCP support
+- [ ] ML-based forecasting (Prophet/ARIMA)
+- [ ] Virtual tagging (LLM infers team ownership)
+- [ ] Stripe billing & usage metering
 
-Built with 🩸,  sweat, and Python by <a href="https://github.com/daretechie"><strong>Dare AbdulGoniyy</strong></a>.
+---
 
-</div>
+## 📜 License
+
+Valdrix is **source available** under the **Business Source License (BSL) 1.1**.
+
+- ✅ **Free for internal use** — Run it on your own infrastructure.
+- ❌ **No resale** — Cannot offer Valdrix as a managed service.
+- 🗓️ **Freedom date:** Converts to **Apache 2.0** on **January 12, 2029**.
+
+See [LICENSE](LICENSE) for full terms.
+
+---
+
+## 🤝 Contributing
+
+We welcome contributions! Please read our [CONTRIBUTING.md](CONTRIBUTING.md) before opening a PR.
+
+**Areas we need help:**
+- Azure & GCP adapters
+- More zombie detection plugins
+- Dashboard UI/UX improvements
+- Documentation
+
+---
+
+## 💖 Support
+
+If Valdrix saved your team $1,000 this month, consider sponsoring the project:
+
+<p align="center">
+  <a href="https://github.com/sponsors/daretechie">
+    <img src="https://img.shields.io/badge/💜-Sponsor%20on%20GitHub-pink?style=for-the-badge" alt="Sponsor" />
+  </a>
+</p>
+
+---
+
+<p align="center">
+  Built with obsessive attention to detail by <a href="https://github.com/daretechie"><strong>Dare AbdulGoniyy</strong></a>.<br/>
+  <em>Because your cloud bill shouldn't keep you up at night.</em>
+</p>
