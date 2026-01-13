@@ -10,7 +10,6 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 import structlog
 
-from app.core.config import get_settings
 
 logger = structlog.get_logger()
 
@@ -21,15 +20,15 @@ DEFAULT_TIMEOUT_SECONDS = 300  # 5 minutes
 class TimeoutMiddleware(BaseHTTPMiddleware):
     """
     Middleware to enforce request timeouts.
-    
+
     Cancels requests that exceed the configured timeout to prevent
     resource exhaustion from long-running operations.
     """
-    
+
     def __init__(self, app, timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS):
         super().__init__(app)
         self.timeout_seconds = timeout_seconds
-    
+
     async def dispatch(self, request: Request, call_next):
         try:
             return await asyncio.wait_for(

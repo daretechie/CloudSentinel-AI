@@ -29,40 +29,40 @@ class IAMAuditor:
         try:
             async with self.session.client("sts") as sts:
                 caller_identity = await sts.get_caller_identity()
-            
+
             arn = caller_identity["Arn"]
-            
+
             # Extract role name from ARN (arn:aws:sts::123:assumed-role/RoleName/Session)
             # Typically for assumed roles: arn:aws:sts::ACCOUNT:assumed-role/ROLE_NAME/SESSION_NAME
             # The actual IAM role ARN is arn:aws:iam::ACCOUNT:role/ROLE_NAME
-            
+
             if "assumed-role" not in arn:
                 return {"error": "Not running as an assumed role", "arn": arn}
 
             parts = arn.split("/")
             if len(parts) < 2:
                 return {"error": "Could not parse role name", "arn": arn}
-                
+
             role_name = parts[1]
-            
+
             logger.info("auditing_role", role_name=role_name)
-            
+
             risks = []
             score = 100 # Start with perfect score
 
             async with self.session.client("iam") as iam:
                 # Fetch attached policies
                 attached_policies = await iam.list_attached_role_policies(RoleName=role_name)
-                
+
                 # Analyze Attached Policies
                 for policy in attached_policies.get("AttachedPolicies", []):
                     policy_arn = policy["PolicyArn"]
                     policy_info = await iam.get_policy(PolicyArn=policy_arn)
                     version = policy_info["Policy"]["DefaultVersionId"]
-                    
+
                     policy_version = await iam.get_policy_version(PolicyArn=policy_arn, VersionId=version)
                     doc = policy_version["PolicyVersion"]["Document"]
-                    
+
                     analysis = self._analyze_policy_document(doc)
                     if analysis["risks"]:
                         risks.extend([(f"Policy {policy['PolicyName']}: {r}") for r in analysis["risks"]])
@@ -77,7 +77,7 @@ class IAMAuditor:
                     if analysis["risks"]:
                         risks.extend([(f"Inline Policy {policy_name}: {r}") for r in analysis["risks"]])
                         score -= (len(analysis["risks"]) * 10)
-            
+
             return {
                 "role_name": role_name,
                 "score": max(0, score),
@@ -98,23 +98,23 @@ class IAMAuditor:
         statements = doc.get("Statement", [])
         if isinstance(statements, dict):
             statements = [statements]
-            
+
         for stmt in statements:
             if stmt.get("Effect") != "Allow":
                 continue
-                
+
             actions = stmt.get("Action", [])
             if isinstance(actions, str):
                 actions = [actions]
-                
+
             resources = stmt.get("Resource", [])
             if isinstance(resources, str):
                 resources = [resources]
-            
+
             # Risk 1: Admin Access (* on *)
             if "*" in actions and "*" in resources:
                 risks.append("Critical: Full Administrator Access detected ('*'). Violation of Least Privilege.")
-            
+
             # Risk 2: Full Resource Access to sensitive services
             # In 2026, scoping strictly to resources is mandatory.
             if "*" in resources:
@@ -124,5 +124,5 @@ class IAMAuditor:
                     if action == "*" or any(action.startswith(p) for p in sensitive_prefixes):
                         risks.append(f"High: Unscoped allow on sensitive action '{action}'. Should rely on Resource ARNs.")
                         break
-        
+
         return {"risks": risks}

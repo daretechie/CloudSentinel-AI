@@ -16,7 +16,7 @@ from app.db.base import Base
 class CarbonSettings(Base):
     """
     Carbon budget settings for a tenant.
-    
+
     Configurable values:
     - carbon_budget_kg: Monthly CO2 limit in kg
     - alert_threshold_percent: Percentage at which to send warning
@@ -28,25 +28,25 @@ class CarbonSettings(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id"), unique=True, nullable=False)
-    
+
     # Budget configuration
     carbon_budget_kg: Mapped[float] = mapped_column(Float, default=100.0)  # kg CO2/month
     alert_threshold_percent: Mapped[int] = mapped_column(Integer, default=80)  # % before warning
-    
+
     # Region configuration
     default_region: Mapped[str] = mapped_column(String, default="us-east-1")
-    
+
     # Email notification settings
     email_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     email_recipients: Mapped[str | None] = mapped_column(String, nullable=True)  # Comma-separated
-    
+
     # Alert rate limiting
     last_alert_sent: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    
+
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
-    
+
     # Relationship
     tenant = relationship("Tenant", backref="carbon_settings")
 

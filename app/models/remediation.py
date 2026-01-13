@@ -53,16 +53,16 @@ class RemediationAction(str, Enum):
 class RemediationRequest(Base):
     """
     A request to remediate (delete/modify) a zombie resource.
-    
+
     Requires human approval before execution.
     Supports optional backup before destructive actions.
     """
-    
+
     __tablename__ = "remediation_requests"
-    
+
     # Primary Key
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
-    
+
     # Multi-tenancy
     tenant_id = Column(
         UUID(as_uuid=True),
@@ -70,12 +70,12 @@ class RemediationRequest(Base):
         nullable=False,
         index=True,
     )
-    
+
     # Resource identification
     resource_id = Column(String(100), nullable=False, index=True)  # AWS resource ID
     resource_type = Column(String(50), nullable=False)  # EBS Volume, Snapshot, etc.
     region = Column(String(20), nullable=False, default="us-east-1")
-    
+
     # Action details
     action = Column(SQLEnum(RemediationAction), nullable=False)
     status = Column(
@@ -84,27 +84,27 @@ class RemediationRequest(Base):
         default=RemediationStatus.PENDING,
         index=True,
     )
-    
+
     # Financial impact
     estimated_monthly_savings = Column(Numeric(10, 2), nullable=True)
-    
+
     # AI Explainability
     confidence_score = Column(Numeric(3, 2), nullable=True) # 0.00 to 1.00
     explainability_notes = Column(String(1000), nullable=True) # AI Reasoning
-    
+
     # Backup options (for safe delete)
     create_backup = Column(Boolean, default=False)
     backup_retention_days = Column(Integer, default=30)
     backup_resource_id = Column(String(100), nullable=True)  # ID of created backup
     backup_cost_estimate = Column(Numeric(10, 4), nullable=True)  # Monthly cost of backup
-    
+
     # Audit trail - who requested
     requested_by_user_id = Column(
         UUID(as_uuid=True),
         ForeignKey("users.id"),
         nullable=False,
     )
-    
+
     # Audit trail - who approved/rejected
     reviewed_by_user_id = Column(
         UUID(as_uuid=True),
@@ -112,16 +112,16 @@ class RemediationRequest(Base):
         nullable=True,
     )
     review_notes = Column(String(500), nullable=True)
-    
+
     # Execution details
     execution_error = Column(String(500), nullable=True)
-    
+
     # Timestamps inherited from Base: created_at, updated_at
-    
+
     # Relationships
     tenant = relationship("Tenant")
     requested_by = relationship("User", foreign_keys=[requested_by_user_id])
     reviewed_by = relationship("User", foreign_keys=[reviewed_by_user_id])
-    
+
     def __repr__(self):
         return f"<RemediationRequest {self.resource_id} [{self.status.value}]>"

@@ -32,7 +32,7 @@ def setup_logging():
     logger_factory=structlog.PrintLoggerFactory(),
     cache_logger_on_first_use=True,
   )
-  
+
   # 4. Intercept the standard logging (e.g. uvicorn's internal log).
   # This ensure even library logs get formatted as JSON.
   logging.basicConfig(

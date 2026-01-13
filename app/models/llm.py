@@ -24,7 +24,7 @@ from app.db.base import Base
 class LLMUsage(Base):
     """
     Tracks individual LLM API calls for cost analytics.
-    
+
     Example usage:
         usage = LLMUsage(
             tenant_id=current_user.tenant_id,
@@ -39,13 +39,13 @@ class LLMUsage(Base):
         db.add(usage)
         await db.commit()
     """
-    
+
     __tablename__ = "llm_usage"
-    
+
     # Primary Key: UUID prevents enumeration attacks
     # default=uuid4 generates a new UUID if not provided
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
-    
+
     # Foreign Key: Links this record to a tenant
     # Every LLM call belongs to a tenant (multi-tenancy)
     # ondelete="CASCADE": If tenant is deleted, their usage records go too
@@ -55,15 +55,15 @@ class LLMUsage(Base):
         nullable=False,
         index=True,  # Fast filtering by tenant
     )
-    
+
     # Provider: Which company's API (openai, anthropic, groq)
     # Why separate from model: Same model can be on different providers
     provider = Column(String(50), nullable=False)
-    
+
     # Model: Specific model used (gpt-4o, claude-3-sonnet, llama-3.3-70b)
     # Important for cost calculation (each model has different pricing)
     model = Column(String(100), nullable=False, index=True)
-    
+
     # Token counts: The currency of LLM pricing
     # input_tokens: How many tokens in your prompt
     # output_tokens: How many tokens in the response
@@ -71,28 +71,28 @@ class LLMUsage(Base):
     input_tokens = Column(Integer, nullable=False, default=0)
     output_tokens = Column(Integer, nullable=False, default=0)
     total_tokens = Column(Integer, nullable=False, default=0)
-    
+
     # Cost in USD: Calculated at time of call
     # Numeric(10,6): Up to $9999.999999 with 6 decimal precision
     # Why 6 decimals: Token costs are tiny fractions of cents
     cost_usd = Column(Numeric(10, 6), nullable=False, default=0)
-    
+
     # Request Type: What was this LLM call for?
     # Examples: "daily_analysis", "chat", "anomaly_detection"
     # Useful for analytics: "80% of cost comes from daily_analysis"
     request_type = Column(String(50), nullable=True)
-    
+
     # is_byok: True if the user's personal API key was used
     # Important for billing: Platform fees vs Token costs
     is_byok = Column(Boolean, nullable=False, default=False)
-    
+
     # created_at is inherited from Base (automatic timestamp)
     # updated_at is inherited from Base (automatic on update)
-    
+
     # Relationship: Access the tenant object
     # Use: usage.tenant.name
     tenant = relationship("Tenant", back_populates="llm_usage")
-    
+
     def __repr__(self):
         """String representation for debugging."""
         return f"<LLMUsage {self.model} ${self.cost_usd:.6f}>"
@@ -102,19 +102,19 @@ class LLMUsage(Base):
 class LLMBudget(Base):
     """
     Tracks monthly LLM usage budget per tenant.
-    
+
     Enables:
     - Soft alerts: Notify when usage hits threshold (e.g., 80%)
     - Hard limits: Optionally block requests when budget exceeded
     - Cost control: Prevent surprise AI bills
     - BYOK: Securely store tenant API keys with transparent encryption
     """
-    
+
     __tablename__ = "llm_budgets"
-    
+
     # Primary Key
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
-    
+
     # Foreign Key: One budget per tenant
     tenant_id = Column(
         UUID(as_uuid=True),
@@ -123,31 +123,31 @@ class LLMBudget(Base):
         unique=True,  # One budget per tenant
         index=True,
     )
-    
+
     # Monthly limit in USD (e.g., $10.00)
     monthly_limit_usd = Column(Numeric(10, 2), nullable=False, default=10.00)
-    
+
     # Alert threshold percentage (e.g., 80 = alert at 80% usage)
     alert_threshold_percent = Column(Integer, nullable=False, default=80)
-    
+
     # Hard limit: If True, block LLM requests when budget exceeded
     hard_limit = Column(Boolean, nullable=False, default=False)
-    
+
     # AI Strategy: Per-tenant model and provider selection
     preferred_provider = Column(String(50), nullable=False, default="groq")
     preferred_model = Column(String(100), nullable=False, default="llama-3.3-70b-versatile")
-    
+
     # Underlying columns for API Key Overrides (storing encrypted data)
     _openai_api_key = Column("openai_api_key", String(512), nullable=True)
     _claude_api_key = Column("claude_api_key", String(512), nullable=True)
     _google_api_key = Column("google_api_key", String(512), nullable=True)
     _groq_api_key = Column("groq_api_key", String(512), nullable=True)
-    
+
     # Hybrid properties for transparent encryption/decryption
     @hybrid_property
     def openai_api_key(self):
         return decrypt_string(self._openai_api_key)
-        
+
     @openai_api_key.setter
     def openai_api_key(self, value):
         self._openai_api_key = encrypt_string(value) if value else None
@@ -155,7 +155,7 @@ class LLMBudget(Base):
     @hybrid_property
     def claude_api_key(self):
         return decrypt_string(self._claude_api_key)
-        
+
     @claude_api_key.setter
     def claude_api_key(self, value):
         self._claude_api_key = encrypt_string(value) if value else None
@@ -163,7 +163,7 @@ class LLMBudget(Base):
     @hybrid_property
     def google_api_key(self):
         return decrypt_string(self._google_api_key)
-        
+
     @google_api_key.setter
     def google_api_key(self, value):
         self._google_api_key = encrypt_string(value) if value else None
@@ -171,16 +171,16 @@ class LLMBudget(Base):
     @hybrid_property
     def groq_api_key(self):
         return decrypt_string(self._groq_api_key)
-        
+
     @groq_api_key.setter
     def groq_api_key(self, value):
         self._groq_api_key = encrypt_string(value) if value else None
-    
+
     # Track when alert was sent (avoid spam)
     alert_sent_at = Column(DateTime(timezone=True), nullable=True)
-    
+
     # Relationship
     tenant = relationship("Tenant", back_populates="llm_budget")
-    
+
     def __repr__(self):
         return f"<LLMBudget ${self.monthly_limit_usd}/month>"

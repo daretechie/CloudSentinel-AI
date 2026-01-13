@@ -14,15 +14,15 @@ naming_convention = {
 
 class Base(DeclarativeBase):
     metadata = MetaData(naming_convention=naming_convention)
-    
+
     # Mixin for audit columns
     # Using lambda for defaults ensures fresh UTC timestamps at creation
     created_at: Mapped[datetime] = mapped_column(
-        TIMESTAMP(timezone=True), 
+        TIMESTAMP(timezone=True),
         default=lambda: datetime.now(timezone.utc)
     )
     updated_at: Mapped[datetime] = mapped_column(
-        TIMESTAMP(timezone=True), 
-        default=lambda: datetime.now(timezone.utc), 
+        TIMESTAMP(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc)
     )

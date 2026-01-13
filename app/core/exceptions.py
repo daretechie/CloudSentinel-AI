@@ -3,9 +3,9 @@ from typing import Optional, Dict, Any
 class ValdrixException(Exception):
     """Base exception for all Valdrix errors."""
     def __init__(
-        self, 
-        message: str, 
-        code: str = "internal_error", 
+        self,
+        message: str,
+        code: str = "internal_error",
         details: Optional[Dict[str, Any]] = None
     ):
         super().__init__(message)

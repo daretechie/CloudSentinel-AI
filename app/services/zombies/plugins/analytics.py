@@ -24,7 +24,7 @@ class IdleSageMakerPlugin(ZombiePlugin):
                             try:
                                 end_time = datetime.now(timezone.utc)
                                 start_time = end_time - timedelta(days=7)
-                                
+
                                 metrics = await cloudwatch.get_metric_statistics(
                                     Namespace="AWS/SageMaker",
                                     MetricName="Invocations",

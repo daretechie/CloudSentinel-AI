@@ -17,7 +17,7 @@ class UnusedElasticIpsPlugin(ZombiePlugin):
         try:
             async with await self._get_client(session, "ec2", region, credentials) as ec2:
                 response = await ec2.describe_addresses()
-                
+
                 for addr in response.get("Addresses", []):
                     if not addr.get("InstanceId") and not addr.get("NetworkInterfaceId"):
                         zombies.append({
@@ -34,7 +34,7 @@ class UnusedElasticIpsPlugin(ZombiePlugin):
                         })
         except ClientError as e:
             logger.warning("eip_scan_error", error=str(e))
-        
+
         return zombies
 
 class IdleInstancesPlugin(ZombiePlugin):
@@ -47,7 +47,7 @@ class IdleInstancesPlugin(ZombiePlugin):
         instances = []
         cpu_threshold = 5.0
         days = 7
-        
+
         try:
             async with await self._get_client(session, "ec2", region, credentials) as ec2:
                 paginator = ec2.get_paginator("describe_instances")
@@ -61,13 +61,13 @@ class IdleInstancesPlugin(ZombiePlugin):
                                 "type": instance.get("InstanceType", "unknown"),
                                 "launch_time": instance.get("LaunchTime")
                             })
-            
+
             if not instances:
                 return []
 
             end_time = datetime.now(timezone.utc)
             start_time = end_time - timedelta(days=days)
-            
+
             async with await self._get_client(session, "cloudwatch", region, credentials) as cloudwatch:
                 # Batch metrics in 500-instance chunks (AWS limit)
                 for i in range(0, len(instances), 500):
@@ -86,13 +86,13 @@ class IdleInstancesPlugin(ZombiePlugin):
                                 "Stat": "Average"
                             }
                         })
-                    
+
                     results = await cloudwatch.get_metric_data(
                         MetricDataQueries=queries,
                         StartTime=start_time,
                         EndTime=end_time
                     )
-                    
+
                     # Map results back to instances
                     for idx, inst in enumerate(batch):
                         res = next((r for r in results.get("MetricDataResults", []) if r["Id"] == f"m{idx}"), None)
@@ -101,7 +101,7 @@ class IdleInstancesPlugin(ZombiePlugin):
                             if avg_cpu < cpu_threshold:
                                 cost_key = f"ec2_{inst['type'].replace('.', '_')}"
                                 monthly_cost = ESTIMATED_COSTS.get(cost_key, ESTIMATED_COSTS["ec2_default"])
-                                
+
                                 zombies.append({
                                     "resource_id": inst["id"],
                                     "resource_type": "EC2 Instance",
@@ -115,8 +115,8 @@ class IdleInstancesPlugin(ZombiePlugin):
                                     "explainability_notes": f"Instance has shown very low CPU utilization (avg {round(avg_cpu, 2)}%) over the last {days} days.",
                                     "confidence_score": 0.92
                                 })
-                            
+
         except ClientError as e:
             logger.warning("idle_instance_scan_error", error=str(e))
-        
+
         return zombies

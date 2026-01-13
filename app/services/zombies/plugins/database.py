@@ -17,7 +17,7 @@ class IdleRdsPlugin(ZombiePlugin):
         dbs = []
         connection_threshold = 1
         days = 7
-        
+
         try:
             async with await self._get_client(session, "rds", region, credentials) as rds:
                 paginator = rds.get_paginator("describe_db_instances")
@@ -28,13 +28,13 @@ class IdleRdsPlugin(ZombiePlugin):
                             "class": db.get("DBInstanceClass", "unknown"),
                             "engine": db.get("Engine", "unknown")
                         })
-            
+
             if not dbs:
                 return []
 
             end_time = datetime.now(timezone.utc)
             start_time = end_time - timedelta(days=days)
-            
+
             async with await self._get_client(session, "cloudwatch", region, credentials) as cloudwatch:
                 for i in range(0, len(dbs), 500):
                     batch = dbs[i:i + 500]
@@ -58,7 +58,7 @@ class IdleRdsPlugin(ZombiePlugin):
                         StartTime=start_time,
                         EndTime=end_time
                     )
-                    
+
                     for idx, db in enumerate(batch):
                         res = next((r for r in results.get("MetricDataResults", []) if r["Id"] == f"m{idx}"), None)
                         if res and res.get("Values"):
@@ -77,7 +77,7 @@ class IdleRdsPlugin(ZombiePlugin):
                                     monthly_cost = 200.00
                                 else:
                                     monthly_cost = 75.00  # Default
-                                
+
                                 zombies.append({
                                     "resource_id": db["id"],
                                     "resource_type": "RDS Database",
@@ -91,10 +91,10 @@ class IdleRdsPlugin(ZombiePlugin):
                                     "explainability_notes": f"Database has shown near-zero active connections (avg {round(avg_connections, 2)}) over the past {days} days.",
                                     "confidence_score": 0.96
                                 })
-                            
+
         except ClientError as e:
             logger.warning("idle_rds_scan_error", error=str(e))
-        
+
         return zombies
 
 class ColdRedshiftPlugin(ZombiePlugin):
@@ -114,7 +114,7 @@ class ColdRedshiftPlugin(ZombiePlugin):
                             try:
                                 end_time = datetime.now(timezone.utc)
                                 start_time = end_time - timedelta(days=7)
-                                
+
                                 metrics = await cloudwatch.get_metric_statistics(
                                     Namespace="AWS/Redshift",
                                     MetricName="DatabaseConnections",

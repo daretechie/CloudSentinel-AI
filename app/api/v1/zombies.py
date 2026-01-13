@@ -6,7 +6,6 @@ from sqlalchemy import select
 from pydantic import BaseModel
 import structlog
 
-from app.core.config import get_settings
 from app.core.auth import CurrentUser, requires_role
 from app.db.session import get_db
 from app.models.aws_connection import AWSConnection
@@ -37,13 +36,20 @@ async def scan_zombies(
     user: Annotated[CurrentUser, Depends(requires_role("member"))],
     db: AsyncSession = Depends(get_db),
     region: str = Query(default="us-east-1"),
+    analyze: bool = Query(default=False, description="Enable AI-powered analysis of detected zombies"),
 ):
-    """Scan AWS account for zombie resources."""
+    """
+    Scan AWS account for zombie resources.
+
+    Args:
+        analyze: If True, enriches results with LLM-generated explanations and recommendations.
+                 This uses tokens and will be tracked in LLM usage.
+    """
     result = await db.execute(
         select(AWSConnection).where(AWSConnection.tenant_id == user.tenant_id)
     )
     connection = result.scalar_one_or_none()
-    
+
     if not connection:
         return {
             "unattached_volumes": [],
@@ -51,13 +57,47 @@ async def scan_zombies(
             "unused_elastic_ips": [],
             "error": "No AWS connection found."
         }
-    
+
     adapter = MultiTenantAWSAdapter(connection)
     credentials = await adapter._get_credentials()
-    
+
     detector = ZombieDetector(region=region, credentials=credentials)
     zombies = await detector.scan_all()
-    
+
+    # AI Analysis (optional, requires Starter+ tier)
+    if analyze:
+        try:
+            from app.core.tier_guard import TierGuard, FeatureFlag
+            
+            async with TierGuard(user, db) as guard:
+                if not guard.has(FeatureFlag.AI_INSIGHTS):
+                    zombies["ai_analysis"] = {
+                        "error": "AI Insights requires Starter tier or higher.",
+                        "summary": "Upgrade to unlock AI-powered analysis.",
+                        "upgrade_required": True
+                    }
+                else:
+                    from app.services.llm.factory import LLMFactory
+                    from app.services.llm.zombie_analyzer import ZombieAnalyzer
+
+                    llm = LLMFactory.create()
+                    analyzer = ZombieAnalyzer(llm)
+
+                    ai_analysis = await analyzer.analyze(
+                        detection_results=zombies,
+                        tenant_id=user.tenant_id,
+                        db=db,
+                    )
+                    zombies["ai_analysis"] = ai_analysis
+                    logger.info("zombie_ai_analysis_complete",
+                               resource_count=len(ai_analysis.get("resources", [])))
+        except Exception as e:
+            logger.error("zombie_ai_analysis_failed", error=str(e))
+            zombies["ai_analysis"] = {
+                "error": f"AI analysis failed: {str(e)}",
+                "summary": "Analysis unavailable. Rule-based detection completed successfully."
+            }
+
     # Notification logic - use centralized helper
     try:
         from app.services.notifications import get_slack_service
@@ -67,7 +107,7 @@ async def scan_zombies(
             await slack.notify_zombies(zombies, estimated_savings)
     except Exception as e:
         logger.error("zombie_slack_alert_failed", error=str(e))
-    
+
     return zombies
 
 @router.post("/request")
@@ -82,7 +122,7 @@ async def create_remediation_request(
         action_enum = RemediationAction(request.action)
     except ValueError:
         raise HTTPException(400, f"Invalid action: {request.action}")
-    
+
     service = RemediationService(db=db, region=region)
     result = await service.create_request(
         tenant_id=user.tenant_id,
@@ -148,11 +188,11 @@ async def execute_remediation(
     connection = result.scalar_one_or_none()
     if not connection:
         raise HTTPException(400, "No AWS connection")
-    
+
     adapter = MultiTenantAWSAdapter(connection)
     credentials = await adapter._get_credentials()
     service = RemediationService(db=db, region=region, credentials=credentials)
-    
+
     try:
         result = await service.execute(request_id, user.tenant_id)
         return {"status": result.status.value, "request_id": str(result.id)}

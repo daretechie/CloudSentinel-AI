@@ -27,6 +27,8 @@ from app.api.v1.costs import router as costs_router
 from app.api.v1.carbon import router as carbon_router
 from app.api.v1.zombies import router as zombies_router
 from app.api.v1.admin import router as admin_router
+from app.api.v1.billing import router as billing_router
+from app.api.v1.audit import router as audit_router
 
 # Configure logging
 setup_logging()
@@ -37,10 +39,10 @@ async def lifespan(app: FastAPI):
     # Setup: Initialize scheduler and emissions tracker
     settings = get_settings()
     logger.info(f"Starting {settings.APP_NAME}...")
-    
+
     # Ensure data directory exists
     os.makedirs("data", exist_ok=True)
-    
+
     # Track app's own carbon footprint (GreenOps)
     tracker = EmissionsTracker(
         project_name=settings.APP_NAME,
@@ -56,13 +58,13 @@ async def lifespan(app: FastAPI):
     scheduler = SchedulerService(session_maker=async_session_maker)
     scheduler.start()
     app.state.scheduler = scheduler
-    
+
     # Setup rate limiting
     from app.core.rate_limit import setup_rate_limiting
     setup_rate_limiting(app)
-    
+
     yield
-    
+
     # Teardown: Stop scheduler and tracker
     logger.info("Shutting down...")
     scheduler.stop()
@@ -116,3 +118,5 @@ app.include_router(costs_router)
 app.include_router(carbon_router)
 app.include_router(zombies_router)
 app.include_router(admin_router)
+app.include_router(billing_router)
+app.include_router(audit_router)

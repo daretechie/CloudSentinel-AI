@@ -25,7 +25,7 @@ class ZombiePlugin(ABC):
     Abstract base class for Zombie Resource detection plugins.
     Each plugin is responsible for detecting a specific type of zombie resource.
     """
-    
+
     @property
     @abstractmethod
     def category_key(self) -> str:
@@ -39,12 +39,12 @@ class ZombiePlugin(ABC):
     async def scan(self, session: aioboto3.Session, region: str, credentials: Dict[str, str] = None) -> List[Dict[str, Any]]:
         """
         Scan for zombie resources.
-        
+
         Args:
             session: The aioboto3 session to use for client creation.
             region: AWS region to scan.
             credentials: STS credentials dictionary (optional).
-            
+
         Returns:
             List of dictionaries representing detected zombie resources.
         """

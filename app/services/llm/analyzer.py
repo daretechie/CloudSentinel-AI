@@ -77,7 +77,7 @@ RULES:
 class FinOpsAnalyzer:
     """
     The 'Brain' of Valdrix.
-    
+
     This class wraps a LangChain ChatModel and orchestrates the analysis of cost data.
     It uses a specialized System Prompt to enforce strict JSON output for programmatic use.
     """
@@ -118,19 +118,19 @@ class FinOpsAnalyzer:
 
         Args:
             cost_data: List of daily cost records from the adapter.
-        
+
         Returns:
             str: A raw JSON string containing the analysis.
         """
         logger.info("starting_analysis", data_points=len(cost_data))
-        
+
         # Format cost data as JSON string for the prompt (better than str() for LLMs)
         formatted_data = json.dumps(cost_data, default=str)
-        
+
         # Determine provider and model
         effective_provider = provider
         effective_model = model
-        
+
         if tenant_id and db and (not effective_provider or not effective_model):
             from app.models.llm import LLMBudget
             result = await db.execute(select(LLMBudget).where(LLMBudget.tenant_id == tenant_id))
@@ -138,7 +138,7 @@ class FinOpsAnalyzer:
             if budget:
                 effective_provider = effective_provider or budget.preferred_provider
                 effective_model = effective_model or budget.preferred_model
-        
+
         # Fallbacks if still none
         effective_provider = effective_provider or get_settings().LLM_PROVIDER
         effective_model = effective_model or "llama-3.3-70b-versatile"
@@ -161,14 +161,14 @@ class FinOpsAnalyzer:
 
         # Build the chain: Prompt -> LLM
         # We need to ensure self.llm matches the effective_provider if they differ or if BYOK is used
-        
+
         current_llm = self.llm
         if effective_provider != get_settings().LLM_PROVIDER or byok_key:
              from app.services.llm.factory import LLMFactory
              current_llm = LLMFactory.create(effective_provider, api_key=byok_key)
 
         chain = self.prompt | current_llm
-        
+
         # Invoke the chain
         response = await chain.ainvoke({"cost_data": formatted_data})
 
@@ -179,7 +179,7 @@ class FinOpsAnalyzer:
                 usage_metadata = response.response_metadata.get("token_usage", {})
                 input_tokens = usage_metadata.get("prompt_tokens", 0)
                 output_tokens = usage_metadata.get("completion_tokens", 0)
-                
+
                 # Record usage
                 tracker = UsageTracker(db)
                 await tracker.record(
@@ -194,9 +194,9 @@ class FinOpsAnalyzer:
             except Exception as e:
                 # Don't fail the analysis if tracking fails
                 logger.warning("llm_usage_tracking_failed", error=str(e))
-        
+
         logger.info("analysis_complete")
-        
+
         # After analysis, check for anomalies and alert
         try:
             result = json.loads(self._strip_markdown(response.content))
@@ -204,7 +204,7 @@ class FinOpsAnalyzer:
                 settings = get_settings()
                 if settings.SLACK_BOT_TOKEN and settings.SLACK_CHANNEL_ID:
                     slack = SlackService(settings.SLACK_BOT_TOKEN, settings.SLACK_CHANNEL_ID)
-                    
+
                     top_anomaly = result["anomalies"][0]
                     await slack.send_alert(
                         title=f"Cost Anomaly Detected: {top_anomaly['resource']}",
@@ -213,5 +213,5 @@ class FinOpsAnalyzer:
                     )
         except json.JSONDecodeError as e:
             logger.warning("llm_response_json_parse_failed", error=str(e))
-            
+
         return self._strip_markdown(response.content)

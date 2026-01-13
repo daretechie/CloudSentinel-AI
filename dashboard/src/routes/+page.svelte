@@ -21,6 +21,7 @@
   let costs: any = $state(null);
   let carbon: any = $state(null);
   let zombies: any = $state(null);
+  let analysis: any = $state(null);
   let error = $state('');
   let startDate = $state('');
   let endDate = $state('');
@@ -42,15 +43,17 @@
         'Authorization': `Bearer ${session.access_token}`,
       };
       
-      const [costsRes, carbonRes, zombiesRes] = await Promise.all([
+      const [costsRes, carbonRes, zombiesRes, analyzeRes] = await Promise.all([
         fetch(`${PUBLIC_API_URL}/costs?start_date=${startDate}&end_date=${endDate}`, { headers }),
         fetch(`${PUBLIC_API_URL}/carbon?start_date=${startDate}&end_date=${endDate}`, { headers }),
         fetch(`${PUBLIC_API_URL}/zombies`, { headers }),
+        fetch(`${PUBLIC_API_URL}/analyze?start_date=${startDate}&end_date=${endDate}`, { headers }),
       ]);
       
       costs = await costsRes.json();
       carbon = await carbonRes.json();
       zombies = await zombiesRes.json();
+      analysis = analyzeRes.ok ? await analyzeRes.json() : { analysis: 'Analysis unavailable.' };
     } catch (e: any) {
       error = e.message;
     } finally {
@@ -69,6 +72,8 @@
   let zombieCount = $derived(zombies ? Object.values(zombies).reduce((acc: number, val: any) => {
     return Array.isArray(val) ? acc + val.length : acc;
   }, 0) : 0);
+  
+  let analysisText = $derived(analysis?.analysis ?? '');
   
   // Calculate period label from dates
   let periodLabel = $derived((() => {
@@ -198,6 +203,107 @@
           </p>
         </div>
       </div>
+      
+      <!-- AI Insights - Interactive Cards -->
+      {#if zombies?.ai_analysis}
+        {@const aiData = zombies.ai_analysis}
+        
+        <!-- Hero Savings Card -->
+        <div class="glass-panel stagger-enter col-span-full" style="animation-delay: 200ms;">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-sm text-ink-400 mb-1">Potential Monthly Savings</p>
+              <p class="text-5xl font-bold text-gradient">
+                {aiData.total_monthly_savings || '$0.00'}
+              </p>
+              <p class="text-sm text-ink-400 mt-2">{aiData.summary || 'Analysis complete.'}</p>
+            </div>
+            <div class="hero-icon text-6xl">💰</div>
+          </div>
+        </div>
+        
+        <!-- AI Findings Grid -->
+        {#if aiData.resources && aiData.resources.length > 0}
+          <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {#each aiData.resources as finding, i}
+              <div 
+                class="glass-panel stagger-enter" 
+                style="animation-delay: {250 + i * 50}ms;"
+              >
+                <!-- Header: Icon + Confidence -->
+                <div class="flex items-start justify-between mb-3">
+                  <span class="text-2xl">
+                    {finding.confidence === 'high' ? '🔴' : finding.confidence === 'medium' ? '🟡' : '🟢'}
+                  </span>
+                  <span class="badge {finding.confidence === 'high' ? 'badge-danger' : finding.confidence === 'medium' ? 'badge-warning' : 'badge-success'}">
+                    {finding.confidence} confidence
+                  </span>
+                </div>
+                
+                <!-- Resource ID -->
+                <h3 class="font-mono text-sm mb-2 truncate">{finding.resource_id}</h3>
+                
+                <!-- Explanation -->
+                <p class="text-sm text-ink-300 mb-3 line-clamp-3">{finding.explanation}</p>
+                
+                <!-- Cost + Risk Row -->
+                <div class="flex items-center gap-4 mb-4 text-xs">
+                  <span class="text-success-400">💵 {finding.monthly_cost}</span>
+                  <span class="{finding.risk_if_deleted === 'high' ? 'text-danger-400' : finding.risk_if_deleted === 'medium' ? 'text-warning-400' : 'text-success-400'}">
+                    Risk: {finding.risk_if_deleted}
+                  </span>
+                </div>
+                
+                <!-- Action Button -->
+                <button 
+                  class="btn btn-primary w-full text-xs"
+                  onclick={() => console.log('Remediate:', finding.resource_id)}
+                >
+                  {finding.recommended_action || 'Review'}
+                </button>
+                
+                <!-- Why? Tooltip (expandable) -->
+                {#if finding.confidence_reason}
+                  <details class="mt-2">
+                    <summary class="text-xs text-ink-500 cursor-pointer hover:text-ink-400">
+                      Why this confidence?
+                    </summary>
+                    <p class="text-xs text-ink-400 mt-1 pl-2 border-l border-ink-700">
+                      {finding.confidence_reason}
+                    </p>
+                  </details>
+                {/if}
+              </div>
+            {/each}
+          </div>
+        {/if}
+        
+        <!-- General Recommendations -->
+        {#if aiData.general_recommendations && aiData.general_recommendations.length > 0}
+          <div class="card stagger-enter" style="animation-delay: 400ms;">
+            <h3 class="text-lg font-semibold mb-3">💡 Recommendations</h3>
+            <ul class="space-y-2">
+              {#each aiData.general_recommendations as rec}
+                <li class="flex items-start gap-2 text-sm text-ink-300">
+                  <span class="text-accent-400">•</span>
+                  {rec}
+                </li>
+              {/each}
+            </ul>
+          </div>
+        {/if}
+      {:else if analysisText}
+        <!-- Fallback: Plain text analysis -->
+        <div class="card stagger-enter" style="animation-delay: 200ms;">
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="text-lg font-semibold">AI Insights</h2>
+            <span class="badge badge-default">LLM</span>
+          </div>
+          <div class="text-sm text-ink-300 whitespace-pre-wrap leading-relaxed">
+            {analysisText}
+          </div>
+        </div>
+      {/if}
       
       <!-- Carbon Impact Section -->
       {#if carbon?.equivalencies}

@@ -30,13 +30,13 @@ async def get_carbon_footprint(
     select(AWSConnection).where(AWSConnection.tenant_id == user.tenant_id)
   )
   connection = result.scalar_one_or_none()
-  
+
   if not connection:
     return {"error": "No AWS connection found"}
-  
+
   adapter = MultiTenantAWSAdapter(connection)
   cost_data = await adapter.get_gross_usage(start_date, end_date)
-  
+
   calculator = CarbonCalculator()
   results = calculator.calculate_from_costs(cost_data, region=region)
   return results
@@ -52,38 +52,38 @@ async def get_carbon_budget(
     select(AWSConnection).where(AWSConnection.tenant_id == user.tenant_id)
   )
   connection = result.scalar_one_or_none()
-  
+
   if not connection:
     return {"error": "No AWS connection found", "alert_status": "unknown"}
-  
+
   today = date.today()
   month_start = date(today.year, today.month, 1)
-  
+
   settings_result = await db.execute(
     select(CarbonSettings).where(CarbonSettings.tenant_id == user.tenant_id)
   )
   carbon_settings = settings_result.scalar_one_or_none()
-  
+
   calc_region = region
   if carbon_settings and region == "us-east-1" and carbon_settings.default_region != "us-east-1":
     calc_region = carbon_settings.default_region
-  
+
   adapter = MultiTenantAWSAdapter(connection)
   cost_data = await adapter.get_gross_usage(month_start, today)
-  
+
   calculator = CarbonCalculator()
   carbon_result = calculator.calculate_from_costs(cost_data, region=calc_region)
-  
+
   budget_service = CarbonBudgetService(db)
   budget_status = await budget_service.get_budget_status(
     tenant_id=user.tenant_id,
     month_start=month_start,
     current_co2_kg=carbon_result["total_co2_kg"],
   )
-  
+
   if budget_status["alert_status"] in ["warning", "exceeded"]:
     await budget_service.send_carbon_alert(user.tenant_id, budget_status)
-    
+
   return budget_status
 
 @router.get("/graviton")
@@ -97,14 +97,14 @@ async def analyze_graviton_opportunities(
         select(AWSConnection).where(AWSConnection.tenant_id == user.tenant_id)
     )
     connection = result.scalar_one_or_none()
-    
+
     if not connection:
         return {"error": "No AWS connection found", "migration_candidates": 0}
-    
+
     adapter = MultiTenantAWSAdapter(connection)
     credentials = await adapter._get_credentials()
-    
+
     analyzer = GravitonAnalyzer(credentials=credentials, region=region)
     analysis = await analyzer.analyze_instances()
-    
+
     return analysis

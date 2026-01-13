@@ -22,11 +22,11 @@ class OrphanLoadBalancersPlugin(ZombiePlugin):
                         lb_arn = lb["LoadBalancerArn"]
                         lb_name = lb["LoadBalancerName"]
                         lb_type = lb.get("Type", "application")
-                        
+
                         try:
                             tg_paginator = elb.get_paginator("describe_target_groups")
                             tg_iterator = tg_paginator.paginate(LoadBalancerArn=lb_arn)
-                            
+
                             has_healthy_targets = False
                             async for tg_page in tg_iterator:
                                 for tg in tg_page.get("TargetGroups", []):
@@ -40,7 +40,7 @@ class OrphanLoadBalancersPlugin(ZombiePlugin):
                                         break
                                 if has_healthy_targets:
                                     break
-                            
+
                             if not has_healthy_targets:
                                 zombies.append({
                                     "resource_id": lb_arn,
@@ -56,10 +56,10 @@ class OrphanLoadBalancersPlugin(ZombiePlugin):
                                 })
                         except ClientError as e:
                             logger.warning("target_health_check_failed", lb=lb_name, error=str(e))
-                            
+
         except ClientError as e:
             logger.warning("orphan_lb_scan_error", error=str(e))
-        
+
         return zombies
 
 class UnderusedNatGatewaysPlugin(ZombiePlugin):
@@ -77,21 +77,21 @@ class UnderusedNatGatewaysPlugin(ZombiePlugin):
                         for nat in page.get("NatGateways", []):
                             if nat["State"] != "available":
                                 continue
-                                
+
                             nat_id = nat["NatGatewayId"]
                             try:
                                 end_time = datetime.now(timezone.utc)
                                 start_time = end_time - timedelta(days=7)
-                                
+
                                 metrics = await cloudwatch.get_metric_statistics(
                                     Namespace="AWS/NATGateway",
                                     MetricName="ConnectionAttemptCount",
                                     Dimensions=[{"Name": "NatGatewayId", "Value": nat_id}],
                                     StartTime=start_time, EndTime=end_time, Period=604800, Statistics=["Sum"]
                                 )
-                                
+
                                 total_connections = sum(d.get("Sum", 0) for d in metrics.get("Datapoints", []))
-                                
+
                                 if total_connections < 100:
                                     zombies.append({
                                         "resource_id": nat_id,

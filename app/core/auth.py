@@ -21,7 +21,7 @@ security = HTTPBearer(auto_error=False)
 class CurrentUser(BaseModel):
     """
     Represents the authenticated user from the JWT.
-    
+
     Fields:
     - id: Supabase user UUID (used as PK in our users table)
     - email: User's email from Supabase
@@ -36,22 +36,22 @@ class CurrentUser(BaseModel):
 def decode_jwt(token: str) -> dict:
     """
     Decode and verify a Supabase JWT token.
-    
+
     How it works:
     1. Uses SUPABASE_JWT_SECRET to verify signature
     2. Checks expiration time (exp claim)
     3. Returns payload if valid
-    
+
     Security:
     - HS256 algorithm must match Supabase's signing algorithm
     - Rejects expired tokens automatically
     - Rejects tampered tokens (signature mismatch)
-    
+
     Raises:
         HTTPException 401 if token is invalid
     """
     settings = get_settings()
-    
+
     try:
         # Decode with verification
         payload = jwt.decode(
@@ -61,7 +61,7 @@ def decode_jwt(token: str) -> dict:
             audience="authenticated",  # Supabase uses this audience
         )
         return payload
-    
+
     except jwt.ExpiredSignatureError:
         logger.warning("jwt_expired")
         raise HTTPException(
@@ -85,7 +85,7 @@ async def get_current_user_from_jwt(
             detail="Not authenticated",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
+
     payload = decode_jwt(credentials.credentials)
     user_id = payload.get("sub")
     email = payload.get("email")
@@ -95,7 +95,7 @@ async def get_current_user_from_jwt(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token payload",
         )
-    
+
     logger.info("user_authenticated", user_id=user_id, email=email)
     return CurrentUser(id=UUID(user_id), email=email)
 
@@ -110,8 +110,8 @@ async def get_current_user(
             detail="Not authenticated",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
-    payload = decode_jwt(credentials.credentials) 
+
+    payload = decode_jwt(credentials.credentials)
     user_id = payload.get("sub")
 
     if not user_id:
@@ -124,16 +124,16 @@ async def get_current_user(
         # Fetch user from DB
         result = await db.execute(select(User).where(User.id == UUID(user_id)))
         user = result.scalar_one_or_none()
-        
+
         # Handle not found
         if user is None:
           raise HTTPException(403, "User not found. Complete Onboarding first.")
-        
+
         logger.info("user_authenticated", user_id=str(user.id), email=user.email, role=user.role)
-        
+
         return CurrentUser(
-            id=user.id, 
-            email=user.email, 
+            id=user.id,
+            email=user.email,
             tenant_id=user.tenant_id,
             role=user.role
         )
@@ -148,12 +148,12 @@ async def get_current_user(
 def requires_role(required_role: str):
     """
     FastAPI dependency for RBAC.
-    
+
     Usage:
         @router.post("/admin-only")
         async def admin_only(user: CurrentUser = Depends(requires_role("admin"))):
             ...
-    
+
     Access Levels:
     - owner: full access (super user)
     - admin: configuration and remediation
@@ -163,28 +163,28 @@ def requires_role(required_role: str):
         # Owner bypasses all role checks
         if user.role == "owner":
             return user
-            
+
         # Check hierarchy
         # owner > admin > member
         role_hierarchy = {"owner": 100, "admin": 50, "member": 10}
-        
+
         user_level = role_hierarchy.get(user.role, 0)
         required_level = role_hierarchy.get(required_role, 10)
-        
+
         if user_level < required_level:
             logger.warning(
-                "insufficient_permissions", 
-                user_id=str(user.id), 
-                user_role=user.role, 
+                "insufficient_permissions",
+                user_id=str(user.id),
+                user_role=user.role,
                 required_role=required_role
             )
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Insufficient permissions. Required role: {required_role}"
             )
-            
+
         return user
-        
+
     return role_checker
 
 
@@ -193,4 +193,3 @@ def requires_role(required_role: str):
 
 
 
-        

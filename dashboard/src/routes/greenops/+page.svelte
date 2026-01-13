@@ -119,6 +119,7 @@
     if (kg < 1000) return `${kg.toFixed(2)} kg`;
     return `${(kg / 1000).toFixed(2)} t`;
   }
+
 </script>
 
 <svelte:head>
@@ -328,25 +329,31 @@
     </div>
 
     <!-- Green Regions Section (Separate Flow) -->
-    {#if carbonData?.green_region_recommendations?.length > 0}
+    {#if carbonData}
       <div class="glass-panel mt-6">
          <h3 class="text-lg font-semibold mb-3 flex items-center gap-2">
             🌿 Recommended Regions
             <span class="text-xs font-normal text-ink-400 bg-ink-800 px-2 py-0.5 rounded">Lower Carbon Intensity</span>
          </h3>
-         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-           {#each carbonData.green_region_recommendations.slice(0, 3) as rec}
-             <div class="group p-4 rounded-lg bg-gradient-to-br from-green-900/10 to-green-900/5 border border-green-900/30 hover:border-green-500/50 transition-all cursor-pointer">
-               <div class="flex justify-between items-start">
-                  <span class="font-bold text-white group-hover:text-green-400 transition-colors">{rec.region}</span>
-                  <span class="text-xs bg-green-900/40 text-green-300 px-1.5 py-0.5 rounded">{rec.carbon_intensity} g/kWh</span>
-               </div>
-               <div class="mt-2 text-sm text-ink-400">
-                  Save <span class="text-green-400 font-bold">{rec.savings_percent}%</span> emissions
-               </div>
-             </div>
-           {/each}
-         </div>
+         {#if carbonData.green_region_recommendations?.length > 0}
+           <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+             {#each carbonData.green_region_recommendations.slice(0, 3) as rec}
+            <div class="group p-4 rounded-lg bg-gradient-to-br from-green-900/10 to-green-900/5 border border-green-900/30 hover:border-green-500/50 transition-all">
+              <div class="flex justify-between items-start">
+                 <span class="font-bold text-white group-hover:text-green-400 transition-colors">{rec.region}</span>
+                 <span class="text-xs bg-green-900/40 text-green-300 px-1.5 py-0.5 rounded">{rec.carbon_intensity} g/kWh</span>
+              </div>
+              <div class="mt-2 text-sm text-ink-400">
+                 Save <span class="text-green-400 font-bold">{rec.savings_percent}%</span> emissions
+              </div>
+            </div>
+          {/each}
+           </div>
+         {:else}
+           <div class="p-4 rounded-lg bg-gradient-to-br from-green-900/10 to-green-900/5 border border-green-900/30 text-ink-400">
+             You’re already in one of the greenest regions 🌿
+           </div>
+         {/if}
       </div>
     {/if}
   {/if}

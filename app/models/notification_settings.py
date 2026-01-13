@@ -15,9 +15,9 @@ from app.db.base import Base
 
 class NotificationSettings(Base):
     """Per-tenant notification preferences."""
-    
+
     __tablename__ = "notification_settings"
-    
+
     # Primary key
     id: Mapped[UUID] = mapped_column(
         PG_UUID(as_uuid=True),
@@ -25,7 +25,7 @@ class NotificationSettings(Base):
         default=uuid4,
         server_default=text("gen_random_uuid()"),
     )
-    
+
     # Foreign key to tenant
     tenant_id: Mapped[UUID] = mapped_column(
         PG_UUID(as_uuid=True),
@@ -33,21 +33,21 @@ class NotificationSettings(Base):
         unique=True,  # One settings record per tenant
         nullable=False,
     )
-    
+
     # Slack configuration
     slack_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     slack_channel_override: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
-    
+
     # Digest schedule: "daily", "weekly", "disabled"
     digest_schedule: Mapped[str] = mapped_column(String(20), default="daily")
     digest_hour: Mapped[int] = mapped_column(default=9)  # 24-hour format, UTC
     digest_minute: Mapped[int] = mapped_column(default=0)
-    
+
     # Alert preferences
     alert_on_budget_warning: Mapped[bool] = mapped_column(Boolean, default=True)
     alert_on_budget_exceeded: Mapped[bool] = mapped_column(Boolean, default=True)
     alert_on_zombie_detected: Mapped[bool] = mapped_column(Boolean, default=True)
-    
+
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -60,9 +60,9 @@ class NotificationSettings(Base):
         onupdate=lambda: datetime.now(timezone.utc),
         server_default=text("now()"),
     )
-    
+
     # Relationship
     tenant = relationship("Tenant", back_populates="notification_settings")
-    
+
     def __repr__(self) -> str:
         return f"<NotificationSettings tenant={self.tenant_id} schedule={self.digest_schedule}>"

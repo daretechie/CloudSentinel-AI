@@ -6,12 +6,12 @@ class Settings(BaseSettings):
     APP_NAME: str = "Valdrix"
     VERSION: str = "0.1.0"
     DEBUG: bool = False
-    
+
     # AWS Credentials
     AWS_ACCESS_KEY_ID: Optional[str] = None
     AWS_SECRET_ACCESS_KEY: Optional[str] = None
     AWS_DEFAULT_REGION: str = "us-east-1"
-    
+
     # Security
     CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://localhost:5174", "http://localhost:3000"]
     ENCRYPTION_KEY: Optional[str] = None
@@ -42,6 +42,8 @@ class Settings(BaseSettings):
 
     # Database
     DATABASE_URL: str # Required in prod
+    DB_SSL_MODE: str = "require"  # Options: disable, require, verify-ca, verify-full
+    DB_SSL_CA_CERT_PATH: Optional[str] = None  # Path to CA cert for verify-ca/verify-full modes
 
     # Supabase Auth
     SUPABASE_URL: Optional[str] = None
@@ -50,19 +52,34 @@ class Settings(BaseSettings):
     # Notifications
     SLACK_BOT_TOKEN: Optional[str] = None
     SLACK_CHANNEL_ID: Optional[str] = None
-    
+
     # SMTP Email (for carbon alerts)
     SMTP_HOST: Optional[str] = None
     SMTP_PORT: int = 587
     SMTP_USER: Optional[str] = None
     SMTP_PASSWORD: Optional[str] = None
     SMTP_FROM: str = "alerts@valdrix.ai"
-    
+
     # Encryption
     ENCRYPTION_KEY: Optional[str] = None
-    
+
+    # Cache (Redis for production, in-memory for dev)
+    REDIS_URL: Optional[str] = None  # e.g., redis://localhost:6379
+
+    # Paystack Billing (Nigeria Support)
+    PAYSTACK_SECRET_KEY: Optional[str] = None
+    PAYSTACK_PUBLIC_KEY: Optional[str] = None
+    PAYSTACK_PLAN_STARTER: str = "PLN_starter_xxx"  # ₦50,000/mo
+    PAYSTACK_PLAN_PROFESSIONAL: str = "PLN_pro_xxx"  # ₦200,000/mo
+    PAYSTACK_PLAN_ENTERPRISE: str = "PLN_ent_xxx"  # Custom
+
+    # Circuit Breaker Defaults
+    CIRCUIT_BREAKER_FAILURE_THRESHOLD: int = 3
+    CIRCUIT_BREAKER_RECOVERY_SECONDS: int = 300
+    CIRCUIT_BREAKER_MAX_DAILY_SAVINGS: float = 1000.0
+
     model_config = SettingsConfigDict(
-        env_file=".env", 
+        env_file=".env",
         env_ignore_empty=True
     )
 

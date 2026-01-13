@@ -28,7 +28,7 @@ async def get_costs(
     select(AWSConnection).where(AWSConnection.tenant_id == user.tenant_id)
   )
   connection = result.scalar_one_or_none()
-  
+
   if not connection:
     logger.warning("no_aws_connection", tenant_id=str(user.tenant_id))
     return {
@@ -38,10 +38,10 @@ async def get_costs(
       "end_date": end_date.isoformat(),
       "error": "No AWS connection found."
     }
-  
+
   adapter = MultiTenantAWSAdapter(connection)
   results = await adapter.get_daily_costs(start_date, end_date)
-  
+
   # Simple total calculation for response
   total = 0
   if results and not (isinstance(results[0], dict) and "Error" in results[0]):
@@ -72,21 +72,21 @@ async def analyze_costs(
     select(AWSConnection).where(AWSConnection.tenant_id == user.tenant_id)
   )
   connection = result.scalar_one_or_none()
-  
+
   if not connection:
     return {"analysis": "No AWS connection found."}
-  
+
   adapter = MultiTenantAWSAdapter(connection)
   cost_data = await adapter.get_daily_costs(start_date, end_date)
-  
+
   logger.info("starting_sentinel_analysis", start=start_date, end=end_date)
-  
+
   insights = await analyzer.analyze(
       cost_data,
       tenant_id=user.tenant_id,
       db=db,
   )
-  
+
   return {"analysis": insights}
 
 @router.get("/llm/usage")
@@ -103,7 +103,7 @@ async def get_llm_usage(
         .limit(limit)
     )
     records = result.scalars().all()
-    
+
     return {
         "usage": [
             {

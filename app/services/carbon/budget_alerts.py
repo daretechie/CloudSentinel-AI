@@ -1,10 +1,10 @@
 """
 Carbon Budget Alerts Service
 
-Allows users to set monthly carbon (CO2) limits and receive 
+Allows users to set monthly carbon (CO2) limits and receive
 alerts when approaching or exceeding their budget.
 
-Valdrix Innovation: Bring carbon accountability to 
+Valdrix Innovation: Bring carbon accountability to
 cloud teams with measurable targets and automated notifications.
 """
 
@@ -21,17 +21,17 @@ logger = structlog.get_logger()
 class CarbonBudgetService:
     """
     Manages carbon budgets and alerts for tenants.
-    
+
     Features:
     - Set monthly CO2 limits (in kg)
     - Track current usage against budget
     - Send alerts at configurable thresholds (e.g., 80%, 100%)
     - Slack/email notifications with rate limiting
     """
-    
+
     def __init__(self, db: AsyncSession):
         self.db = db
-    
+
     async def get_budget_status(
         self,
         tenant_id: UUID,
@@ -40,23 +40,23 @@ class CarbonBudgetService:
     ) -> Dict[str, Any]:
         """
         Get the current budget status for a tenant.
-        
+
         Args:
             tenant_id: The tenant's UUID
             month_start: Start of the month to check
             current_co2_kg: Current CO2 emissions for the month
-        
+
         Returns:
             Dict with budget info, usage, and alert status
         """
         from app.models.carbon_settings import CarbonSettings
-        
+
         # Get tenant's carbon settings from database
         result = await self.db.execute(
             select(CarbonSettings).where(CarbonSettings.tenant_id == tenant_id)
         )
         settings = result.scalar_one_or_none()
-        
+
         # Use settings from DB or defaults
         if settings:
             budget_kg = float(settings.carbon_budget_kg)
@@ -65,17 +65,17 @@ class CarbonBudgetService:
             # Fallback defaults if no settings saved yet
             budget_kg = 100.0  # Default 100 kg CO2/month
             alert_threshold_percent = 80
-        
+
         # Calculate usage percentage
         usage_percent = (current_co2_kg / budget_kg * 100) if budget_kg > 0 else 0
-        
+
         # Determine alert status
         alert_status = "ok"
         if usage_percent >= 100:
             alert_status = "exceeded"
         elif usage_percent >= alert_threshold_percent:
             alert_status = "warning"
-        
+
         return {
             "month": month_start.isoformat(),
             "budget_kg": budget_kg,
@@ -86,7 +86,7 @@ class CarbonBudgetService:
             "alert_status": alert_status,
             "recommendations": self._get_recommendations(usage_percent, alert_status),
         }
-    
+
     def _get_recommendations(self, usage_percent: float, status: str) -> List[str]:
         """Generate contextual recommendations based on usage."""
         if status == "exceeded":
@@ -107,43 +107,43 @@ class CarbonBudgetService:
                 "✅ Carbon usage within budget.",
                 "Continue monitoring to maintain efficiency.",
             ]
-    
+
     async def should_send_alert(self, tenant_id: UUID, alert_status: str) -> bool:
         """
         Check if we should send an alert (rate limiting).
-        
+
         Prevents alert spam by only sending once per status per day.
         """
         from app.models.carbon_settings import CarbonSettings
-        
+
         result = await self.db.execute(
             select(CarbonSettings).where(CarbonSettings.tenant_id == tenant_id)
         )
         settings = result.scalar_one_or_none()
-        
+
         if not settings:
             return True  # First time, allow alert
-        
+
         # Check if last_alert_sent exists and was today
         last_alert = getattr(settings, 'last_alert_sent', None)
         if last_alert:
             if last_alert.date() == date.today():
                 logger.info("carbon_alert_rate_limited", tenant_id=str(tenant_id))
                 return False
-        
+
         return True
-    
+
     async def mark_alert_sent(self, tenant_id: UUID) -> None:
         """Mark that an alert was sent today."""
         from app.models.carbon_settings import CarbonSettings
-        
+
         await self.db.execute(
             update(CarbonSettings)
             .where(CarbonSettings.tenant_id == tenant_id)
             .values(last_alert_sent=datetime.now(timezone.utc))
         )
         await self.db.commit()
-    
+
     async def send_carbon_alert(
         self,
         tenant_id: UUID,
@@ -151,37 +151,37 @@ class CarbonBudgetService:
     ) -> bool:
         """
         Send carbon budget alert via configured channels (Slack and/or email).
-        
+
         Returns True if any alert was sent successfully.
         """
         from app.core.config import get_settings
         from app.models.carbon_settings import CarbonSettings
-        
+
         # Rate limiting check
         if not await self.should_send_alert(tenant_id, budget_status["alert_status"]):
             return False
-        
+
         app_settings = get_settings()
         sent_any = False
-        
+
         # Send Slack notification
         from app.models.notification_settings import NotificationSettings
         notif_result = await self.db.execute(
             select(NotificationSettings).where(NotificationSettings.tenant_id == tenant_id)
         )
         notif_settings = notif_result.scalar_one_or_none()
-        
+
         if app_settings.SLACK_BOT_TOKEN and (app_settings.SLACK_CHANNEL_ID or (notif_settings and notif_settings.slack_channel_override)):
             try:
                 from app.services.notifications import SlackService
-                channel = (notif_settings.slack_channel_override if notif_settings and notif_settings.slack_channel_override 
+                channel = (notif_settings.slack_channel_override if notif_settings and notif_settings.slack_channel_override
                           else app_settings.SLACK_CHANNEL_ID)
-                
+
                 slack = SlackService(app_settings.SLACK_BOT_TOKEN, channel)
-                
+
                 status = budget_status["alert_status"]
                 severity = "critical" if status == "exceeded" else "warning"
-                
+
                 await slack.send_alert(
                     title=f"Carbon Budget {'Exceeded' if status == 'exceeded' else 'Warning'}!",
                     message=(
@@ -195,20 +195,20 @@ class CarbonBudgetService:
                 )
                 sent_any = True
                 logger.info("carbon_slack_alert_sent", tenant_id=str(tenant_id))
-                
+
             except Exception as e:
                 logger.error("carbon_slack_alert_failed", error=str(e))
-        
+
         # Send email notification if enabled
         result = await self.db.execute(
             select(CarbonSettings).where(CarbonSettings.tenant_id == tenant_id)
         )
         carbon_settings = result.scalar_one_or_none()
-        
+
         if carbon_settings and carbon_settings.email_enabled and carbon_settings.email_recipients:
             try:
                 from app.services.notifications.email_service import EmailService
-                
+
                 # Get SMTP config from app settings
                 if (hasattr(app_settings, 'SMTP_HOST') and app_settings.SMTP_HOST):
                     email_service = EmailService(
@@ -218,20 +218,20 @@ class CarbonBudgetService:
                         smtp_password=getattr(app_settings, 'SMTP_PASSWORD', ''),
                         from_email=getattr(app_settings, 'SMTP_FROM', 'alerts@valdrix.io'),
                     )
-                    
+
                     recipients = [e.strip() for e in carbon_settings.email_recipients.split(',')]
                     await email_service.send_carbon_alert(recipients, budget_status)
                     sent_any = True
                     logger.info("carbon_email_alert_sent", tenant_id=str(tenant_id), recipients=recipients)
                 else:
                     logger.warning("email_alert_skipped", reason="SMTP not configured")
-                    
+
             except Exception as e:
                 logger.error("carbon_email_alert_failed", error=str(e))
-        
+
         # Mark alert as sent to prevent spam
         if sent_any:
             await self.mark_alert_sent(tenant_id)
-        
+
         return sent_any
 

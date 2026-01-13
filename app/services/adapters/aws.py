@@ -43,7 +43,7 @@ class AWSAdapter(CostAdapter):
                         'End': end_date.isoformat(),
                     },
                     Granularity='DAILY',
-                    Metrics=['UnblendedCost'],    
+                    Metrics=['UnblendedCost'],
                 )
                 logger.info("AWS Cost Explorer response", response=response)
                 return response.get("ResultsByTime", [])
@@ -51,9 +51,9 @@ class AWSAdapter(CostAdapter):
         except ClientError as e:
             logger.error("aws_cost_fetch_failed", error=str(e))
             return []
-            
 
-        
+
+
     async def get_resource_usage(self, service_name: str) -> List[Dict[str, Any]]:
         """
         Fetches granular resource usage metrics from CloudWatch.

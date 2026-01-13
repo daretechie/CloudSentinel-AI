@@ -29,19 +29,19 @@ REGION_CARBON_INTENSITY = {
     "eu-north-1": 28,     # Stockholm - hydro/nuclear
     "ca-central-1": 35,   # Montreal - hydro
     "eu-west-1": 316,     # Ireland - wind/gas mix
-    
+
     # Medium carbon
     "us-west-1": 218,     # N. California
     "eu-west-2": 225,     # London
     "eu-central-1": 338,  # Frankfurt
-    
+
     # High carbon (coal/gas heavy)
     "us-east-1": 379,     # N. Virginia
     "us-east-2": 440,     # Ohio
     "ap-southeast-1": 408,# Singapore
     "ap-south-1": 708,    # Mumbai
     "ap-northeast-1": 506,# Tokyo
-    
+
     # Default for unknown regions
     "default": 400,
 }
@@ -74,7 +74,7 @@ EMBODIED_EMISSIONS_FACTOR = 0.025
 class CarbonCalculator:
     """
     Calculates carbon footprint from cloud cost data.
-    
+
     2026 Methodology (aligned with CCF and AWS CCFT):
     1. Estimate energy (kWh) from cost using service-specific factors
     2. Apply PUE multiplier for datacenter overhead
@@ -83,7 +83,7 @@ class CarbonCalculator:
     5. Convert to kg CO₂
     6. Calculate carbon efficiency score (gCO2e per $1)
     """
-    
+
     def calculate_from_costs(
         self,
         cost_data: List[Dict[str, Any]],
@@ -91,20 +91,20 @@ class CarbonCalculator:
     ) -> Dict[str, Any]:
         """
         Calculate carbon footprint from AWS cost data.
-        
+
         IMPORTANT: For accurate results, pass GROSS USAGE data
         (excluding credits/refunds). Use adapter.get_gross_usage().
-        
+
         Args:
             cost_data: Cost records from AWS Cost Explorer (use gross usage!)
             region: AWS region (for carbon intensity lookup)
-        
+
         Returns:
             Dict with total emissions, breakdown, efficiency score, and equivalencies
         """
         total_cost_usd = Decimal("0")
         total_energy_kwh = Decimal("0")
-        
+
         # Sum up costs and estimate energy
         for record in cost_data:
             try:
@@ -124,7 +124,7 @@ class CarbonCalculator:
                             factor_key = service if service in SERVICE_ENERGY_FACTORS else "default"
                             energy_factor = Decimal(str(SERVICE_ENERGY_FACTORS[factor_key]))
                             total_energy_kwh += cost_amount * energy_factor
-                
+
                 # Case 2: Flat data (un-grouped)
                 else:
                     cost_amount = Decimal(
@@ -136,38 +136,38 @@ class CarbonCalculator:
                         total_cost_usd += cost_amount
                         energy_factor = Decimal(str(SERVICE_ENERGY_FACTORS["default"]))
                         total_energy_kwh += cost_amount * energy_factor
-                        
+
             except (KeyError, TypeError, ValueError) as e:
                 logger.warning("carbon_calc_skip_record", error=str(e))
                 continue
-        
+
         # Apply PUE (datacenter overhead)
         total_energy_with_pue = total_energy_kwh * Decimal(str(AWS_PUE))
-        
+
         # Get carbon intensity for region
         carbon_intensity = REGION_CARBON_INTENSITY.get(
             region, REGION_CARBON_INTENSITY["default"]
         )
-        
+
         # Calculate Scope 2 CO₂ (operational emissions) in grams
         scope2_co2_grams = total_energy_with_pue * Decimal(str(carbon_intensity))
         scope2_co2_kg = scope2_co2_grams / Decimal("1000")
-        
+
         # Calculate Scope 3 CO₂ (embodied emissions from server manufacturing)
         scope3_co2_kg = total_energy_with_pue * Decimal(str(EMBODIED_EMISSIONS_FACTOR))
-        
+
         # Total CO₂ = Scope 2 + Scope 3
         total_co2_kg = scope2_co2_kg + scope3_co2_kg
-        
+
         # Calculate Carbon Efficiency Score (gCO2e per $1 of usage)
         # Lower is better - this is a key FinOps Carbon KPI
         carbon_efficiency_score = 0.0
         if total_cost_usd > 0:
             carbon_efficiency_score = float(total_co2_kg * 1000 / total_cost_usd)
-        
+
         # Calculate equivalencies for user-friendly display
         equivalencies = self._calculate_equivalencies(float(total_co2_kg))
-        
+
         result = {
             # Core metrics
             "total_co2_kg": round(float(total_co2_kg), 3),
@@ -175,26 +175,29 @@ class CarbonCalculator:
             "scope3_co2_kg": round(float(scope3_co2_kg), 3),
             "total_cost_usd": round(float(total_cost_usd), 2),
             "estimated_energy_kwh": round(float(total_energy_with_pue), 3),
-            
+
             # FinOps Carbon KPI (lower is better)
             "carbon_efficiency_score": round(carbon_efficiency_score, 2),
             "carbon_efficiency_unit": "gCO2e per $1 spent",
-            
+
             # Region info
             "region": region,
             "carbon_intensity_gco2_kwh": carbon_intensity,
-            
+
             # Human-readable equivalencies
             "equivalencies": equivalencies,
-            
+
             # Methodology metadata
             "methodology": "Valdrix 2026 (CCF + AWS CCFT v3.0.0)",
             "includes_embodied_emissions": True,
-            
+
             # Projections
-            "forecast_30d": self.forecast_emissions(float(total_co2_kg) / 30 if total_co2_kg > 0 else 0)
+            "forecast_30d": self.forecast_emissions(float(total_co2_kg) / 30 if total_co2_kg > 0 else 0),
+
+            # GreenOps recommendations
+            "green_region_recommendations": self.get_green_region_recommendations(region)
         }
-        
+
         logger.info(
             "carbon_calculated",
             co2_kg=result["total_co2_kg"],
@@ -202,40 +205,40 @@ class CarbonCalculator:
             efficiency_score=result["carbon_efficiency_score"],
             region=region,
         )
-        
+
         return result
-    
+
     def _calculate_equivalencies(self, co2_kg: float) -> Dict[str, Any]:
         """
         Convert CO₂ to relatable equivalencies.
-        
+
         Sources: EPA Greenhouse Gas Equivalencies Calculator
         """
         return {
             # Average car emits 404g CO₂ per mile
             "miles_driven": round(co2_kg * 1000 / 404, 1),
-            
+
             # One tree absorbs ~22kg CO₂ per year
             "trees_needed_for_year": round(co2_kg / 22, 1),
-            
+
             # Average smartphone charge uses ~0.0085 kWh = ~3.4g CO₂
             "smartphone_charges": round(co2_kg * 1000 / 3.4, 0),
-            
+
             # Average home uses ~900kWh/month = ~360kg CO₂/month
             "percent_of_home_month": round((co2_kg / 360) * 100, 2),
         }
-    
+
     def get_green_region_recommendations(self, current_region: str) -> List[Dict[str, Any]]:
         """
         Recommend lower-carbon regions for workload placement.
-        
+
         Valdrix Innovation: Help users reduce emissions
         by migrating to greener AWS regions.
         """
         current_intensity = REGION_CARBON_INTENSITY.get(
             current_region, REGION_CARBON_INTENSITY["default"]
         )
-        
+
         recommendations = []
         for region, intensity in sorted(REGION_CARBON_INTENSITY.items(), key=lambda x: x[1]):
             if region == "default":
@@ -247,32 +250,32 @@ class CarbonCalculator:
                     "carbon_intensity": intensity,
                     "savings_percent": savings_percent,
                 })
-        
+
         return recommendations[:5]  # Top 5 greenest alternatives
 
     def forecast_emissions(
-        self, 
-        current_daily_co2_kg: float, 
-        days: int = 30, 
+        self,
+        current_daily_co2_kg: float,
+        days: int = 30,
         region_trend_factor: float = 0.99  # Assuming 1% monthly grid improvement (optimistic) or flat
     ) -> Dict[str, Any]:
         """
         Predict future emissions based on current workload and grid trends.
-        
+
         Args:
             current_daily_co2_kg: Current daily emission rate.
             days: Number of days to forecast.
             region_trend_factor: Monthly grid efficiency improvement (default 0.99 = 1% better).
-            
+
         Returns:
             Dict with forecasted totals and trend description.
         """
         # Simple projection
         baseline_projection = current_daily_co2_kg * days
-        
+
         # Adjusted projection (accounting for grid improvements or degradation)
         projected_co2_kg = baseline_projection * region_trend_factor
-        
+
         return {
             "forecast_days": days,
             "baseline_co2_kg": round(baseline_projection, 2),

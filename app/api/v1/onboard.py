@@ -21,18 +21,18 @@ async def onboard(
     existing = await db.execute(select(User).where(User.id == user.id))
     if existing.scalar_one_or_none():
         raise HTTPException(400, "Already onboarded")
-    
+
     # 2. Create Tenant
     if len(request.tenant_name) < 3:
         raise HTTPException(400, "Tenant name must be at least 3 characters")
-        
+
     tenant = Tenant(name=request.tenant_name)
     db.add(tenant)
     await db.flush()  # Get tenant.id
-    
+
     # 3. Create User linked to Tenant
     new_user = User(id=user.id, email=user.email, tenant_id=tenant.id, role="owner")
     db.add(new_user)
     await db.commit()
-    
+
     return {"status": "onboarded", "tenant_id": str(tenant.id)}

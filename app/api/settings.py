@@ -59,7 +59,7 @@ async def get_notification_settings(
 ):
     """
     Get notification settings for the current tenant.
-    
+
     Creates default settings if none exist.
     """
     result = await db.execute(
@@ -68,7 +68,7 @@ async def get_notification_settings(
         )
     )
     settings = result.scalar_one_or_none()
-    
+
     # Create default settings if not exists
     if not settings:
         settings = NotificationSettings(
@@ -84,12 +84,12 @@ async def get_notification_settings(
         db.add(settings)
         await db.commit()
         await db.refresh(settings)
-        
+
         logger.info(
             "notification_settings_created",
             tenant_id=str(current_user.tenant_id),
         )
-    
+
     return settings
 
 
@@ -101,7 +101,7 @@ async def update_notification_settings(
 ):
     """
     Update notification settings for the current tenant.
-    
+
     Creates settings if none exist.
     """
     result = await db.execute(
@@ -110,7 +110,7 @@ async def update_notification_settings(
         )
     )
     settings = result.scalar_one_or_none()
-    
+
     if not settings:
         # Create new settings
         settings = NotificationSettings(
@@ -122,16 +122,16 @@ async def update_notification_settings(
         # Update existing settings
         for key, value in data.model_dump().items():
             setattr(settings, key, value)
-    
+
     await db.commit()
     await db.refresh(settings)
-    
+
     logger.info(
         "notification_settings_updated",
         tenant_id=str(current_user.tenant_id),
         digest_schedule=settings.digest_schedule,
     )
-    
+
     return settings
 
 
@@ -141,20 +141,20 @@ async def test_slack_notification(
 ):
     """
     Send a test notification to Slack.
-    
+
     Uses the configured Slack channel or override.
     """
     from app.core.config import get_settings
     from app.services.notifications import SlackService
-    
+
     settings = get_settings()
-    
+
     if not settings.SLACK_BOT_TOKEN or not settings.SLACK_CHANNEL_ID:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Slack is not configured. Set SLACK_BOT_TOKEN and SLACK_CHANNEL_ID in environment."
         )
-    
+
     try:
         slack = SlackService(settings.SLACK_BOT_TOKEN, settings.SLACK_CHANNEL_ID)
         success = await slack.send_alert(
@@ -162,7 +162,7 @@ async def test_slack_notification(
             message=f"This is a test alert from Valdrix.\n\nUser: {current_user.email}",
             severity="info"
         )
-        
+
         if success:
             return {"status": "success", "message": "Test notification sent to Slack"}
         else:
@@ -213,7 +213,7 @@ class LLMSettingsResponse(BaseModel):
     hard_limit: bool
     preferred_provider: str
     preferred_model: str
-    
+
     # API Key status (True if key is set, but don't return the actual key for security)
     has_openai_key: bool = False
     has_claude_key: bool = False
@@ -230,7 +230,7 @@ class LLMSettingsUpdate(BaseModel):
     hard_limit: bool = Field(False, description="Block requests if budget exceeded")
     preferred_provider: str = Field("groq", pattern="^(openai|claude|google|groq)$")
     preferred_model: str = Field("llama-3.3-70b-versatile")
-    
+
     # Optional API Key Overrides
     openai_api_key: str | None = Field(None, max_length=255)
     claude_api_key: str | None = Field(None, max_length=255)
@@ -267,18 +267,18 @@ async def get_carbon_settings(
 ):
     """
     Get carbon budget settings for the current tenant.
-    
+
     Creates default settings if none exist.
     """
     from app.models.carbon_settings import CarbonSettings
-    
+
     result = await db.execute(
         select(CarbonSettings).where(
             CarbonSettings.tenant_id == current_user.tenant_id
         )
     )
     settings = result.scalar_one_or_none()
-    
+
     # Create default settings if not exists
     if not settings:
         settings = CarbonSettings(
@@ -290,12 +290,12 @@ async def get_carbon_settings(
         db.add(settings)
         await db.commit()
         await db.refresh(settings)
-        
+
         logger.info(
             "carbon_settings_created",
             tenant_id=str(current_user.tenant_id),
         )
-    
+
     return settings
 
 
@@ -307,18 +307,18 @@ async def update_carbon_settings(
 ):
     """
     Update carbon budget settings for the current tenant.
-    
+
     Creates settings if none exist.
     """
     from app.models.carbon_settings import CarbonSettings
-    
+
     result = await db.execute(
         select(CarbonSettings).where(
             CarbonSettings.tenant_id == current_user.tenant_id
         )
     )
     settings = result.scalar_one_or_none()
-    
+
     if not settings:
         # Create new settings
         settings = CarbonSettings(
@@ -330,17 +330,17 @@ async def update_carbon_settings(
         # Update existing settings
         for key, value in data.model_dump().items():
             setattr(settings, key, value)
-    
+
     await db.commit()
     await db.refresh(settings)
-    
+
     logger.info(
         "carbon_settings_updated",
         tenant_id=str(current_user.tenant_id),
         budget_kg=settings.carbon_budget_kg,
         threshold=settings.alert_threshold_percent,
     )
-    
+
     return settings
 
 
@@ -357,14 +357,14 @@ async def get_llm_settings(
     Get LLM budget and selection settings for the current tenant.
     """
     from app.models.llm import LLMBudget
-    
+
     result = await db.execute(
         select(LLMBudget).where(
             LLMBudget.tenant_id == current_user.tenant_id
         )
     )
     settings = result.scalar_one_or_none()
-    
+
     # Create default budget if not exists
     if not settings:
         settings = LLMBudget(
@@ -377,12 +377,12 @@ async def get_llm_settings(
         db.add(settings)
         await db.commit()
         await db.refresh(settings)
-        
+
         logger.info(
             "llm_settings_created",
             tenant_id=str(current_user.tenant_id),
         )
-    
+
     # Map model flags for response
     return {
         "monthly_limit_usd": float(settings.monthly_limit_usd),
@@ -407,14 +407,14 @@ async def update_llm_settings(
     Update LLM budget and selection settings for the current tenant.
     """
     from app.models.llm import LLMBudget
-    
+
     result = await db.execute(
         select(LLMBudget).where(
             LLMBudget.tenant_id == current_user.tenant_id
         )
     )
     settings = result.scalar_one_or_none()
-    
+
     if not settings:
         settings = LLMBudget(
             tenant_id=current_user.tenant_id,
@@ -424,17 +424,17 @@ async def update_llm_settings(
     else:
         for key, value in data.model_dump().items():
             setattr(settings, key, value)
-    
+
     await db.commit()
     await db.refresh(settings)
-    
+
     logger.info(
         "llm_settings_updated",
         tenant_id=str(current_user.tenant_id),
         provider=settings.preferred_provider,
         model=settings.preferred_model,
     )
-    
+
     # Map model flags for response
     return {
         "monthly_limit_usd": float(settings.monthly_limit_usd),
@@ -453,11 +453,11 @@ async def update_llm_settings(
 async def get_llm_models():
     """Returns available LLM providers and models."""
     from app.services.llm.usage_tracker import LLM_PRICING
-    
+
     result = {}
     for provider, models in LLM_PRICING.items():
         result[provider] = list(models.keys())
-    
+
     return result
 
 
@@ -479,7 +479,7 @@ async def get_activeops_settings(
         )
     )
     settings = result.scalar_one_or_none()
-    
+
     # Create default settings if not exists
     if not settings:
         settings = RemediationSettings(
@@ -490,9 +490,9 @@ async def get_activeops_settings(
         db.add(settings)
         await db.commit()
         await db.refresh(settings)
-        
+
         logger.info("activeops_settings_created", tenant_id=str(current_user.tenant_id))
-    
+
     return settings
 
 
@@ -511,7 +511,7 @@ async def update_activeops_settings(
         )
     )
     settings = result.scalar_one_or_none()
-    
+
     if not settings:
         settings = RemediationSettings(
             tenant_id=current_user.tenant_id,
@@ -521,15 +521,116 @@ async def update_activeops_settings(
     else:
         for key, value in data.model_dump().items():
             setattr(settings, key, value)
-    
+
     await db.commit()
     await db.refresh(settings)
-    
+
     logger.info(
         "activeops_settings_updated",
         tenant_id=str(current_user.tenant_id),
         auto_pilot=settings.auto_pilot_enabled,
         threshold=float(settings.min_confidence_threshold)
     )
-    
+
     return settings
+
+
+# ============================================================
+# Safety Status Endpoint (Circuit Breaker)
+# ============================================================
+
+class SafetyStatusResponse(BaseModel):
+    """Response for safety/circuit breaker status."""
+    circuit_state: str  # "closed", "open", "half_open"
+    failure_count: int
+    daily_savings_used: float
+    daily_savings_limit: float
+    last_failure_at: str | None
+    can_execute: bool
+
+
+@router.get("/safety", response_model=SafetyStatusResponse)
+async def get_safety_status(
+    current_user: CurrentUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Get circuit breaker and safety status for the current tenant.
+    
+    Shows:
+    - Circuit state (closed=ok, open=blocked, half_open=testing)
+    - Daily savings budget usage
+    - Whether remediations can execute
+    """
+    from app.services.remediation.circuit_breaker import get_circuit_breaker
+    from app.core.config import get_settings
+    
+    settings = get_settings()
+    
+    try:
+        circuit_breaker = await get_circuit_breaker(str(current_user.tenant_id))
+        
+        state = await circuit_breaker.state.get("state", "closed")
+        failure_count = await circuit_breaker.state.get("failure_count", 0)
+        daily_savings = await circuit_breaker.state.get("daily_savings", 0.0)
+        last_failure = await circuit_breaker.state.get("last_failure_at", None)
+        
+        can_execute = await circuit_breaker.can_execute()
+        
+        return SafetyStatusResponse(
+            circuit_state=state,
+            failure_count=failure_count,
+            daily_savings_used=daily_savings,
+            daily_savings_limit=settings.CIRCUIT_BREAKER_MAX_DAILY_SAVINGS,
+            last_failure_at=last_failure,
+            can_execute=can_execute
+        )
+    except Exception as e:
+        logger.error("safety_status_failed", error=str(e))
+        # Return safe defaults
+        return SafetyStatusResponse(
+            circuit_state="unknown",
+            failure_count=0,
+            daily_savings_used=0.0,
+            daily_savings_limit=settings.CIRCUIT_BREAKER_MAX_DAILY_SAVINGS,
+            last_failure_at=None,
+            can_execute=True
+        )
+
+
+@router.post("/safety/reset")
+async def reset_circuit_breaker(
+    current_user: CurrentUser = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Manually reset circuit breaker to closed state (admin-only).
+    
+    Use with caution - this allows remediations to proceed.
+    """
+    # Check admin role
+    if current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required"
+        )
+    
+    from app.services.remediation.circuit_breaker import get_circuit_breaker
+    
+    try:
+        circuit_breaker = await get_circuit_breaker(str(current_user.tenant_id))
+        await circuit_breaker.reset()
+        
+        logger.info(
+            "circuit_breaker_reset",
+            tenant_id=str(current_user.tenant_id),
+            by_user=str(current_user.id)
+        )
+        
+        return {"status": "reset", "message": "Circuit breaker reset to closed state"}
+    except Exception as e:
+        logger.error("circuit_breaker_reset_failed", error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to reset circuit breaker"
+        )

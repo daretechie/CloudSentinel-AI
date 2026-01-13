@@ -43,17 +43,21 @@ class AWSConnectionCreate(BaseModel):
 
 
 class AWSConnectionResponse(BaseModel):
-    """Response body for AWS connection."""
+    """Response body for AWS connection.
+
+    Note: external_id is intentionally excluded for security.
+    It should only be visible during initial /setup flow.
+    """
     id: UUID
     aws_account_id: str
     role_arn: str
-    external_id: str
+    # external_id: REMOVED - security risk to expose after initial setup
     region: str
     status: str
     last_verified_at: datetime | None
     error_message: str | None
     created_at: datetime
-    
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -71,14 +75,14 @@ class AWSConnectionSetup(BaseModel):
 async def verify_aws_connection(role_arn: str, external_id: str) -> tuple[bool, str | None]:
     """
     Test if we can assume the IAM role (Async).
-    
+
     Returns:
         (success: bool, error_message: str | None)
     """
     try:
         session = aioboto3.Session()
         async with session.client("sts") as sts_client:
-            
+
             # Try to assume the role
             await sts_client.assume_role(
                 RoleArn=role_arn,
@@ -86,22 +90,22 @@ async def verify_aws_connection(role_arn: str, external_id: str) -> tuple[bool, 
                 ExternalId=external_id,
                 DurationSeconds=900,  # Minimum duration
             )
-            
+
             # If successful, we got temporary credentials
             logger.info("aws_connection_verified", role_arn=role_arn)
             return True, None
-        
+
     except ClientError as e:
         error_code = e.response.get("Error", {}).get("Code", "Unknown")
         error_message = e.response.get("Error", {}).get("Message", str(e))
-        
+
         logger.warning(
             "aws_connection_verification_failed",
             role_arn=role_arn,
             error_code=error_code,
             error_message=error_message,
         )
-        
+
         return False, f"{error_code}: {error_message}"
 
 
@@ -122,17 +126,17 @@ class TemplateResponse(BaseModel):
 async def get_setup_templates():
     """
     Get CloudFormation and Terraform templates with a unique External ID.
-    
+
     Returns templates that users can copy/paste directly into AWS Console
     or their IaC repository. No external URL dependencies.
-    
+
     Three Paths UX:
     - Path A: Copy YAML → Create Stack manually
     - Path B: Copy Terraform → Add to IaC repo
     - Path C: Download file → Upload to AWS
     """
     external_id = AWSConnection.generate_external_id()
-    
+
     # CloudFormation YAML template with external_id embedded
     cloudformation_yaml = f'''AWSTemplateFormatVersion: '2010-09-09'
 Description: Valdrix - Read-Only IAM Role for Cost Analysis and Resource Optimization
@@ -235,7 +239,7 @@ Outputs:
 resource "aws_iam_role" "valdrix" {{
   name        = "ValdrixReadOnly"
   description = "Allows Valdrix to read cost data and detect zombie resources"
-  
+
   assume_role_policy = jsonencode({{
     Version = "2012-10-17"
     Statement = [{{
@@ -252,7 +256,7 @@ data "aws_caller_identity" "current" {{}}
 resource "aws_iam_role_policy" "valdrix_policy" {{
   name = "ValdrixReadOnlyPolicy"
   role = aws_iam_role.valdrix.id
-  
+
   policy = jsonencode({{
     Version = "2012-10-17"
     Statement = [
@@ -263,7 +267,7 @@ resource "aws_iam_role_policy" "valdrix_policy" {{
         Resource = "*"
       }},
       {{
-        Sid      = "EC2ReadOnly" 
+        Sid      = "EC2ReadOnly"
         Effect   = "Allow"
         Action   = ["ec2:DescribeInstances", "ec2:DescribeVolumes", "ec2:DescribeSnapshots", "ec2:DescribeAddresses", "ec2:DescribeNetworkInterfaces", "ec2:DescribeNatGateways", "ec2:DescribeSecurityGroups"]
         Resource = "*"
@@ -352,7 +356,7 @@ async def create_connection(
 ):
     """
     Register a new AWS connection after the user has created the IAM role.
-    
+
     Security:
     - Requires valid Supabase JWT
     - Creates connection tied to user's tenant_id
@@ -370,7 +374,7 @@ async def create_connection(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Connection for AWS account {data.aws_account_id} already exists"
         )
-    
+
     # Create new connection - use the SAME external_id from setup step
     connection = AWSConnection(
         tenant_id=current_user.tenant_id,
@@ -380,18 +384,18 @@ async def create_connection(
         region=data.region,
         status="pending",
     )
-    
+
     db.add(connection)
     await db.commit()
     await db.refresh(connection)
-    
+
     logger.info(
         "aws_connection_created",
         connection_id=str(connection.id),
         tenant_id=str(current_user.tenant_id),
         aws_account_id=data.aws_account_id,
     )
-    
+
     return connection
 
 
@@ -402,7 +406,7 @@ async def list_connections(
 ):
     """
     List all AWS connections for the current tenant.
-    
+
     Security:
     - Only returns connections belonging to the authenticated user's tenant
     - Cannot see other tenants' connections
@@ -411,7 +415,7 @@ async def list_connections(
         select(AWSConnection).where(AWSConnection.tenant_id == current_user.tenant_id)
     )
     connections = result.scalars().all()
-    
+
     return connections
 
 @router.post("/{connection_id}/verify")
@@ -428,20 +432,20 @@ async def verify_connection(
         )
     )
     connection = result.scalar_one_or_none()
-    
+
     if not connection:
         raise HTTPException(status_code=404, detail="Connection not found")
-    
+
     # Verify the connection
     success, error = await verify_aws_connection(connection.role_arn, connection.external_id)
-    
+
     # Update status
     connection.status = "active" if success else "error"
     # FIX: Use naive UTC datetime for SQLAlchemy DateTime column
     connection.last_verified_at = datetime.now(timezone.utc).replace(tzinfo=None)
     connection.error_message = error
     await db.commit()
-    
+
     if success:
         return {"status": "active", "message": "Connection verified successfully"}
     else:
@@ -459,7 +463,7 @@ async def delete_connection(
 ):
     """
     Remove an AWS connection.
-    
+
     Security:
     - Requires authentication
     - Only allows deletion of connections belonging to the user's tenant
@@ -471,17 +475,17 @@ async def delete_connection(
         )
     )
     connection = result.scalar_one_or_none()
-    
+
     if not connection:
         raise HTTPException(status_code=404, detail="Connection not found")
-    
+
     await db.delete(connection)
     await db.commit()
-    
+
     logger.info(
         "aws_connection_deleted",
         connection_id=str(connection_id),
         tenant_id=str(current_user.tenant_id),
     )
-    
+
     return None

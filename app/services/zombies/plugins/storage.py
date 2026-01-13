@@ -24,11 +24,11 @@ class UnattachedVolumesPlugin(ZombiePlugin):
                         for vol in page.get("Volumes", []):
                             vol_id = vol["VolumeId"]
                             size_gb = vol.get("Size", 0)
-                            
+
                             try:
                                 end_time = datetime.now(timezone.utc)
                                 start_time = end_time - timedelta(days=7)
-                                
+
                                 # Check for ANY ops
                                 ops_metrics = await cloudwatch.get_metric_data(
                                     MetricDataQueries=[
@@ -51,21 +51,21 @@ class UnattachedVolumesPlugin(ZombiePlugin):
                                     ],
                                     StartTime=start_time, EndTime=end_time
                                 )
-                                
+
                                 total_ops = 0
                                 for m_res in ops_metrics.get("MetricDataResults", []):
                                     total_ops += sum(m_res.get("Values", [0]))
-                                
+
                                 if total_ops > 0:
                                     # logger.info("volume_has_recent_ops_skipping", vol=vol_id, ops=total_ops)
                                     continue
-                                    
+
                             except ClientError as e:
                                 logger.warning("volume_metric_check_failed", vol=vol_id, error=str(e))
-                            
+
                             monthly_cost = size_gb * ESTIMATED_COSTS["ebs_volume_gb"]
                             backup_cost = size_gb * ESTIMATED_COSTS["snapshot_gb"]
-                            
+
                             zombies.append({
                                 "resource_id": vol_id,
                                 "resource_type": "EBS Volume",
@@ -81,7 +81,7 @@ class UnattachedVolumesPlugin(ZombiePlugin):
                             })
         except ClientError as e:
             logger.warning("volume_scan_error", error=str(e))
-        
+
         return zombies
 
 class OldSnapshotsPlugin(ZombiePlugin):
@@ -93,7 +93,7 @@ class OldSnapshotsPlugin(ZombiePlugin):
         zombies = []
         days_old = 90
         cutoff = datetime.now(timezone.utc) - timedelta(days=days_old)
-        
+
         try:
             async with await self._get_client(session, "ec2", region, credentials) as ec2:
                 paginator = ec2.get_paginator("describe_snapshots")
@@ -103,7 +103,7 @@ class OldSnapshotsPlugin(ZombiePlugin):
                         if start_time and start_time < cutoff:
                             size_gb = snap.get("VolumeSize", 0)
                             monthly_cost = size_gb * ESTIMATED_COSTS["snapshot_gb"]
-                            
+
                             zombies.append({
                                 "resource_id": snap["SnapshotId"],
                                 "resource_type": "EBS Snapshot",
@@ -119,7 +119,7 @@ class OldSnapshotsPlugin(ZombiePlugin):
                             })
         except ClientError as e:
             logger.warning("snapshot_scan_error", error=str(e))
-        
+
         return zombies
 
 class IdleS3BucketsPlugin(ZombiePlugin):

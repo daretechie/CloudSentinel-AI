@@ -20,23 +20,26 @@ from app.services.adapters.base import CostAdapter
 
 logger = structlog.get_logger()
 
+# Safety limit to prevent memory bloat for large enterprise accounts
+MAX_COST_EXPLORER_PAGES = 10
+
 class MultiTenantAWSAdapter(CostAdapter):
     """
     AWS adapter that assumes an IAM role in the customer's account using aioboto3.
     """
-    
+
     def __init__(self, connection: AWSConnection):
         self.connection = connection
         self._credentials: Optional[Dict] = None
         self._credentials_expire_at: Optional[datetime] = None
         self.session = aioboto3.Session()
-    
+
     async def _get_credentials(self) -> Dict:
         """Get temporary credentials via STS AssumeRole (Native Async)."""
         if self._credentials and self._credentials_expire_at:
             if datetime.now(timezone.utc) < self._credentials_expire_at:
                 return self._credentials
-        
+
         async with self.session.client("sts") as sts_client:
             try:
                 response = await sts_client.assume_role(
@@ -45,18 +48,18 @@ class MultiTenantAWSAdapter(CostAdapter):
                     ExternalId=self.connection.external_id,
                     DurationSeconds=3600,
                 )
-                
+
                 self._credentials = response["Credentials"]
                 self._credentials_expire_at = self._credentials["Expiration"]
-                
+
                 logger.info(
                     "sts_assume_role_success",
                     role_arn=self.connection.role_arn,
                     expires_at=str(self._credentials_expire_at),
                 )
-                
+
                 return self._credentials
-                
+
             except ClientError as e:
                 logger.error(
                     "sts_assume_role_failed",
@@ -66,15 +69,20 @@ class MultiTenantAWSAdapter(CostAdapter):
                 raise
 
     async def get_daily_costs(
-        self, 
-        start_date: date, 
+        self,
+        start_date: date,
         end_date: date,
         usage_only: bool = False,
         group_by_service: bool = False,
+        max_pages: int = MAX_COST_EXPLORER_PAGES,
     ) -> List[Dict[str, Any]]:
-        """Fetch daily costs using aioboto3 (Native Async)."""
+        """Fetch daily costs using aioboto3 (Native Async).
+
+        Args:
+            max_pages: Maximum pagination pages to fetch (prevents memory bloat)
+        """
         creds = await self._get_credentials()
-        
+
         async with self.session.client(
             "ce",
             region_name=self.connection.region,
@@ -91,31 +99,46 @@ class MultiTenantAWSAdapter(CostAdapter):
                     "Granularity": "DAILY",
                     "Metrics": ["UnblendedCost"],
                 }
-                
+
                 if usage_only:
                     request_params["Filter"] = {
                         "Dimensions": {"Key": "RECORD_TYPE", "Values": ["Usage"]}
                     }
-                
+
                 if group_by_service:
                     request_params["GroupBy"] = [{"Type": "DIMENSION", "Key": "SERVICE"}]
-                
+
                 results = []
+                pages_fetched = 0
                 response = await client.get_cost_and_usage(**request_params)
                 results.extend(response.get("ResultsByTime", []))
-                
-                while "NextPageToken" in response:
+                pages_fetched += 1
+
+                # Paginate with safety limit
+                while "NextPageToken" in response and pages_fetched < max_pages:
                     request_params["NextPageToken"] = response["NextPageToken"]
                     response = await client.get_cost_and_usage(**request_params)
                     results.extend(response.get("ResultsByTime", []))
-                
+                    pages_fetched += 1
+
+                # Warn if we hit the limit (data may be truncated)
+                if "NextPageToken" in response:
+                    logger.warning(
+                        "cost_explorer_truncated",
+                        aws_account=self.connection.aws_account_id,
+                        pages_fetched=pages_fetched,
+                        max_pages=max_pages,
+                        msg="Results truncated due to pagination limit"
+                    )
+
                 logger.info(
                     "multitenant_cost_fetch_success",
                     aws_account=self.connection.aws_account_id,
                     days=len(results),
+                    pages=pages_fetched,
                 )
                 return results
-                
+
             except ClientError as e:
                 error_code = e.response.get("Error", {}).get("Code", "Unknown")
                 logger.error("multitenant_cost_fetch_failed", error=str(e))
@@ -123,6 +146,6 @@ class MultiTenantAWSAdapter(CostAdapter):
 
     async def get_gross_usage(self, start_date: date, end_date: date) -> List[Dict[str, Any]]:
         return await self.get_daily_costs(start_date, end_date, usage_only=True, group_by_service=True)
-    
+
     async def get_resource_usage(self, service_name: str) -> List[Dict[str, Any]]:
         return []

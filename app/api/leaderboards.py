@@ -28,14 +28,14 @@ class LeaderboardEntry(BaseModel):
     user_email: str
     savings_usd: float
     remediation_count: int
-    
-    
+
+
 class LeaderboardResponse(BaseModel):
     """Leaderboard response with rankings."""
     period: str
     entries: list[LeaderboardEntry]
     total_team_savings: float
-    
+
 
 # ============================================================
 # API Endpoints
@@ -49,19 +49,19 @@ async def get_leaderboard(
 ):
     """
     Get the savings leaderboard for the current tenant.
-    
+
     Shows who has approved the most cost-saving remediations.
     """
     from app.models.tenant import User
     from app.models.remediation import RemediationStatus
-    
+
     # Calculate date range
     if period == "all":
         start_date = None
     else:
         days = int(period.replace("d", ""))
         start_date = datetime.now(timezone.utc) - timedelta(days=days)
-    
+
     # Query COMPLETED remediations grouped by approver
     # Join with User table to get email instead of UUID
     query = (
@@ -78,35 +78,35 @@ async def get_leaderboard(
         .group_by(User.email)
         .order_by(func.sum(RemediationRequest.estimated_monthly_savings).desc())
     )
-    
+
     if start_date:
         query = query.where(RemediationRequest.created_at >= start_date)
-    
+
     result = await db.execute(query)
     rows = result.fetchall()
-    
+
     # Build leaderboard entries
     entries = []
     total_savings = 0.0
-    
+
     for rank, row in enumerate(rows, start=1):
         savings = float(row.total_savings or 0)
         total_savings += savings
-        
+
         entries.append(LeaderboardEntry(
             rank=rank,
             user_email=row.user_email,
             savings_usd=savings,
             remediation_count=row.count,
         ))
-    
+
     period_labels = {
         "7d": "Last 7 Days",
         "30d": "Last 30 Days",
         "90d": "Last 90 Days",
         "all": "All Time",
     }
-    
+
     return LeaderboardResponse(
         period=period_labels.get(period, "Last 30 Days"),
         entries=entries,

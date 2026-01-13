@@ -551,3 +551,22 @@ body {
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+
+/* Line clamp utility */
+.line-clamp-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Text color utilities */
+.text-success-400 { color: var(--color-success-400); }
+.text-warning-400 { color: var(--color-warning-400); }
+.text-danger-400 { color: var(--color-danger-400); }
+.text-ink-300 { color: var(--color-ink-300); }
+.text-ink-400 { color: var(--color-ink-400); }
+.text-ink-500 { color: var(--color-ink-500); }
+
+/* Border utilities */
+.border-ink-700 { border-color: var(--color-ink-700); }

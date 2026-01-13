@@ -1,5 +1,5 @@
 from uuid import uuid4
-from sqlalchemy import Boolean, Numeric, ForeignKey
+from sqlalchemy import Boolean, Numeric, Integer, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -16,20 +16,26 @@ class RemediationSettings(Base):
         primary_key=True,
         default=uuid4
     )
-    
+
     tenant_id: Mapped[UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("tenants.id", ondelete="CASCADE"),
         unique=True,
         nullable=False
     )
-    
+
     # Global Kill-Switch for Auto-Pilot
     auto_pilot_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
-    
+
     # Safety Thresholds
     min_confidence_threshold: Mapped[float] = mapped_column(Numeric(3, 2), default=0.95)
-    
+
+    # Rate Limiting Safety Fuse
+    max_deletions_per_hour: Mapped[int] = mapped_column(Integer, default=10)
+
+    # Simulation Mode - dry-run preview without actual execution
+    simulation_mode: Mapped[bool] = mapped_column(Boolean, default=True)
+
     # Relationship
     tenant = relationship("Tenant")
 

@@ -22,7 +22,7 @@ class LegacyEcrImagesPlugin(ZombiePlugin):
                 async for repo_page in repo_paginator.paginate():
                     for repo in repo_page.get("repositories", []):
                         name = repo["repositoryName"]
-                        
+
                         img_paginator = ecr.get_paginator("describe_images")
                         async for img_page in img_paginator.paginate(repositoryName=name):
                             for img in img_page.get("imageDetails", []):
