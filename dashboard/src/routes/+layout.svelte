@@ -79,7 +79,7 @@
           </div>
           <div class="flex-1 min-w-0">
             <p class="text-sm font-medium truncate">{data.user.email}</p>
-            <p class="text-xs text-ink-500">Free Plan</p>
+            <p class="text-xs text-ink-500 capitalize">{data.subscription?.tier || 'Free'} Plan</p>
           </div>
         </div>
         <form method="POST" action="/auth/logout">
