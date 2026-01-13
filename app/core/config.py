@@ -14,6 +14,7 @@ class Settings(BaseSettings):
 
     # Security
     CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://localhost:5174", "http://localhost:3000"]
+    FRONTEND_URL: str = "http://localhost:5173"  # Used for billing callbacks
     ENCRYPTION_KEY: Optional[str] = None
     OPENAI_API_KEY: Optional[str] = None
     OPENAI_MODEL: str = "gpt-4o" # High performance for complex analysis
