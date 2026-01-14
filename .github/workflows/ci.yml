@@ -36,7 +36,7 @@ jobs:
       - name: Run Linting (Ruff)
         run: uv run ruff check .
 
-      - name: Run Pytest
+      - name: Run Pytest with Coverage
         env:
           # Production Readiness: Provide dummy env vars for CI.
           # We don't need real keys because we use Mocks, but Pydantic
@@ -47,7 +47,15 @@ jobs:
           GROQ_API_KEY: "testing"
           DATABASE_URL: "postgresql+asyncpg://test:test@localhost/test"
           SUPABASE_JWT_SECRET: "test-jwt-secret-for-ci"
-        run: uv run pytest -v
+        run: |
+          uv run pytest -v --cov=app --cov-report=xml --cov-report=term-missing
+          
+      - name: Upload Coverage Report
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage.xml
+          fail_ci_if_error: false
+          verbose: true
 
   # JOB 2: SECURITY CHECKS
   security:
