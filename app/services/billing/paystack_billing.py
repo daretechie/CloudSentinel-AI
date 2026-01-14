@@ -36,9 +36,10 @@ settings = get_settings()
 
 class PricingTier(str, Enum):
     """Available subscription tiers."""
-    FREE = "free"
+    TRIAL = "trial"
     STARTER = "starter"
-    PROFESSIONAL = "professional"
+    GROWTH = "growth"
+    PRO = "pro"
     ENTERPRISE = "enterprise"
 
 
@@ -159,13 +160,15 @@ class BillingService:
         self.client = PaystackClient()
         self.plan_codes = {
             PricingTier.STARTER: settings.PAYSTACK_PLAN_STARTER,
-            PricingTier.PROFESSIONAL: settings.PAYSTACK_PLAN_PROFESSIONAL,
+            PricingTier.GROWTH: settings.PAYSTACK_PLAN_GROWTH,
+            PricingTier.PRO: settings.PAYSTACK_PLAN_PRO,
             PricingTier.ENTERPRISE: settings.PAYSTACK_PLAN_ENTERPRISE,
         }
-        # Hardcoded amounts for now (in Kobo), ideally fetched from plan API
+        # Amounts in Kobo (NGN x 100) - based on $29/$79/$199 @ ₦1,422/USD
         self.plan_amounts = {
-            PricingTier.STARTER: 5000000,      # 50,000 NGN
-            PricingTier.PROFESSIONAL: 20000000, # 200,000 NGN
+            PricingTier.STARTER: 4125000,      # ₦41,250 ($29)
+            PricingTier.GROWTH: 11235000,      # ₦112,350 ($79)
+            PricingTier.PRO: 28300000,         # ₦283,000 ($199)
             PricingTier.ENTERPRISE: 0          # Custom
         }
 

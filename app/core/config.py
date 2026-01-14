@@ -70,9 +70,10 @@ class Settings(BaseSettings):
     # Paystack Billing (Nigeria Support)
     PAYSTACK_SECRET_KEY: Optional[str] = None
     PAYSTACK_PUBLIC_KEY: Optional[str] = None
-    PAYSTACK_PLAN_STARTER: str = "PLN_starter_xxx"  # ₦50,000/mo
-    PAYSTACK_PLAN_PROFESSIONAL: str = "PLN_pro_xxx"  # ₦200,000/mo
-    PAYSTACK_PLAN_ENTERPRISE: str = "PLN_ent_xxx"  # Custom
+    PAYSTACK_PLAN_STARTER: str = "PLN_starter_xxx"    # ₦41,250/mo ($29)
+    PAYSTACK_PLAN_GROWTH: str = "PLN_growth_xxx"      # ₦112,350/mo ($79)
+    PAYSTACK_PLAN_PRO: str = "PLN_pro_xxx"            # ₦283,000/mo ($199)
+    PAYSTACK_PLAN_ENTERPRISE: str = "PLN_ent_xxx"     # Custom
 
     # Circuit Breaker Defaults
     CIRCUIT_BREAKER_FAILURE_THRESHOLD: int = 3

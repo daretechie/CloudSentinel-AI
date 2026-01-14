@@ -117,7 +117,22 @@ async def create_remediation_request(
     db: AsyncSession = Depends(get_db),
     region: str = Query(default="us-east-1"),
 ):
-    """Create a remediation request."""
+    """Create a remediation request. Requires Pro tier or higher."""
+    from app.core.pricing import PricingTier, is_feature_enabled
+    
+    # Feature gating: Pro+ required for auto-remediation
+    user_tier = getattr(user, "tier", "starter")
+    try:
+        tier_enum = PricingTier(user_tier)
+    except ValueError:
+        tier_enum = PricingTier.STARTER
+    
+    if not is_feature_enabled(tier_enum, "auto_remediation"):
+        raise HTTPException(
+            status_code=403,
+            detail="Auto-remediation requires Pro tier or higher. Please upgrade."
+        )
+    
     try:
         action_enum = RemediationAction(request.action)
     except ValueError:
@@ -183,7 +198,21 @@ async def execute_remediation(
     db: AsyncSession = Depends(get_db),
     region: str = Query(default="us-east-1"),
 ):
-    """Execute a request."""
+    """Execute a remediation request. Requires Pro tier or higher."""
+    from app.core.pricing import PricingTier, is_feature_enabled
+    
+    # Feature gating: Pro+ required
+    user_tier = getattr(user, "tier", "starter")
+    try:
+        tier_enum = PricingTier(user_tier)
+    except ValueError:
+        tier_enum = PricingTier.STARTER
+    
+    if not is_feature_enabled(tier_enum, "auto_remediation"):
+        raise HTTPException(
+            status_code=403,
+            detail="Auto-remediation requires Pro tier or higher. Please upgrade."
+        )
     result = await db.execute(select(AWSConnection).where(AWSConnection.tenant_id == user.tenant_id))
     connection = result.scalar_one_or_none()
     if not connection:

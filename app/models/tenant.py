@@ -1,5 +1,6 @@
 import uuid
-from sqlalchemy import String, ForeignKey
+from datetime import datetime
+from sqlalchemy import String, ForeignKey, DateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID
 from app.db.base import Base
@@ -9,8 +10,11 @@ class Tenant(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String, index=True)
-    plan: Mapped[str] = mapped_column(String, default="free")  # free, starter, pro
+    plan: Mapped[str] = mapped_column(String, default="trial")  # trial, starter, growth, pro, enterprise
     stripe_customer_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    
+    # Trial tracking
+    trial_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Relationships
     users: Mapped[list["User"]] = relationship(back_populates="tenant", cascade="all, delete")

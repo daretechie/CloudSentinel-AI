@@ -58,6 +58,7 @@ async def get_costs(
   }
 
 from app.core.dependencies import get_analyzer
+from app.core.pricing import PricingTier, is_feature_enabled
 
 @router.get("/analyze")
 async def analyze_costs(
@@ -67,7 +68,20 @@ async def analyze_costs(
   user: Annotated[CurrentUser, Depends(requires_role("member"))],
   db: AsyncSession = Depends(get_db)
 ):
-  """AI-powered analysis of cloud costs."""
+  """AI-powered analysis of cloud costs. Requires Growth tier or higher."""
+  # Feature gating: Check tier access
+  user_tier = getattr(user, "tier", "starter")
+  try:
+      tier_enum = PricingTier(user_tier)
+  except ValueError:
+      tier_enum = PricingTier.STARTER
+  
+  if not is_feature_enabled(tier_enum, "llm_analysis"):
+      return {
+          "analysis": "AI-powered analysis requires Growth tier or higher.",
+          "upgrade_required": True,
+          "current_tier": user_tier
+      }
   result = await db.execute(
     select(AWSConnection).where(AWSConnection.tenant_id == user.tenant_id)
   )

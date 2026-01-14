@@ -21,15 +21,17 @@
   let upgrading = $state('');
   
   const prices = {
-    starter: '₦50,000',
-    professional: '₦200,000',
+    starter: '$29',
+    growth: '$79',
+    pro: '$199',
     enterprise: 'Custom'
   };
   
   const features = {
-    starter: ['5 AWS Accounts', 'Daily Scans', 'Email Alerts', 'Basic Reports'],
-    professional: ['25 AWS Accounts', 'Hourly Scans', 'Slack Integration', 'AI Insights', 'Priority Support'],
-    enterprise: ['Unlimited Accounts', 'Real-time Scans', 'Custom Integrations', 'Dedicated Support', 'SLA Guarantee']
+    starter: ['Single Cloud (AWS)', 'Cost Dashboards', 'Budget Alerts', 'Basic Zombie Detection', 'Up to $10K cloud spend'],
+    growth: ['Multi-Cloud Support', 'AI Cost Analysis', 'Full Zombie Detection', 'Slack Integration', 'Forecasting', 'Up to $50K cloud spend'],
+    pro: ['Everything in Growth', 'Auto-Remediation', 'Full API Access', 'Priority Support', 'Up to $200K cloud spend'],
+    enterprise: ['Unlimited Accounts', 'SSO (SAML/OIDC)', 'Dedicated Support', 'Custom SLA', 'Unlimited cloud spend']
   };
   
   $effect(() => {
@@ -150,8 +152,8 @@
     </div>
     
     <!-- Pricing Tiers -->
-    <div class="grid gap-5 md:grid-cols-3">
-      {#each ['starter', 'professional', 'enterprise'] as tier, i}
+    <div class="grid gap-5 md:grid-cols-4">
+      {#each ['starter', 'growth', 'pro', 'enterprise'] as tier, i}
         <div 
           class="card stagger-enter {tierIsCurrent(tier) ? 'border-accent-500 border-2' : ''}" 
           style="animation-delay: {50 + i * 50}ms;"
@@ -205,9 +207,9 @@
     </div>
     
     <!-- Payment Info -->
-    <div class="card stagger-enter" style="animation-delay: 250ms;">
+    <div class="card stagger-enter text-center" style="animation-delay: 250ms;">
       <h3 class="text-lg font-semibold mb-3">Payment Information</h3>
-      <div class="flex items-center gap-4 text-sm text-ink-400">
+      <div class="flex items-center justify-center gap-4 text-sm text-ink-400">
         <span>Powered by</span>
         <span class="font-bold text-ink-200">Paystack</span>
         <span>•</span>

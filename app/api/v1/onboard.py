@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
+from datetime import datetime, timezone
 from app.db.session import get_db
 from app.core.auth import get_current_user_from_jwt, CurrentUser
 from app.models.tenant import Tenant, User
@@ -22,11 +23,15 @@ async def onboard(
     if existing.scalar_one_or_none():
         raise HTTPException(400, "Already onboarded")
 
-    # 2. Create Tenant
+    # 2. Create Tenant with 14-day trial
     if len(request.tenant_name) < 3:
         raise HTTPException(400, "Tenant name must be at least 3 characters")
 
-    tenant = Tenant(name=request.tenant_name)
+    tenant = Tenant(
+        name=request.tenant_name,
+        plan="trial",
+        trial_started_at=datetime.now(timezone.utc)
+    )
     db.add(tenant)
     await db.flush()  # Get tenant.id
 

@@ -6,6 +6,7 @@ from sqlalchemy import select
 import structlog
 
 from app.core.auth import CurrentUser, requires_role
+from app.core.pricing import PricingTier, is_feature_enabled
 from app.db.session import get_db
 from app.models.aws_connection import AWSConnection
 from app.services.adapters.aws_multitenant import MultiTenantAWSAdapter
@@ -25,7 +26,20 @@ async def get_carbon_footprint(
   db: AsyncSession = Depends(get_db),
   region: str = Query(default="us-east-1")
 ):
-  """Calculates the estimated CO2 emissions for a specified date range."""
+  """Calculates the estimated CO2 emissions. Requires Growth tier or higher."""
+  # Feature gating
+  user_tier = getattr(user, "tier", "starter")
+  try:
+      tier_enum = PricingTier(user_tier)
+  except ValueError:
+      tier_enum = PricingTier.STARTER
+  
+  if tier_enum not in [PricingTier.GROWTH, PricingTier.PRO, PricingTier.ENTERPRISE, PricingTier.TRIAL]:
+      return {
+          "error": "GreenOps features require Growth tier or higher.",
+          "upgrade_required": True,
+          "current_tier": user_tier
+      }
   result = await db.execute(
     select(AWSConnection).where(AWSConnection.tenant_id == user.tenant_id)
   )
