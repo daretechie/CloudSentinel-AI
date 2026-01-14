@@ -6,8 +6,8 @@
 <h3 align="center">Optimize Cloud Value, Not Just Cost</h3>
 
 <p align="center">
-  <em><strong>Val</strong>ue + Mat<strong>rix</strong> — Intelligent reasoning that turns cloud spend<br/>
-  into measurable business outcomes.</em>
+  <em><strong>Val</strong>ue + Mat<strong>rix</strong> — A FinOps engine that continuously optimizes cloud value<br/>
+  by eliminating waste, controlling cost, and reducing unnecessary overhead.</em>
 </p>
 
 <p align="center">

@@ -159,7 +159,7 @@
     
     <!-- Subheading -->
     <p class="fade-in-up text-lg md:text-xl mb-10 max-w-xl leading-relaxed" style="animation-delay: 200ms; color: var(--color-ink-400);">
-      AI-powered FinOps platform that tracks costs, carbon footprint, and zombie resources in real-time.
+      A FinOps engine that continuously optimizes cloud value by eliminating waste, controlling cost, and reducing unnecessary overhead.
     </p>
     
     <!-- CTA Buttons -->
@@ -268,7 +268,10 @@
               <p class="text-5xl font-bold text-gradient">
                 {aiData.total_monthly_savings || '$0.00'}
               </p>
-              <p class="text-sm text-ink-400 mt-2">{aiData.summary || 'Analysis complete.'}</p>
+              <p class="text-sm text-ink-400 mt-2">
+                {aiData.summary || 'Analysis complete.'} 
+                <span class="block mt-1 font-semibold text-accent-400">Value Optimizer: Continuously eliminating waste and technical debt.</span>
+              </p>
             </div>
             <div class="hero-icon text-6xl">💰</div>
           </div>
