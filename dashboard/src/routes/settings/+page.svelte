@@ -452,11 +452,23 @@
     </div>
     
     <!-- Carbon Budget Settings -->
-    <div class="card stagger-enter">
-      <h2 class="text-lg font-semibold mb-5 flex items-center gap-2">
-        <span>🌱</span> Carbon Budget
-      </h2>
+    <div class="card stagger-enter" class:opacity-60={!['growth', 'pro', 'enterprise'].includes(data.subscription?.tier)} class:pointer-events-none={!['growth', 'pro', 'enterprise'].includes(data.subscription?.tier)}>
+      <div class="flex items-center justify-between mb-5">
+        <h2 class="text-lg font-semibold flex items-center gap-2">
+          <span>🌱</span> Carbon Budget
+        </h2>
+        
+        {#if !['growth', 'pro', 'enterprise'].includes(data.subscription?.tier)}
+           <span class="badge badge-warning text-xs">Growth Plan Required</span>
+        {/if}
+      </div>
       
+      {#if !['growth', 'pro', 'enterprise'].includes(data.subscription?.tier)}
+        <div class="absolute inset-0 z-10 flex items-center justify-center bg-transparent">
+             <a href="/billing" class="btn btn-primary shadow-lg pointer-events-auto">Upgrade to Unlock GreenOps</a>
+        </div>
+      {/if}
+
       {#if loadingCarbon}
         <div class="skeleton h-4 w-48"></div>
       {:else}
@@ -469,6 +481,7 @@
               bind:value={carbonSettings.carbon_budget_kg}
               min="0"
               step="10"
+              disabled={!['growth', 'pro', 'enterprise'].includes(data.subscription?.tier)}
             />
             <p class="text-xs text-ink-500 mt-1">Set your monthly carbon footprint limit</p>
           </div>
@@ -481,13 +494,14 @@
               bind:value={carbonSettings.alert_threshold_percent}
               min="0"
               max="100"
+              disabled={!['growth', 'pro', 'enterprise'].includes(data.subscription?.tier)}
             />
             <p class="text-xs text-ink-500 mt-1">Warn when usage reaches this percentage of budget</p>
           </div>
           
           <div class="form-group">
             <label for="default_region">Default AWS Region</label>
-            <select id="default_region" bind:value={carbonSettings.default_region} class="select">
+            <select id="default_region" bind:value={carbonSettings.default_region} class="select" disabled={!['growth', 'pro', 'enterprise'].includes(data.subscription?.tier)}>
               <option value="us-west-2">US West (Oregon) - 21 gCO₂/kWh ⭐</option>
               <option value="eu-north-1">EU (Stockholm) - 28 gCO₂/kWh ⭐</option>
               <option value="ca-central-1">Canada (Central) - 35 gCO₂/kWh ⭐</option>
@@ -501,7 +515,7 @@
           <!-- Email Notifications -->
           <div class="form-group">
             <label class="flex items-center gap-3 cursor-pointer">
-              <input type="checkbox" bind:checked={carbonSettings.email_enabled} class="toggle" />
+              <input type="checkbox" bind:checked={carbonSettings.email_enabled} class="toggle" disabled={!['growth', 'pro', 'enterprise'].includes(data.subscription?.tier)} />
               <span>Enable email notifications for carbon alerts</span>
             </label>
           </div>
@@ -514,12 +528,13 @@
                 id="email_recipients"
                 bind:value={carbonSettings.email_recipients}
                 placeholder="email1@example.com, email2@example.com"
+                disabled={!['growth', 'pro', 'enterprise'].includes(data.subscription?.tier)}
               />
               <p class="text-xs text-ink-500 mt-1">Comma-separated email addresses for carbon budget alerts</p>
             </div>
           {/if}
           
-          <button class="btn btn-primary" onclick={saveCarbonSettings} disabled={savingCarbon}>
+          <button class="btn btn-primary" onclick={saveCarbonSettings} disabled={savingCarbon || !['growth', 'pro', 'enterprise'].includes(data.subscription?.tier)}>
             {savingCarbon ? '⏳ Saving...' : '💾 Save Carbon Settings'}
           </button>
         </div>
@@ -642,10 +657,23 @@
     </div>
 
     <!-- ActiveOps (Remediation) Settings -->
-    <div class="card stagger-enter">
-      <h2 class="text-lg font-semibold mb-3 flex items-center gap-2">
-        <span>⚡</span> ActiveOps (Autonomous Remediation)
-      </h2>
+    <div class="card stagger-enter" class:opacity-60={!['pro', 'enterprise'].includes(data.subscription?.tier)} class:pointer-events-none={!['pro', 'enterprise'].includes(data.subscription?.tier)}>
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-lg font-semibold flex items-center gap-2">
+          <span>⚡</span> ActiveOps (Autonomous Remediation)
+        </h2>
+        
+        {#if !['pro', 'enterprise'].includes(data.subscription?.tier)}
+           <span class="badge badge-warning text-xs">Pro Plan Required</span>
+        {/if}
+      </div>
+
+      {#if !['pro', 'enterprise'].includes(data.subscription?.tier)}
+        <div class="absolute inset-0 z-10 flex items-center justify-center bg-transparent">
+             <a href="/billing" class="btn btn-primary shadow-lg pointer-events-auto">Upgrade to Unlock Auto-Pilot</a>
+        </div>
+      {/if}
+
       <p class="text-xs text-ink-400 mb-5">Enable AI to automatically remediate high-confidence zombie resources during weekly sweeps.</p>
       
       {#if loadingActiveOps}
@@ -661,7 +689,7 @@
           </div>
 
           <label class="flex items-center gap-3 cursor-pointer">
-            <input type="checkbox" bind:checked={activeOpsSettings.auto_pilot_enabled} class="toggle toggle-warning" />
+            <input type="checkbox" bind:checked={activeOpsSettings.auto_pilot_enabled} class="toggle toggle-warning" disabled={!['pro', 'enterprise'].includes(data.subscription?.tier)} />
             <span class="font-medium {activeOpsSettings.auto_pilot_enabled ? 'text-white' : 'text-ink-400'}">
               Enable Auto-Pilot (Weekly Autonomous Deletion)
             </span>
@@ -677,7 +705,7 @@
               max="1.0"
               step="0.01"
               class="range"
-              disabled={!activeOpsSettings.auto_pilot_enabled}
+              disabled={!activeOpsSettings.auto_pilot_enabled || !['pro', 'enterprise'].includes(data.subscription?.tier)}
             />
             <div class="flex justify-between text-[10px] text-ink-500 mt-1">
               <span>Riskier (50%)</span>
@@ -685,7 +713,7 @@
             </div>
           </div>
           
-          <button class="btn btn-primary" onclick={saveActiveOpsSettings} disabled={savingActiveOps}>
+          <button class="btn btn-primary" onclick={saveActiveOpsSettings} disabled={savingActiveOps || !['pro', 'enterprise'].includes(data.subscription?.tier)}>
             {savingActiveOps ? '⏳ Saving...' : '💾 Save ActiveOps Settings'}
           </button>
         </div>

@@ -6,7 +6,7 @@ from sqlalchemy import select
 import structlog
 
 from app.core.auth import CurrentUser, requires_role
-from app.core.pricing import PricingTier, is_feature_enabled
+from app.core.pricing import is_feature_enabled, requires_feature
 from app.db.session import get_db
 from app.models.aws_connection import AWSConnection
 from app.services.adapters.aws_multitenant import MultiTenantAWSAdapter
@@ -19,6 +19,7 @@ router = APIRouter(tags=["GreenOps & Carbon"])
 logger = structlog.get_logger()
 
 @router.get("/carbon")
+@requires_feature("greenops")
 async def get_carbon_footprint(
   start_date: date,
   end_date: date,
@@ -27,19 +28,6 @@ async def get_carbon_footprint(
   region: str = Query(default="us-east-1")
 ):
   """Calculates the estimated CO2 emissions. Requires Growth tier or higher."""
-  # Feature gating
-  user_tier = getattr(user, "tier", "starter")
-  try:
-      tier_enum = PricingTier(user_tier)
-  except ValueError:
-      tier_enum = PricingTier.STARTER
-  
-  if not is_feature_enabled(tier_enum, "greenops"):
-      return {
-          "error": "GreenOps features require Growth tier or higher.",
-          "upgrade_required": True,
-          "current_tier": user_tier
-      }
   result = await db.execute(
     select(AWSConnection).where(AWSConnection.tenant_id == user.tenant_id)
   )
@@ -56,6 +44,7 @@ async def get_carbon_footprint(
   return results
 
 @router.get("/carbon/budget")
+@requires_feature("greenops")
 async def get_carbon_budget(
   user: Annotated[CurrentUser, Depends(requires_role("member"))],
   db: AsyncSession = Depends(get_db),
@@ -101,6 +90,7 @@ async def get_carbon_budget(
   return budget_status
 
 @router.get("/graviton")
+@requires_feature("greenops")
 async def analyze_graviton_opportunities(
     user: Annotated[CurrentUser, Depends(requires_role("member"))],
     db: AsyncSession = Depends(get_db),
