@@ -9,7 +9,6 @@ Provides endpoints for:
 
 from typing import Annotated
 from datetime import datetime, timezone
-from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession

@@ -3,14 +3,19 @@ Background Job SQLAlchemy Model
 
 Represents jobs in the background_jobs table for durable job processing.
 """
+from __future__ import annotations
 
 import uuid
 from datetime import datetime
 from enum import Enum
+from typing import TYPE_CHECKING
 from sqlalchemy import String, Text, Integer, DateTime, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from app.db.base import Base
+
+if TYPE_CHECKING:
+    from app.models.tenant import Tenant
 
 
 class JobStatus(str, Enum):

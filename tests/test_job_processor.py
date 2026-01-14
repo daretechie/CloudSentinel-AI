@@ -202,7 +202,7 @@ class TestEnqueueJob:
             mock_instance.id = uuid4()
             MockJob.return_value = mock_instance
             
-            job = await enqueue_job(
+            await enqueue_job(
                 db=mock_db,
                 job_type=JobType.FINOPS_ANALYSIS,
                 tenant_id=uuid4()

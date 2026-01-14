@@ -8,8 +8,7 @@ Combines:
 This provides 95% quality at 20% of the cost of always doing full analysis.
 """
 
-from datetime import datetime, timezone, date
-from typing import Optional
+from datetime import date
 from uuid import UUID
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -109,7 +108,6 @@ class HybridAnalysisScheduler:
         Returns:
             Analysis result dict
         """
-        import json
         
         # Determine analysis type
         if force_full:
@@ -174,7 +172,7 @@ class HybridAnalysisScheduler:
         # Parse result and add metadata
         try:
             parsed = json.loads(result)
-        except:
+        except json.JSONDecodeError:
             parsed = {"raw_analysis": result}
         
         parsed["analysis_type"] = "full_30_day"
@@ -225,7 +223,7 @@ class HybridAnalysisScheduler:
         import json
         try:
             parsed = json.loads(result)
-        except:
+        except json.JSONDecodeError:
             parsed = {"raw_analysis": result}
         
         parsed["analysis_type"] = "delta_3_day"

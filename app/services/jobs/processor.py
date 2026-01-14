@@ -15,12 +15,11 @@ Usage:
     await processor.process_pending_jobs()
 """
 
-import asyncio
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict, Any, Callable, Awaitable
 from uuid import UUID
 import structlog
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.background_job import BackgroundJob, JobStatus, JobType

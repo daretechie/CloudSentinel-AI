@@ -24,7 +24,6 @@ Usage:
 from datetime import datetime
 from typing import Optional, Dict, Any
 import hashlib
-import json
 import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -196,7 +195,6 @@ async def process_paystack_webhook(job: BackgroundJob, db: AsyncSession) -> Dict
     
     # The handle method expects bytes and signature
     # For retry, we skip signature verification (already verified on first attempt)
-    payload_bytes = json.dumps(webhook_data).encode()
     
     # Use internal processing - bypass signature check for retries
     event = webhook_data.get("event", payload.get("event_type"))

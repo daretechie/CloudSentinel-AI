@@ -21,7 +21,7 @@ import structlog
 
 from app.db.session import get_db
 from app.core.auth import CurrentUser, requires_role
-from app.models.tenant import Tenant, User
+from app.models.tenant import Tenant
 from app.models.background_job import BackgroundJob, JobStatus
 from app.models.aws_connection import AWSConnection
 
@@ -226,7 +226,7 @@ async def _get_aws_connection_health(db: AsyncSession) -> AWSConnectionHealth:
     
     verified = await db.scalar(
         select(func.count(AWSConnection.id))
-        .where(AWSConnection.is_verified == True)
+        .where(AWSConnection.is_verified.is_(True))
     )
     
     failed = (total or 0) - (verified or 0)

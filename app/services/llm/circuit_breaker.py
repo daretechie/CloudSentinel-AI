@@ -22,8 +22,8 @@ Usage:
         # Fall back to next provider
 """
 
-from datetime import datetime, timezone, timedelta
-from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from dataclasses import dataclass
 from enum import Enum
 from typing import Dict, Optional
 import structlog
