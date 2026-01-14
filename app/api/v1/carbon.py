@@ -34,7 +34,7 @@ async def get_carbon_footprint(
   except ValueError:
       tier_enum = PricingTier.STARTER
   
-  if tier_enum not in [PricingTier.GROWTH, PricingTier.PRO, PricingTier.ENTERPRISE, PricingTier.TRIAL]:
+  if not is_feature_enabled(tier_enum, "greenops"):
       return {
           "error": "GreenOps features require Growth tier or higher.",
           "upgrade_required": True,

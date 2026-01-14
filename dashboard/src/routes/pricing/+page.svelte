@@ -49,6 +49,7 @@
         'Multi-cloud support (AWS, Azure, GCP)',
         'AI-driven cost analysis',
         'Full zombie detection suite',
+        'GreenOps (Carbon tracking)',
         'Slack integration',
         'Cost forecasting (30-90 days)',
         'Up to $50K monthly cloud spend'

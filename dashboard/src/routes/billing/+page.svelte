@@ -29,7 +29,7 @@
   
   const features = {
     starter: ['Single Cloud (AWS)', 'Cost Dashboards', 'Budget Alerts', 'Basic Zombie Detection', 'Up to $10K cloud spend'],
-    growth: ['Multi-Cloud Support', 'AI Cost Analysis', 'Full Zombie Detection', 'Slack Integration', 'Forecasting', 'Up to $50K cloud spend'],
+    growth: ['Multi-Cloud Support', 'AI Cost Analysis', 'Full Zombie Detection', 'GreenOps (Carbon Tracking)', 'Slack Integration', 'Forecasting', 'Up to $50K cloud spend'],
     pro: ['Everything in Growth', 'Auto-Remediation', 'Full API Access', 'Priority Support', 'Up to $200K cloud spend'],
     enterprise: ['Unlimited Accounts', 'SSO (SAML/OIDC)', 'Dedicated Support', 'Custom SLA', 'Unlimited cloud spend']
   };
