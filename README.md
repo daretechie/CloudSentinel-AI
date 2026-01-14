@@ -3,11 +3,11 @@
 </p>
 
 <h1 align="center">Valdrix</h1>
-<h3 align="center">Intelligence for Cloud Value Optimization</h3>
+<h3 align="center">Optimize Cloud Value, Not Just Cost</h3>
 
 <p align="center">
-  <em>Valdrix combines <strong>Value</strong> + <strong>Matrix</strong>: an intelligent system that extracts,<br/>
-  measures, and optimizes value from complex multi-cloud financial data.</em>
+  <em><strong>Val</strong>ue + Mat<strong>rix</strong> — Intelligent reasoning that turns cloud spend<br/>
+  into measurable business outcomes.</em>
 </p>
 
 <p align="center">
@@ -26,7 +26,6 @@
   <strong><a href="#-get-started">Get Started</a></strong> · 
   <strong><a href="#-roadmap">Roadmap</a></strong>
 </p>
-
 
 ---
 
@@ -47,18 +46,18 @@ Most FinOps tools give you dashboards.
 Dashboards give you graphs.  
 Graphs give you... more questions.
 
-**You don't need more graphs. You need answers.**
+**You don't need more graphs. You need actionable value insights.**
 
 ---
 
 ## 🛡️ The Solution
 
-**Valdrix is different.**
+**Valdrix transforms raw cost data into actionable value intelligence.**
 
-It's not a dashboard. It's an **autonomous value optimization engine** that connects to your cloud, finds value leakage, and tells you *exactly* what to do—with receipts.
+It connects to your cloud, uncovers waste, explains spend behavior, and gives you *exactly* what to do—with receipts.
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Think_of_it_as-�_Your_Cloud_Value_Intelligence-blueviolet?style=for-the-badge" alt="Cloud Value Intelligence" />
+  <img src="https://img.shields.io/badge/Turn_Spend_Into-Business_Value-blueviolet?style=for-the-badge" alt="Turn Spend Into Business Value" />
 </p>
 
 ### Here's how it works:
