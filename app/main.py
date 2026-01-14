@@ -30,6 +30,7 @@ from app.api.v1.zombies import router as zombies_router
 from app.api.v1.admin import router as admin_router
 from app.api.v1.billing import router as billing_router
 from app.api.v1.audit import router as audit_router
+from app.api.v1.jobs import router as jobs_router
 
 # Configure logging
 setup_logging()
@@ -126,3 +127,4 @@ app.include_router(zombies_router)
 app.include_router(admin_router)
 app.include_router(billing_router)
 app.include_router(audit_router)
+app.include_router(jobs_router)
