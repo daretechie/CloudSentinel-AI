@@ -2602,6 +2602,18 @@ wheels = [
 ]
 
 [[package]]
+name = "upstash-redis"
+version = "1.5.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "httpx" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/a8/62/bc53c35fbf4e2b774ab0eb02f3908cfe89b6636e87cdc40b264a4fc1dcce/upstash_redis-1.5.0.tar.gz", hash = "sha256:1917d4d009ca803815092892d92c7da9138b4ada6b353974fb74caf063c6d2a3", size = 39356, upload-time = "2025-10-22T10:15:34.608Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/5a/87/d24541a1d9c29033e74aa05b5d8b4857feff79344ebd8fca410eb4683795/upstash_redis-1.5.0-py3-none-any.whl", hash = "sha256:e08de1f74d3fb48a81b383c00398cc9336c43b65b82e6d9266312143970800b9", size = 41088, upload-time = "2025-10-22T10:15:33.363Z" },
+]
+
+[[package]]
 name = "urllib3"
 version = "2.6.3"
 source = { registry = "https://pypi.org/simple" }
@@ -2719,6 +2731,7 @@ dependencies = [
     { name = "sqlalchemy", extra = ["asyncio"] },
     { name = "sqlalchemy-utils" },
     { name = "structlog" },
+    { name = "upstash-redis" },
     { name = "uvicorn", extra = ["standard"] },
 ]
 
@@ -2769,6 +2782,7 @@ requires-dist = [
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.36" },
     { name = "sqlalchemy-utils", specifier = ">=0.42.1" },
     { name = "structlog", specifier = ">=25.1.0" },
+    { name = "upstash-redis", specifier = ">=1.5.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.32.0" },
 ]
 provides-extras = ["dev"]

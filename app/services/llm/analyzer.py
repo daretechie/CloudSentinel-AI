@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.services.llm.usage_tracker import UsageTracker
 from app.services.notifications import SlackService
+from app.services.cache import get_cache_service
 
 logger = structlog.get_logger()
 
@@ -106,23 +107,36 @@ class FinOpsAnalyzer:
     tenant_id: Optional[UUID] = None,
     db: Optional[AsyncSession] = None,
     provider: Optional[str] = None,
-    model: Optional[str] = None,) -> str:
+    model: Optional[str] = None,
+    force_refresh: bool = False,) -> str:
         """
         Takes raw cost data and returns AI-generated insights.
 
         The process:
-        1. Formats the raw list of dictionaries into a string.
-        2. Injects it into the prompt template.
-        3. Invokes the LLM to process the data against the System Prompt.
-        4. Strips any markdown formatting from the response to ensure valid JSON.
+        1. Check cache for recent analysis (if tenant_id provided)
+        2. Formats the raw list of dictionaries into a string.
+        3. Injects it into the prompt template.
+        4. Invokes the LLM to process the data against the System Prompt.
+        5. Strips any markdown formatting from the response to ensure valid JSON.
+        6. Caches the result for 24 hours
 
         Args:
             cost_data: List of daily cost records from the adapter.
+            force_refresh: Skip cache and force new LLM analysis.
 
         Returns:
             str: A raw JSON string containing the analysis.
         """
-        logger.info("starting_analysis", data_points=len(cost_data))
+        cache = get_cache_service()
+        
+        # Check cache first (unless force_refresh)
+        if tenant_id and not force_refresh:
+            cached = await cache.get_analysis(tenant_id)
+            if cached:
+                logger.info("analysis_cache_hit", tenant_id=str(tenant_id))
+                return json.dumps(cached)
+        
+        logger.info("starting_analysis", data_points=len(cost_data), cache_miss=True)
 
         # Format cost data as JSON string for the prompt (better than str() for LLMs)
         formatted_data = json.dumps(cost_data, default=str)
@@ -200,6 +214,12 @@ class FinOpsAnalyzer:
         # After analysis, check for anomalies and alert
         try:
             result = json.loads(self._strip_markdown(response.content))
+            
+            # Cache the result for future requests (24h TTL)
+            if tenant_id:
+                await cache.set_analysis(tenant_id, result)
+                logger.info("analysis_cached", tenant_id=str(tenant_id))
+            
             if result.get("anomalies") and len(result["anomalies"]) > 0:
                 settings = get_settings()
                 if settings.SLACK_BOT_TOKEN and settings.SLACK_CHANNEL_ID:

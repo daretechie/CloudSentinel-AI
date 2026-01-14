@@ -68,6 +68,10 @@ class Settings(BaseSettings):
 
     # Cache (Redis for production, in-memory for dev)
     REDIS_URL: Optional[str] = None  # e.g., redis://localhost:6379
+    
+    # Upstash Redis (Serverless - Free tier: 10K commands/day)
+    UPSTASH_REDIS_URL: Optional[str] = None  # e.g., https://xxx.upstash.io
+    UPSTASH_REDIS_TOKEN: Optional[str] = None
 
     # Paystack Billing (Nigeria Support)
     PAYSTACK_SECRET_KEY: Optional[str] = None
