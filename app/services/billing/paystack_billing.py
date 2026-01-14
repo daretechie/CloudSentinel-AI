@@ -73,7 +73,7 @@ class TenantSubscription(Base):
     paystack_email_token: Mapped[Optional[str]] = mapped_column(String(255), nullable=True) # For charging auth
 
     # Current state
-    tier: Mapped[str] = mapped_column(String(20), default=PricingTier.FREE.value)
+    tier: Mapped[str] = mapped_column(String(20), default=PricingTier.TRIAL.value)
     status: Mapped[str] = mapped_column(String(20), default=SubscriptionStatus.ACTIVE.value)
 
     # Billing dates
@@ -182,8 +182,8 @@ class BillingService:
         """
         Initialize Paystack transaction for subscription.
         """
-        if tier == PricingTier.FREE:
-            raise ValueError("Cannot checkout free tier")
+        if tier == PricingTier.TRIAL:
+            raise ValueError("Cannot checkout trial tier")
 
         plan_code = self.plan_codes.get(tier)
         amount = self.plan_amounts.get(tier)
