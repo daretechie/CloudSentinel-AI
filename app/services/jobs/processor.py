@@ -250,15 +250,23 @@ class JobProcessor:
         db: AsyncSession
     ) -> Dict[str, Any]:
         """Handle webhook retry job (e.g., Paystack)."""
+        payload = job.payload or {}
+        provider = payload.get("provider", "generic")
+        
+        if provider == "paystack":
+            # Use Paystack-specific handler
+            from app.services.billing.webhook_retry import process_paystack_webhook
+            return await process_paystack_webhook(job, db)
+        
+        # Generic HTTP webhook retry
         import httpx
         
-        payload = job.payload or {}
         url = payload.get("url")
         data = payload.get("data")
         headers = payload.get("headers", {})
         
         if not url:
-            raise ValueError("url required for webhook_retry")
+            raise ValueError("url required for generic webhook_retry")
         
         async with httpx.AsyncClient() as client:
             response = await client.post(url, json=data, headers=headers, timeout=30)

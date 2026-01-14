@@ -17,6 +17,7 @@ import app.models.aws_connection
 import app.models.llm
 import app.models.notification_settings
 import app.models.remediation
+import app.models.background_job
 
 
 from codecarbon import EmissionsTracker
