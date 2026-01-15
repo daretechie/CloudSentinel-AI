@@ -158,9 +158,3 @@ Outputs:
     Export:
       Name: ValdrixRoleArn
   
-  Instructions:
-    Description: Next steps
-    Value: |
-      1. Copy the RoleArn above
-      2. Go to Valdrix dashboard -> Settings -> AWS Connection
-      3. Paste the Role ARN and click Verify
