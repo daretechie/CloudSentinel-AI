@@ -49,6 +49,10 @@ class AWSConnectionService:
             cloudformation_yaml = f"# Template load failed: {str(e)}"
             terraform_hcl = f"# Template load failed: {str(e)}"
 
+        from app.core.config import get_settings
+        settings = get_settings()
+        template_url = settings.CLOUDFORMATION_TEMPLATE_URL
+
         return {
             "external_id": external_id,
             "cloudformation_yaml": cloudformation_yaml,
@@ -56,7 +60,7 @@ class AWSConnectionService:
             "magic_link": (
                 f"https://console.aws.amazon.com/cloudformation/home?region=us-east-1#/stacks/create/review?"
                 f"stackName=ValdrixSecurityAudit&"
-                f"templateURL=https://raw.githubusercontent.com/Valdrix-AI/valdrix/main/cloudformation/valdrix-role.yaml&"
+                f"templateURL={template_url}&"
                 f"param_ExternalId={external_id}"
             ),
             "instructions": (

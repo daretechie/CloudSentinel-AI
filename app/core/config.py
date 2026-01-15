@@ -13,6 +13,9 @@ class Settings(BaseSettings):
     AWS_SECRET_ACCESS_KEY: Optional[str] = None
     AWS_DEFAULT_REGION: str = "us-east-1"
     
+    # CloudFormation Template (Configurable for S3/GitHub)
+    CLOUDFORMATION_TEMPLATE_URL: str = "https://raw.githubusercontent.com/Valdrix-AI/valdrix/main/cloudformation/valdrix-role.yaml"
+    
     # Reload trigger: 2026-01-14
 
     # Security
