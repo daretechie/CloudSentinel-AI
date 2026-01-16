@@ -15,7 +15,7 @@ export const load: PageLoad = async ({ fetch, parent }) => {
     };
   }
 
-  const res = await fetch(`${PUBLIC_API_URL}/llm/usage`, {
+  const res = await fetch(`${PUBLIC_API_URL}/costs/llm/usage`, {
     headers: {
       'Authorization': `Bearer ${session.access_token}`,
     },

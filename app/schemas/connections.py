@@ -81,11 +81,18 @@ class GCPConnectionCreate(BaseModel):
     project_id: str = Field(..., description="GCP Project ID")
     service_account_json: str | None = Field(default=None, description="Full JSON content (Optional for Workload Identity)")
     auth_method: str = Field(default="secret", description="secret or workload_identity")
+    billing_project_id: str | None = Field(default=None, description="Project ID holding BigQuery export")
+    billing_dataset: str | None = Field(default=None, description="BigQuery dataset ID")
+    billing_table: str | None = Field(default=None, description="BigQuery table ID")
 
 class GCPConnectionResponse(BaseModel):
     id: UUID
     name: str
     project_id: str
+    auth_method: str
+    billing_project_id: str | None
+    billing_dataset: str | None
+    billing_table: str | None
     is_active: bool
     last_synced_at: datetime | None
     created_at: datetime

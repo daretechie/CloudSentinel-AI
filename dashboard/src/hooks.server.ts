@@ -29,22 +29,37 @@ export const handle: Handle = async ({ event, resolve }) => {
     }
   );
 
-  /**
-   * Get session and user - validates with Supabase
-   * 
-   * IMPORTANT: We use getUser() instead of getSession() for security.
-   * getSession() reads from cookies (client-controlled, could be tampered).
-   * getUser() verifies with Supabase servers (trusted source of truth).
-   */
-  event.locals.getSession = async () => {
-    const { data: { session } } = await event.locals.supabase.auth.getSession();
-    return session;
+  event.locals.safeGetSession = async () => {
+    const {
+      data: { session },
+    } = await event.locals.supabase.auth.getSession();
+    if (!session) return { session: null, user: null };
+
+    const {
+      data: { user },
+      error,
+    } = await event.locals.supabase.auth.getUser();
+
+    if (error || !user) {
+      // validation failed
+      return { session: null, user: null };
+    }
+
+    return { session, user };
   };
 
-  event.locals.getUser = async () => {
-    const { data: { user } } = await event.locals.supabase.auth.getUser();
-    return user;
-  };
+  // Auth Guard: Protect all routes starting with /dashboard
+  // (Assuming dashboards are under /dashboard or we check for protected patterns)
+  if (event.url.pathname.startsWith('/dashboard') || event.url.pathname.startsWith('/settings')) {
+    const { session } = await event.locals.safeGetSession();
+    if (!session) {
+      return new Response(null, {
+        status: 303,
+        headers: { Location: '/login' }
+      });
+    }
+  }
+
 
   return resolve(event, {
     // Filter out sensitive auth headers from responses

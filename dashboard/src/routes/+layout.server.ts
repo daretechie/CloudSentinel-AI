@@ -9,8 +9,8 @@ import { PUBLIC_API_URL } from '$env/static/public';
 import type { LayoutServerLoad } from './$types';
 
 export const load: LayoutServerLoad = async ({ locals, fetch }) => {
-  const session = await locals.getSession();
-  const user = await locals.getUser();
+  const { session, user } = await locals.safeGetSession();
+
   
   let subscription = { tier: 'free', status: 'active' };
   

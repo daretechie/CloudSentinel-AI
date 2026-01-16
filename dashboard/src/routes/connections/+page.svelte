@@ -12,8 +12,9 @@
   let loadingGCP = $state(true);
   
   let awsConnection: any = $state(null);
-  let azureConnection: any = $state(null);
-  let gcpConnection: any = $state(null);
+  let awsConnections: any[] = $state([]);
+  let azureConnections: any[] = $state([]);
+  let gcpConnections: any[] = $state([]);
   
   let gcpProjectId = $state('');
   let azureSubscriptionId = $state('');
@@ -27,10 +28,9 @@
   let success = $state('');
 
   async function getHeaders() {
-    const { data: { session } } = await supabase.auth.getSession();
     return {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${session?.access_token}`,
+      'Authorization': `Bearer ${data.session?.access_token}`,
     };
   }
 
@@ -39,26 +39,24 @@
       const headers = await getHeaders();
       
       // AWS
-      const awsRes = await fetch(`${PUBLIC_API_URL}/api/v1/connections/aws`, { headers });
+      const awsRes = await fetch(`${PUBLIC_API_URL}/connections/aws`, { headers });
       if (awsRes.ok) {
-        const awsData = await awsRes.json();
-        awsConnection = awsData.length > 0 ? awsData[0] : null;
+        awsConnections = await awsRes.json();
+        awsConnection = awsConnections.length > 0 ? awsConnections[0] : null;
       }
       loadingAWS = false;
 
       // Azure
-      const azureRes = await fetch(`${PUBLIC_API_URL}/api/v1/connections/azure`, { headers });
+      const azureRes = await fetch(`${PUBLIC_API_URL}/connections/azure`, { headers });
       if (azureRes.ok) {
-        const azureData = await azureRes.json();
-        azureConnection = azureData.length > 0 ? azureData[0] : null;
+        azureConnections = await azureRes.json();
       }
       loadingAzure = false;
 
       // GCP
-      const gcpRes = await fetch(`${PUBLIC_API_URL}/api/v1/connections/gcp`, { headers });
+      const gcpRes = await fetch(`${PUBLIC_API_URL}/connections/gcp`, { headers });
       if (gcpRes.ok) {
-        const gcpData = await gcpRes.json();
-        gcpConnection = gcpData.length > 0 ? gcpData[0] : null;
+        gcpConnections = await gcpRes.json();
       }
       loadingGCP = false;
 
@@ -75,7 +73,7 @@
     loadingDiscovered = true;
     try {
       const headers = await getHeaders();
-      const res = await fetch(`${PUBLIC_API_URL}/api/v1/connections/aws/discovered`, { headers });
+      const res = await fetch(`${PUBLIC_API_URL}/connections/aws/discovered`, { headers });
       if (res.ok) {
         discoveredAccounts = await res.json();
       }
@@ -93,7 +91,7 @@
     error = '';
     try {
       const headers = await getHeaders();
-      const res = await fetch(`${PUBLIC_API_URL}/api/v1/connections/aws/${awsConnection.id}/sync-org`, {
+      const res = await fetch(`${PUBLIC_API_URL}/connections/aws/${awsConnection.id}/sync-org`, {
         method: 'POST',
         headers
       });
@@ -110,13 +108,51 @@
     }
   }
 
+  async function deleteConnection(provider: string, id: string) {
+    if (!confirm(`Are you sure you want to delete this ${provider.toUpperCase()} connection? Data fetching will stop immediately.`)) {
+      return;
+    }
+
+    success = '';
+    error = '';
+    try {
+      const headers = await getHeaders();
+      const res = await fetch(`${PUBLIC_API_URL}/connections/${provider}/${id}`, {
+        method: 'DELETE',
+        headers
+      });
+      
+      // Handle Success (204) OR Not Found (404 - already deleted)
+      if (res.ok || res.status === 404) {
+        success = `${provider.toUpperCase()} connection deleted successfully.`;
+        if (res.status === 404) {
+           console.log("Connection was already deleted (404), refreshing list.");
+        }
+        
+        // If this was the management account, clear discovered accounts
+        if (provider === 'aws' && awsConnection?.id === id) {
+          discoveredAccounts = [];
+          awsConnection = null;
+        }
+        
+        await loadConnections();
+        setTimeout(() => success = '', 3000);
+      } else {
+        const data = await res.json();
+        throw new Error(data.detail || 'Delete failed');
+      }
+    } catch (e: any) {
+      error = e.message;
+    }
+  }
+
   async function linkDiscoveredAccount(discoveredId: string) {
     linkingAccount = discoveredId;
     success = '';
     error = '';
     try {
       const headers = await getHeaders();
-      const res = await fetch(`${PUBLIC_API_URL}/api/v1/connections/aws/discovered/${discoveredId}/link`, {
+      const res = await fetch(`${PUBLIC_API_URL}/connections/aws/discovered/${discoveredId}/link`, {
         method: 'POST',
         headers
       });
@@ -180,25 +216,48 @@
         </div>
         {#if loadingAWS}
           <div class="skeleton w-4 h-4 rounded-full"></div>
-        {:else if awsConnection}
-          <span class="badge badge-success">Active</span>
+        {:else if awsConnections.length > 0}
+          <span class="badge badge-success">Active ({awsConnections.length})</span>
         {:else}
           <span class="badge badge-default">Disconnected</span>
         {/if}
       </div>
       
-      {#if awsConnection}
-        <div class="space-y-2 mb-6">
-          <div class="flex justify-between text-xs">
-            <span class="text-ink-400">Account ID:</span>
-            <span class="font-mono">{awsConnection.aws_account_id}</span>
-          </div>
-          <div class="flex justify-between text-xs">
-            <span class="text-ink-400">Type:</span>
-            <span class="capitalize">{awsConnection.is_management_account ? 'Management Account' : 'Member Account'}</span>
-          </div>
+      {#if awsConnections.length > 0}
+        <div class="space-y-4 mb-6">
+          {#each awsConnections as conn}
+            <div class="p-3 rounded-xl bg-ink-900/50 border border-ink-800 group relative overflow-hidden">
+              <div class="flex justify-between items-start mb-2">
+                <div>
+                  <div class="flex items-center gap-2 mb-1">
+                    <span class="text-[10px] text-ink-500 font-mono">ID: {conn.aws_account_id}</span>
+                    <span class="badge {conn.is_management_account ? 'badge-accent' : 'badge-default'} text-[10px] px-1.5 py-0.5">
+                      {conn.is_management_account ? 'Management' : 'Member'}
+                    </span>
+                  </div>
+                </div>
+                
+                <button 
+                  class="p-1.5 rounded-lg bg-danger-500/10 text-danger-400 hover:bg-danger-500 hover:text-white transition-all shadow-sm"
+                  onclick={() => deleteConnection('aws', conn.id)}
+                  title="Delete Connection"
+                >
+                  <span class="text-xs">🗑️</span>
+                </button>
+              </div>
+
+              {#if conn.organization_id}
+                <div class="flex justify-between text-[10px]">
+                  <span class="text-ink-500">Organization:</span>
+                  <span class="text-ink-300 font-mono">{conn.organization_id}</span>
+                </div>
+              {/if}
+            </div>
+          {/each}
         </div>
-        <a href="/onboarding" class="btn btn-ghost text-xs w-full">Update Settings</a>
+        <a href="/onboarding" class="btn btn-ghost text-xs w-full border-dashed border-ink-800 hover:border-accent-500/50">
+          <span>➕</span> Add Another Account
+        </a>
       {:else if !loadingAWS}
         <p class="text-xs text-ink-400 mb-6">Establish a secure connection using our 1-click CloudFormation template.</p>
         <a href="/onboarding" class="btn btn-primary text-xs w-full">Connect AWS</a>
@@ -217,29 +276,46 @@
         </div>
         {#if loadingAzure}
           <div class="skeleton w-4 h-4 rounded-full"></div>
-        {:else if azureConnection}
-          <span class="badge badge-accent">Secure</span>
+        {:else if azureConnections.length > 0}
+          <span class="badge badge-accent">Secure ({azureConnections.length})</span>
         {:else}
           <span class="badge badge-default">Disconnected</span>
         {/if}
       </div>
       
-      {#if azureConnection}
-        <div class="space-y-2 mb-6">
-          <div class="flex justify-between text-xs">
-            <span class="text-ink-400">Subscription:</span>
-            <span class="font-mono truncate max-w-[120px]">{azureConnection.subscription_id}</span>
-          </div>
-          <div class="flex justify-between text-xs">
-            <span class="text-ink-400">Auth:</span>
-            <span>Zero-Secret</span>
-          </div>
+      {#if azureConnections.length > 0}
+        <div class="space-y-4 mb-6">
+          {#each azureConnections as conn}
+            <div class="p-3 rounded-xl bg-ink-900/50 border border-ink-800 group relative overflow-hidden">
+               <div class="flex justify-between items-start mb-2">
+                <div>
+                  <div class="flex items-center gap-2 mb-1">
+                    <span class="text-[10px] text-ink-500 font-mono">Sub ID: {conn.subscription_id.slice(0, 8)}...</span>
+                  </div>
+                </div>
+                
+                <button 
+                  class="p-1.5 rounded-lg bg-danger-500/10 text-danger-400 hover:bg-danger-500 hover:text-white transition-all shadow-sm"
+                  onclick={() => deleteConnection('azure', conn.id)}
+                  title="Delete Connection"
+                >
+                  <span class="text-xs">🗑️</span>
+                </button>
+              </div>
+              <div class="flex justify-between text-[10px]">
+                <span class="text-ink-500">Auth Strategy:</span>
+                <span class="text-accent-400">Identity Federation</span>
+              </div>
+            </div>
+          {/each}
         </div>
-        <a href="/onboarding" class="btn btn-ghost text-xs w-full">Update Settings</a>
+        <a href="/onboarding" class="btn btn-ghost text-xs w-full border-dashed border-ink-800 hover:border-accent-500/50">
+          <span>➕</span> Add Another Subscription
+        </a>
       {:else if !loadingAzure}
         <p class="text-xs text-ink-400 mb-6">Connect via Workload Identity Federation for secret-less security.</p>
         <div class="flex flex-col gap-2">
-           <a href="/onboarding" class="btn btn-secondary text-xs w-full">Connect Azure</a>
+           <a href={['growth', 'pro', 'enterprise', 'trial'].includes(data.subscription?.tier) ? "/onboarding" : "/billing"} class="btn btn-secondary text-xs w-full">Connect Azure</a>
            <span class="badge badge-warning text-[10px] w-full justify-center">Growth Tier Required</span>
         </div>
       {/if}
@@ -257,29 +333,46 @@
         </div>
         {#if loadingGCP}
           <div class="skeleton w-4 h-4 rounded-full"></div>
-        {:else if gcpConnection}
-          <span class="badge badge-accent">Secure</span>
+        {:else if gcpConnections.length > 0}
+          <span class="badge badge-accent">Secure ({gcpConnections.length})</span>
         {:else}
           <span class="badge badge-default">Disconnected</span>
         {/if}
       </div>
       
-      {#if gcpProjectId && gcpConnection}
-        <div class="space-y-2 mb-6">
-          <div class="flex justify-between text-xs">
-            <span class="text-ink-400">Project ID:</span>
-            <span class="font-mono">{gcpConnection.project_id}</span>
-          </div>
-          <div class="flex justify-between text-xs">
-            <span class="text-ink-400">Auth:</span>
-            <span>Identity Federation</span>
-          </div>
+      {#if gcpConnections.length > 0}
+        <div class="space-y-4 mb-6">
+          {#each gcpConnections as conn}
+            <div class="p-3 rounded-xl bg-ink-900/50 border border-ink-800 group relative overflow-hidden">
+               <div class="flex justify-between items-start mb-2">
+                <div>
+                  <div class="flex items-center gap-2 mb-1">
+                    <span class="text-[10px] text-ink-500 font-mono">Project: {conn.project_id}</span>
+                  </div>
+                </div>
+                
+                <button 
+                  class="p-1.5 rounded-lg bg-danger-500/10 text-danger-400 hover:bg-danger-500 hover:text-white transition-all shadow-sm"
+                  onclick={() => deleteConnection('gcp', conn.id)}
+                  title="Delete Connection"
+                >
+                  <span class="text-xs">🗑️</span>
+                </button>
+              </div>
+              <div class="flex justify-between text-[10px]">
+                <span class="text-ink-500">Auth Method:</span>
+                <span class="text-accent-400 capitalize">{conn.auth_method.replace('_', ' ')}</span>
+              </div>
+            </div>
+          {/each}
         </div>
-        <a href="/onboarding" class="btn btn-ghost text-xs w-full">Update Settings</a>
+        <a href="/onboarding" class="btn btn-ghost text-xs w-full border-dashed border-ink-800 hover:border-accent-500/50">
+          <span>➕</span> Add Another Project
+        </a>
       {:else if !loadingGCP}
         <p class="text-xs text-ink-400 mb-6">Seamless integration using GCP Workload Identity pools.</p>
         <div class="flex flex-col gap-2">
-           <a href="/onboarding" class="btn btn-secondary text-xs w-full">Connect GCP</a>
+           <a href={['growth', 'pro', 'enterprise', 'trial'].includes(data.subscription?.tier) ? "/onboarding" : "/billing"} class="btn btn-secondary text-xs w-full">Connect GCP</a>
            <span class="badge badge-warning text-[10px] w-full justify-center">Growth Tier Required</span>
         </div>
       {/if}

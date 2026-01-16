@@ -53,3 +53,7 @@ class AzureConnection(Base):
 
     # Relationships
     tenant = relationship("Tenant", backref="azure_connections")
+
+    @property
+    def provider(self) -> str:
+        return "azure"

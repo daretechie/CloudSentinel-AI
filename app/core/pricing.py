@@ -1,16 +1,7 @@
-"""
-Pricing Tiers Configuration and Feature Gating
-
-This module defines:
-- Tier pricing and limits
-- 14-day trial logic
-- Feature gating decorators
-"""
-
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from functools import wraps
-from typing import Optional, Callable
+from typing import Optional, Callable, Set, Dict
 
 from fastapi import HTTPException, status
 
@@ -28,23 +19,34 @@ class PricingTier(str, Enum):
     ENTERPRISE = "enterprise"
 
 
-# Tier configuration - USD pricing (NGN calculated at checkout)
-TIER_CONFIG = {
+class FeatureFlag(str, Enum):
+    """Feature flags for tier gating."""
+    DASHBOARDS = "dashboards"
+    ALERTS = "alerts"
+    ZOMBIE_DETECTION = "zombie_detection"
+    LLM_ANALYSIS = "llm_analysis"
+    MULTI_CLOUD = "multi_cloud"
+    GREENOPS = "greenops"
+    AUTO_REMEDIATION = "auto_remediation"
+    API_ACCESS = "api_access"
+    FORECASTING = "forecasting"
+    SSO = "sso"
+    DEDICATED_SUPPORT = "dedicated_support"
+    AUDIT_LOGS = "audit_logs"
+
+
+# Tier configuration - USD pricing
+TIER_CONFIG: Dict[PricingTier, Dict] = {
     PricingTier.TRIAL: {
         "name": "Trial",
         "price_usd": 0,
-        "duration_days": 14,
-        "cloud_spend_limit": None,  # Unlimited during trial
         "features": {
-            "dashboards": True,
-            "alerts": True,
-            "zombie_detection": True,
-            "llm_analysis": True,
-            "multi_cloud": True,
-            "greenops": True,
-            "auto_remediation": False,
-            "api_access": False,
-            "forecasting": False,
+            FeatureFlag.DASHBOARDS,
+            FeatureFlag.ALERTS,
+            FeatureFlag.ZOMBIE_DETECTION,
+            FeatureFlag.LLM_ANALYSIS,
+            FeatureFlag.MULTI_CLOUD,
+            FeatureFlag.GREENOPS,
         },
         "limits": {
             "zombie_scans_per_day": 10,
@@ -54,18 +56,10 @@ TIER_CONFIG = {
     PricingTier.STARTER: {
         "name": "Starter",
         "price_usd": 29,
-        "price_ngn": 41250,
-        "cloud_spend_limit": 10000,  # $10K/month
         "features": {
-            "dashboards": True,
-            "alerts": True,
-            "zombie_detection": True,
-            "llm_analysis": False,
-            "multi_cloud": False,
-            "greenops": False,
-            "auto_remediation": False,
-            "api_access": False,
-            "forecasting": False,
+            FeatureFlag.DASHBOARDS,
+            FeatureFlag.ALERTS,
+            FeatureFlag.ZOMBIE_DETECTION,
         },
         "limits": {
             "zombie_scans_per_day": 20,
@@ -75,18 +69,14 @@ TIER_CONFIG = {
     PricingTier.GROWTH: {
         "name": "Growth",
         "price_usd": 79,
-        "price_ngn": 112350,
-        "cloud_spend_limit": 50000,  # $50K/month
         "features": {
-            "dashboards": True,
-            "alerts": True,
-            "zombie_detection": True,
-            "llm_analysis": True,
-            "multi_cloud": True,
-            "greenops": True,
-            "auto_remediation": False,
-            "api_access": False,
-            "forecasting": True,
+            FeatureFlag.DASHBOARDS,
+            FeatureFlag.ALERTS,
+            FeatureFlag.ZOMBIE_DETECTION,
+            FeatureFlag.LLM_ANALYSIS,
+            FeatureFlag.MULTI_CLOUD,
+            FeatureFlag.GREENOPS,
+            FeatureFlag.FORECASTING,
         },
         "limits": {
             "zombie_scans_per_day": 50,
@@ -96,41 +86,27 @@ TIER_CONFIG = {
     PricingTier.PRO: {
         "name": "Pro",
         "price_usd": 199,
-        "price_ngn": 283000,
-        "cloud_spend_limit": 200000,  # $200K/month
         "features": {
-            "dashboards": True,
-            "alerts": True,
-            "zombie_detection": True,
-            "llm_analysis": True,
-            "multi_cloud": True,
-            "greenops": True,
-            "auto_remediation": True,
-            "api_access": True,
-            "forecasting": True,
+            FeatureFlag.DASHBOARDS,
+            FeatureFlag.ALERTS,
+            FeatureFlag.ZOMBIE_DETECTION,
+            FeatureFlag.LLM_ANALYSIS,
+            FeatureFlag.MULTI_CLOUD,
+            FeatureFlag.GREENOPS,
+            FeatureFlag.FORECASTING,
+            FeatureFlag.AUTO_REMEDIATION,
+            FeatureFlag.API_ACCESS,
+            FeatureFlag.AUDIT_LOGS,
         },
         "limits": {
-            "zombie_scans_per_day": None,  # Unlimited
+            "zombie_scans_per_day": 100,
             "llm_analyses_per_day": 100,
         }
     },
     PricingTier.ENTERPRISE: {
         "name": "Enterprise",
-        "price_usd": None,  # Custom
-        "cloud_spend_limit": None,  # Unlimited
-        "features": {
-            "dashboards": True,
-            "alerts": True,
-            "zombie_detection": True,
-            "llm_analysis": True,
-            "multi_cloud": True,
-            "greenops": True,
-            "auto_remediation": True,
-            "api_access": True,
-            "forecasting": True,
-            "sso": True,
-            "dedicated_support": True,
-        },
+        "price_usd": None,
+        "features": set(FeatureFlag),
         "limits": {
             "zombie_scans_per_day": None,
             "llm_analyses_per_day": None,
@@ -144,10 +120,16 @@ def get_tier_config(tier: PricingTier) -> dict:
     return TIER_CONFIG.get(tier, TIER_CONFIG[PricingTier.STARTER])
 
 
-def is_feature_enabled(tier: PricingTier, feature: str) -> bool:
+def is_feature_enabled(tier: PricingTier, feature: str | FeatureFlag) -> bool:
     """Check if a feature is enabled for a tier."""
+    if isinstance(feature, str):
+        try:
+            feature = FeatureFlag(feature)
+        except ValueError:
+            return False
+            
     config = get_tier_config(tier)
-    return config.get("features", {}).get(feature, False)
+    return feature in config.get("features", set())
 
 
 def get_tier_limit(tier: PricingTier, limit_name: str) -> Optional[int]:
@@ -156,48 +138,13 @@ def get_tier_limit(tier: PricingTier, limit_name: str) -> Optional[int]:
     return config.get("limits", {}).get(limit_name)
 
 
-class TrialManager:
-    """Manages 14-day trial logic."""
-    
-    TRIAL_DURATION_DAYS = 14
-    
-    @staticmethod
-    def calculate_trial_end(start_date: datetime) -> datetime:
-        """Calculate when trial ends."""
-        return start_date + timedelta(days=TrialManager.TRIAL_DURATION_DAYS)
-    
-    @staticmethod
-    def is_trial_active(trial_started_at: Optional[datetime]) -> bool:
-        """Check if trial is still active."""
-        if not trial_started_at:
-            return False
-        trial_end = TrialManager.calculate_trial_end(trial_started_at)
-        return datetime.now(timezone.utc) < trial_end
-    
-    @staticmethod
-    def days_remaining(trial_started_at: Optional[datetime]) -> int:
-        """Get days remaining in trial."""
-        if not trial_started_at:
-            return 0
-        trial_end = TrialManager.calculate_trial_end(trial_started_at)
-        remaining = (trial_end - datetime.now(timezone.utc)).days
-        return max(0, remaining)
-
-
 def requires_tier(*allowed_tiers: PricingTier):
     """
     Decorator to require specific tiers for an endpoint.
-    
-    Usage:
-        @router.get("/analyze")
-        @requires_tier(PricingTier.GROWTH, PricingTier.PRO, PricingTier.ENTERPRISE)
-        async def analyze_costs(user: CurrentUser):
-            ...
     """
     def decorator(func: Callable):
         @wraps(func)
         async def wrapper(*args, **kwargs):
-            # Extract user from kwargs (injected by Depends)
             user = kwargs.get("user")
             if not user:
                 raise HTTPException(
@@ -205,17 +152,13 @@ def requires_tier(*allowed_tiers: PricingTier):
                     detail="Authentication required"
                 )
             
-            # Get tenant's current tier
             user_tier = getattr(user, "tier", PricingTier.STARTER)
-            
-            # Convert string to enum if needed
             if isinstance(user_tier, str):
                 try:
                     user_tier = PricingTier(user_tier)
                 except ValueError:
                     user_tier = PricingTier.STARTER
             
-            # Check if user's tier is allowed
             if user_tier not in allowed_tiers:
                 tier_names = [t.value for t in allowed_tiers]
                 raise HTTPException(
@@ -228,15 +171,9 @@ def requires_tier(*allowed_tiers: PricingTier):
     return decorator
 
 
-def requires_feature(feature_name: str):
+def requires_feature(feature_name: str | FeatureFlag):
     """
     Decorator to require a specific feature for an endpoint.
-    
-    Usage:
-        @router.post("/remediate")
-        @requires_feature("auto_remediation")
-        async def auto_remediate(user: CurrentUser):
-            ...
     """
     def decorator(func: Callable):
         @wraps(func)
@@ -256,9 +193,10 @@ def requires_feature(feature_name: str):
                     user_tier = PricingTier.STARTER
             
             if not is_feature_enabled(user_tier, feature_name):
+                fn = feature_name.value if isinstance(feature_name, FeatureFlag) else feature_name
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
-                    detail=f"Feature '{feature_name}' is not available on your current plan. Please upgrade."
+                    detail=f"Feature '{fn}' is not available on your current plan. Please upgrade."
                 )
             
             return await func(*args, **kwargs)

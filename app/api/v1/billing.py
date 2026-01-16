@@ -18,12 +18,13 @@ from app.db.session import get_db
 from app.core.config import get_settings
 
 logger = structlog.get_logger()
-router = APIRouter(prefix="/billing", tags=["Billing"])
+router = APIRouter(tags=["Billing"])
 settings = get_settings()
 
 
 class CheckoutRequest(BaseModel):
     tier: str  # starter, growth, pro, enterprise
+    billing_cycle: str = "monthly"  # monthly, annual
     callback_url: Optional[str] = None
 
 
@@ -74,7 +75,8 @@ async def create_checkout(
         raise HTTPException(503, "Billing not configured")
 
     try:
-        from app.services.billing.paystack_billing import BillingService, PricingTier
+        from app.services.billing.paystack_billing import BillingService
+        from app.core.pricing import PricingTier
 
         # Validate tier
         try:
@@ -91,7 +93,8 @@ async def create_checkout(
             tenant_id=user.tenant_id,
             tier=tier,
             email=user.email,
-            callback_url=callback
+            callback_url=callback,
+            billing_cycle=request.billing_cycle
         )
 
         return {"checkout_url": result["url"], "reference": result["reference"]}

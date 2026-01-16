@@ -35,7 +35,7 @@ from app.schemas.connections import (
 )
 
 logger = structlog.get_logger()
-router = APIRouter(prefix="/api/v1/connections", tags=["connections"])
+router = APIRouter(tags=["connections"])
 
 
 # ==================== Helpers ====================
@@ -400,6 +400,9 @@ async def create_gcp_connection(
         project_id=data.project_id,
         service_account_json=data.service_account_json,
         auth_method=data.auth_method,
+        billing_project_id=data.billing_project_id,
+        billing_dataset=data.billing_dataset,
+        billing_table=data.billing_table,
         is_active=True,
     )
     db.add(connection)

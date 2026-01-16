@@ -5,42 +5,55 @@ import structlog
 from datetime import datetime, timezone
 from decimal import Decimal
 
+from app.core.config import get_settings
 from app.services.zombies.zombie_plugin import ZombiePlugin
 
 logger = structlog.get_logger()
-
-# Default timeouts
-PLUGIN_TIMEOUT_SECONDS = 30
-REGION_TIMEOUT_SECONDS = 120
+settings = get_settings()
 
 class BaseZombieDetector(ABC):
     """
     Abstract Base Class for multi-cloud zombie resource detection.
-    Implements the Strategy Pattern:
-    - Base class handles orchestration, aggregation, and error handling.
-    - Subclasses (strategies) handle provider-specific API calls.
+    
+    Responsibilities:
+    - Orchestrate scans across multiple plugins (Strategy Pattern).
+    - Aggregate results and calculate total waste.
+    - Handle timeouts and region-specific context.
+    - Provide a bridge between generic plugins and provider-specific clients.
     """
 
     def __init__(self, region: str = "global", credentials: Optional[Dict[str, str]] = None):
+        """
+        Initializes the detector for a specific region.
+        
+        Args:
+            region: Cloud region (e.g., 'us-east-1').
+            credentials: Optional provider-specific credentials override.
+        """
         self.region = region
         self.credentials = credentials
         self.plugins: List[ZombiePlugin] = [] 
 
     @abstractmethod
     def _initialize_plugins(self):
-        """Register provider-specific plugins."""
+        """Register provider-specific plugins for the cloud service."""
         pass
 
     @property
     @abstractmethod
     def provider_name(self) -> str:
-        """Name of the cloud provider (e.g., 'aws', 'azure', 'gcp')."""
+        """The cloud provider identifier (e.g., 'aws')."""
         pass
 
     async def scan_all(self, on_category_complete=None) -> Dict[str, Any]:
         """
-        Orchestrate the scan across all registered plugins.
-        Generic implementation for all providers.
+        Orchestrates the scan across all registered plugins in parallel.
+        
+        Args:
+            on_category_complete: Optional async callback triggered after each plugin finishing.
+            
+        Returns:
+            A dictionary containing scan results, waste metrics, and metadata.
         """
         self._initialize_plugins()
         
@@ -51,15 +64,14 @@ class BaseZombieDetector(ABC):
             "total_monthly_waste": Decimal("0"),
         }
 
-        # Initialize keys
+        # Initialize results keys for all plugins
         for plugin in self.plugins:
             results[plugin.category_key] = []
 
         try:
-            # Run plugins in parallel
+            # Run plugins in parallel with timeout protection
             tasks = [self._run_plugin_with_timeout(plugin) for plugin in self.plugins]
             
-            # Wrap for checkpoints
             async def run_and_checkpoint(task):
                 cat_key, items = await task
                 if on_category_complete:
@@ -69,11 +81,11 @@ class BaseZombieDetector(ABC):
             checkpoint_tasks = [run_and_checkpoint(t) for t in tasks]
             plugin_results = await asyncio.gather(*checkpoint_tasks)
 
-            # Aggregate
+            # Aggregate individual plugin results
             for category_key, items in plugin_results:
                 results[category_key] = items
 
-            # Calculate total waste
+            # Calculate the total monthly waste across all items
             total = Decimal("0")
             for key, items in results.items():
                 if isinstance(items, list):
@@ -96,15 +108,13 @@ class BaseZombieDetector(ABC):
         return results
 
     async def _run_plugin_with_timeout(self, plugin: ZombiePlugin) -> tuple[str, List[Dict]]:
-        """Run a single plugin with generic timeout protection."""
+        """Wraps plugin execution with a generic timeout."""
         try:
-            # Subclasses must implement how they pass session/client to plugin
-            # We delegate to an abstract method or assume plugin.scan accepts standardized context?
-            # Strategy: pass the detector itself or its specialized session property
-            
             scan_coro = self._execute_plugin_scan(plugin)
             
-            items = await asyncio.wait_for(scan_coro, timeout=PLUGIN_TIMEOUT_SECONDS)
+            # Use global timeout from settings
+            timeout = settings.ZOMBIE_PLUGIN_TIMEOUT_SECONDS
+            items = await asyncio.wait_for(scan_coro, timeout=timeout)
             return plugin.category_key, items
             
         except asyncio.TimeoutError:
@@ -117,8 +127,7 @@ class BaseZombieDetector(ABC):
     @abstractmethod
     async def _execute_plugin_scan(self, plugin: ZombiePlugin) -> List[Dict[str, Any]]:
         """
-        Execute the plugin scan using provider-specific sessions/clients.
-        Must be implemented by subclasses to bridge the generic plugin interface
-        with the specific client libraries (boto3, azure-identity, etc).
+        Performs the actual API call to the cloud provider.
+        Must be implemented by concrete subclasses to bridge to boto3, etc.
         """
         pass

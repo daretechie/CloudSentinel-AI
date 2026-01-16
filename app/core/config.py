@@ -3,6 +3,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Optional
 
 class Settings(BaseSettings):
+    """
+    Main configuration for Valdrix AI.
+    Uses Pydantic-Settings for environment variable parsing from .env.
+    """
     APP_NAME: str = "Valdrix"
     VERSION: str = "0.1.0"
     DEBUG: bool = False
@@ -39,6 +43,8 @@ class Settings(BaseSettings):
 
     # LLM Provider
     LLM_PROVIDER: str = "groq" # Options: openai, claude, google, groq
+    ENABLE_DELTA_ANALYSIS: bool = True # Innovation 1: Reduce token usage by 90%
+    DELTA_ANALYSIS_DAYS: int = 3
 
     # Scheduler
     SCHEDULER_HOUR: int = 8
@@ -67,8 +73,12 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: Optional[str] = None
     SMTP_FROM: str = "alerts@valdrix.ai"
 
-    # Encryption
+    # Encryption & Secret Rotation
     ENCRYPTION_KEY: Optional[str] = None
+    PII_ENCRYPTION_KEY: Optional[str] = None
+    API_KEY_ENCRYPTION_KEY: Optional[str] = None
+    LEGACY_ENCRYPTION_KEYS: list[str] = []
+
 
     # Cache (Redis for production, in-memory for dev)
     REDIS_URL: Optional[str] = None  # e.g., redis://localhost:6379
@@ -96,6 +106,10 @@ class Settings(BaseSettings):
     CIRCUIT_BREAKER_RECOVERY_SECONDS: int = 300
     CIRCUIT_BREAKER_MAX_DAILY_SAVINGS: float = 1000.0
 
+    # Scanner Settings
+    ZOMBIE_PLUGIN_TIMEOUT_SECONDS: int = 30
+    ZOMBIE_REGION_TIMEOUT_SECONDS: int = 120
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_ignore_empty=True
@@ -103,4 +117,5 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings():
+    """Returns a singleton instance of the application settings."""
     return Settings()

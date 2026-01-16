@@ -1,12 +1,13 @@
 from datetime import date
 from typing import Annotated
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 import structlog
 
 from app.core.auth import CurrentUser, requires_role
-from app.core.pricing import PricingTier, is_feature_enabled
+from app.core.dependencies import requires_feature
+from app.core.pricing import FeatureFlag
 from app.db.session import get_db
 from app.models.aws_connection import AWSConnection
 from app.services.adapters.aws_multitenant import MultiTenantAWSAdapter
@@ -18,91 +19,78 @@ from app.services.carbon.graviton_analyzer import GravitonAnalyzer
 router = APIRouter(tags=["GreenOps & Carbon"])
 logger = structlog.get_logger()
 
-@router.get("/carbon")
+@router.get("")
 async def get_carbon_footprint(
-  start_date: date,
-  end_date: date,
-  user: Annotated[CurrentUser, Depends(requires_role("member"))],
-  db: AsyncSession = Depends(get_db),
-  region: str = Query(default="us-east-1")
+    start_date: date,
+    end_date: date,
+    user: Annotated[CurrentUser, Depends(requires_feature(FeatureFlag.GREENOPS))],
+    db: AsyncSession = Depends(get_db),
+    region: str = Query(default="us-east-1")
 ):
-  """Calculates the estimated CO2 emissions. Requires Growth tier or higher."""
-  # Feature gating
-  user_tier = getattr(user, "tier", "starter")
-  try:
-      tier_enum = PricingTier(user_tier)
-  except ValueError:
-      tier_enum = PricingTier.STARTER
-  
-  if not is_feature_enabled(tier_enum, "greenops"):
-      return {
-          "error": "GreenOps features require Growth tier or higher.",
-          "upgrade_required": True,
-          "current_tier": user_tier
-      }
-  result = await db.execute(
-    select(AWSConnection).where(AWSConnection.tenant_id == user.tenant_id)
-  )
-  connection = result.scalar_one_or_none()
+    """Calculates the estimated CO2 emissions. Requires Growth tier or higher."""
+    result = await db.execute(
+        select(AWSConnection).where(AWSConnection.tenant_id == user.tenant_id)
+    )
+    connection = result.scalar_one_or_none()
 
-  if not connection:
-    return {"error": "No AWS connection found"}
+    if not connection:
+        raise HTTPException(400, "No AWS connection found")
 
-  adapter = MultiTenantAWSAdapter(connection)
-  cost_data = await adapter.get_gross_usage(start_date, end_date)
+    adapter = MultiTenantAWSAdapter(connection)
+    cost_data = await adapter.get_gross_usage(start_date, end_date)
 
-  calculator = CarbonCalculator()
-  results = calculator.calculate_from_costs(cost_data, region=region)
-  return results
+    calculator = CarbonCalculator()
+    results = calculator.calculate_from_costs(cost_data, region=region)
+    return results
 
-@router.get("/carbon/budget")
+@router.get("/budget")
 async def get_carbon_budget(
-  user: Annotated[CurrentUser, Depends(requires_role("member"))],
-  db: AsyncSession = Depends(get_db),
-  region: str = Query(default="us-east-1")
+    user: Annotated[CurrentUser, Depends(requires_feature(FeatureFlag.GREENOPS))],
+    db: AsyncSession = Depends(get_db),
+    region: str = Query(default="us-east-1")
 ):
-  """Get carbon budget status for the current month."""
-  result = await db.execute(
-    select(AWSConnection).where(AWSConnection.tenant_id == user.tenant_id)
-  )
-  connection = result.scalar_one_or_none()
+    """Get carbon budget status for the current month."""
+    result = await db.execute(
+        select(AWSConnection).where(AWSConnection.tenant_id == user.tenant_id)
+    )
+    connection = result.scalar_one_or_none()
 
-  if not connection:
-    return {"error": "No AWS connection found", "alert_status": "unknown"}
+    if not connection:
+        return {"error": "No AWS connection found", "alert_status": "unknown"}
 
-  today = date.today()
-  month_start = date(today.year, today.month, 1)
+    today = date.today()
+    month_start = date(today.year, today.month, 1)
 
-  settings_result = await db.execute(
-    select(CarbonSettings).where(CarbonSettings.tenant_id == user.tenant_id)
-  )
-  carbon_settings = settings_result.scalar_one_or_none()
+    settings_result = await db.execute(
+        select(CarbonSettings).where(CarbonSettings.tenant_id == user.tenant_id)
+    )
+    carbon_settings = settings_result.scalar_one_or_none()
 
-  calc_region = region
-  if carbon_settings and region == "us-east-1" and carbon_settings.default_region != "us-east-1":
-    calc_region = carbon_settings.default_region
+    calc_region = region
+    if carbon_settings and region == "us-east-1" and carbon_settings.default_region != "us-east-1":
+        calc_region = carbon_settings.default_region
 
-  adapter = MultiTenantAWSAdapter(connection)
-  cost_data = await adapter.get_gross_usage(month_start, today)
+    adapter = MultiTenantAWSAdapter(connection)
+    cost_data = await adapter.get_gross_usage(month_start, today)
 
-  calculator = CarbonCalculator()
-  carbon_result = calculator.calculate_from_costs(cost_data, region=calc_region)
+    calculator = CarbonCalculator()
+    carbon_result = calculator.calculate_from_costs(cost_data, region=calc_region)
 
-  budget_service = CarbonBudgetService(db)
-  budget_status = await budget_service.get_budget_status(
-    tenant_id=user.tenant_id,
-    month_start=month_start,
-    current_co2_kg=carbon_result["total_co2_kg"],
-  )
+    budget_service = CarbonBudgetService(db)
+    budget_status = await budget_service.get_budget_status(
+        tenant_id=user.tenant_id,
+        month_start=month_start,
+        current_co2_kg=carbon_result["total_co2_kg"],
+    )
 
-  if budget_status["alert_status"] in ["warning", "exceeded"]:
-    await budget_service.send_carbon_alert(user.tenant_id, budget_status)
+    if budget_status["alert_status"] in ["warning", "exceeded"]:
+        await budget_service.send_carbon_alert(user.tenant_id, budget_status)
 
-  return budget_status
+    return budget_status
 
 @router.get("/graviton")
 async def analyze_graviton_opportunities(
-    user: Annotated[CurrentUser, Depends(requires_role("member"))],
+    user: Annotated[CurrentUser, Depends(requires_feature(FeatureFlag.GREENOPS))],
     db: AsyncSession = Depends(get_db),
     region: str = Query(default="us-east-1"),
 ):
@@ -116,7 +104,7 @@ async def analyze_graviton_opportunities(
         return {"error": "No AWS connection found", "migration_candidates": 0}
 
     adapter = MultiTenantAWSAdapter(connection)
-    credentials = await adapter._get_credentials()
+    credentials = await adapter.get_credentials()
 
     analyzer = GravitonAnalyzer(credentials=credentials, region=region)
     analysis = await analyzer.analyze_instances()

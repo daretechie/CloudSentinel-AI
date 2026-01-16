@@ -41,6 +41,11 @@ class GCPConnection(Base):
     # Auth Method: "secret" or "workload_identity"
     auth_method: Mapped[str] = mapped_column(String, default="secret", server_default="secret")
     
+    # Billing Export Configuration (BigQuery)
+    billing_project_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    billing_dataset: Mapped[str | None] = mapped_column(String, nullable=True)
+    billing_table: Mapped[str | None] = mapped_column(String, nullable=True)
+
     # Status tracking
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -52,3 +57,7 @@ class GCPConnection(Base):
 
     # Relationships
     tenant = relationship("Tenant", backref="gcp_connections")
+
+    @property
+    def provider(self) -> str:
+        return "gcp"

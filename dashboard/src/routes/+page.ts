@@ -6,6 +6,7 @@ export const load: PageLoad = async ({ fetch, parent, url }) => {
   
   const startDate = url.searchParams.get('start_date');
   const endDate = url.searchParams.get('end_date');
+  const provider = url.searchParams.get('provider') || '';
 
   if (!user || !startDate || !endDate) {
     return {
@@ -14,7 +15,8 @@ export const load: PageLoad = async ({ fetch, parent, url }) => {
       zombies: null,
       analysis: null,
       startDate,
-      endDate
+      endDate,
+      provider
     };
   }
 
@@ -22,12 +24,14 @@ export const load: PageLoad = async ({ fetch, parent, url }) => {
     'Authorization': `Bearer ${session?.access_token}`,
   };
 
+  const providerQuery = provider ? `&provider=${provider}` : '';
+
   try {
     const [costsRes, carbonRes, zombiesRes, analyzeRes] = await Promise.all([
-      fetch(`${PUBLIC_API_URL}/costs?start_date=${startDate}&end_date=${endDate}`, { headers }),
-      fetch(`${PUBLIC_API_URL}/carbon?start_date=${startDate}&end_date=${endDate}`, { headers }),
-      fetch(`${PUBLIC_API_URL}/zombies?analyze=true`, { headers }),
-      fetch(`${PUBLIC_API_URL}/analyze?start_date=${startDate}&end_date=${endDate}`, { headers }),
+      fetch(`${PUBLIC_API_URL}/costs?start_date=${startDate}&end_date=${endDate}${providerQuery}`, { headers }),
+      fetch(`${PUBLIC_API_URL}/carbon?start_date=${startDate}&end_date=${endDate}${providerQuery}`, { headers }),
+      fetch(`${PUBLIC_API_URL}/zombies?analyze=true${providerQuery}`, { headers }),
+      fetch(`${PUBLIC_API_URL}/costs/analyze?start_date=${startDate}&end_date=${endDate}${providerQuery}`, { headers }),
     ]);
 
     const costs = costsRes.ok ? await costsRes.json() : null;
@@ -41,7 +45,8 @@ export const load: PageLoad = async ({ fetch, parent, url }) => {
       zombies,
       analysis,
       startDate,
-      endDate
+      endDate,
+      provider
     };
   } catch (err: any) {
     return {

@@ -34,13 +34,7 @@ logger = structlog.get_logger()
 settings = get_settings()
 
 
-class PricingTier(str, Enum):
-    """Available subscription tiers."""
-    TRIAL = "trial"
-    STARTER = "starter"
-    GROWTH = "growth"
-    PRO = "pro"
-    ENTERPRISE = "enterprise"
+from app.core.pricing import PricingTier
 
 
 class SubscriptionStatus(str, Enum):
@@ -197,7 +191,8 @@ class BillingService:
         tenant_id: UUID,
         tier: PricingTier,
         email: str,
-        callback_url: str
+        callback_url: str,
+        billing_cycle: str = "monthly"
     ) -> Dict[str, Any]:
         """
         Initialize Paystack transaction for subscription.
@@ -205,11 +200,18 @@ class BillingService:
         if tier == PricingTier.TRIAL:
             raise ValueError("Cannot checkout trial tier")
 
-        plan_code = self.plan_codes.get(tier)
-        amount = self.plan_amounts.get(tier)
+        is_annual = billing_cycle.lower() == "annual"
+        
+        if is_annual:
+            plan_code = self.annual_plan_codes.get(tier)
+            amount = self.annual_plan_amounts.get(tier)
+        else:
+            plan_code = self.plan_codes.get(tier)
+            amount = self.plan_amounts.get(tier)
 
         if not plan_code or not plan_code.startswith("PLN_"):
-            raise ValueError(f"Invalid plan code for tier: {tier}")
+            cycle_desc = "annual" if is_annual else "monthly"
+            raise ValueError(f"Invalid {cycle_desc} plan code for tier: {tier}")
 
         try:
             # Check existing subscription
@@ -339,12 +341,42 @@ class WebhookHandler:
     async def _handle_charge_success(self, data: Dict) -> None:
         """Handle successful charge - primary activation point."""
         metadata = data.get("metadata", {})
-        tenant_id = metadata.get("tenant_id")
+        tenant_id_str = metadata.get("tenant_id")
         tier = metadata.get("tier")
         
         customer = data.get("customer", {})
         customer_code = customer.get("customer_code")
+        customer_email = customer.get("email")
         
+        tenant_id = None
+        if tenant_id_str:
+            try:
+                tenant_id = UUID(tenant_id_str)
+            except ValueError:
+                logger.warning("invalid_tenant_id_in_metadata", tenant_id=tenant_id_str)
+
+        # FALLBACK: Lookup by Email if metadata is missing or invalid
+        if not tenant_id and customer_email:
+            from app.models.tenant import User
+            from app.core.security import generate_blind_index
+            
+            logger.info("webhook_metadata_missing_attempting_email_lookup", email=customer_email)
+            email_bidx = generate_blind_index(customer_email)
+            
+            user_result = await self.db.execute(
+                select(User).where(User.email_bidx == email_bidx)
+            )
+            user = user_result.scalar_one_or_none()
+            if user:
+                tenant_id = user.tenant_id
+                logger.info("webhook_email_lookup_success", tenant_id=str(tenant_id), email=customer_email)
+            else:
+                logger.error("webhook_email_lookup_failed", email=customer_email)
+
+        if not tenant_id:
+            logger.error("webhook_tenant_lookup_failed_no_identifier", reference=data.get("reference"))
+            return
+
         # In subscription context, data includes authorization (for future charges)
         _ = data.get("authorization", {})
         
@@ -355,25 +387,23 @@ class WebhookHandler:
             # It's a subscription payment
             result = await self.db.execute(
                 select(TenantSubscription).where(
-                    TenantSubscription.tenant_id == UUID(tenant_id)
+                    TenantSubscription.tenant_id == tenant_id
                 )
             )
             sub = result.scalar_one_or_none()
 
             if not sub:
                 import uuid
-                sub = TenantSubscription(id=uuid.uuid4(), tenant_id=UUID(tenant_id))
+                sub = TenantSubscription(id=uuid.uuid4(), tenant_id=tenant_id)
                 self.db.add(sub)
             
             sub.paystack_customer_code = customer_code
             sub.tier = tier or sub.tier
             sub.status = SubscriptionStatus.ACTIVE.value
             
-            # Note: Subscription code comes from subscription.create event or needs to be fetched
-            # But we can store what we have.
-            
             await self.db.commit()
-            logger.info("paystack_subscription_activated", tenant_id=tenant_id)
+            logger.info("paystack_subscription_activated", tenant_id=str(tenant_id))
+
 
     async def _handle_subscription_disable(self, data: Dict) -> None:
         code = data.get("subscription_code")

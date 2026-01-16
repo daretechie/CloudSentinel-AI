@@ -12,6 +12,8 @@ from datetime import datetime, timezone
 import structlog
 
 from app.models.llm import LLMUsage
+from app.services.cache import get_cache_service
+
 
 logger = structlog.get_logger()
 
@@ -173,54 +175,98 @@ class UsageTracker:
     async def check_budget(self, tenant_id: UUID) -> None:
         """
         Synchronously check if tenant has exceeded their monthly budget.
-        Raises BudgetExceededError if limit reached and hard_limit is True.
+        Raises BudgetExceededError if limit reached or if the check fails (FAIL-CLOSED).
         
         Optimized: Checks Redis first for "Blocked" status (O(1)) before hitting DB.
+        Hardened: Uses a fail-closed pattern. If Redis or DB is down, we block the request
+        to prevent unmanaged spend.
         """
         from sqlalchemy import select
         from app.models.llm import LLMBudget
         from app.core.exceptions import BudgetExceededError
-        from app.services.cache import get_cache_service
+        import aiobreaker
 
-        # 1. Fast Cache Check (Resilience against DB saturation)
-        cache = get_cache_service()
-        if cache.enabled:
-            is_blocked = await cache.client.get(f"budget_blocked:{tenant_id}")
-            if is_blocked:
-                logger.warning("llm_budget_cache_hit_blocked", tenant_id=str(tenant_id))
-                raise BudgetExceededError(
-                    message="Monthly LLM budget exceeded (cached).",
-                    details={"cached": True}
-                )
 
-        # 2. Database Check (Source of Truth)
-        result = await self.db.execute(
-            select(LLMBudget).where(LLMBudget.tenant_id == tenant_id)
-        )
-        budget = result.scalar_one_or_none()
-
-        if not budget or not budget.hard_limit:
-            return
-
-        current_usage = await self.get_monthly_usage(tenant_id)
-        limit = Decimal(str(budget.monthly_limit_usd))
-
-        if current_usage >= limit:
-            logger.error(
-                "llm_budget_hard_limit_exceeded",
-                tenant_id=str(tenant_id),
-                usage_usd=float(current_usage),
-                limit_usd=float(limit)
-            )
-            
-            # Cache the blocked status for 10 minutes to protect the DB
+        # Define the budget check logic as a nested function to be protected by a circuit breaker
+        async def _perform_check():
+            # 1. Fast Cache Check (Resilience against DB saturation)
+            cache = get_cache_service()
             if cache.enabled:
-                await cache.client.set(f"budget_blocked:{tenant_id}", "1", ex=600)
-                
-            raise BudgetExceededError(
-                message=f"Monthly LLM budget of ${limit:.2f} has been exceeded.",
-                details={"usage": float(current_usage), "limit": float(limit)}
+                try:
+                    is_blocked = await cache.client.get(f"budget_blocked:{tenant_id}")
+                    if is_blocked:
+                        logger.warning("llm_budget_cache_hit_blocked", tenant_id=str(tenant_id))
+                        raise BudgetExceededError(
+                            message="Monthly LLM budget exceeded (cached).",
+                            details={"cached": True}
+                        )
+                except BudgetExceededError:
+                    raise
+                except Exception as e:
+                    logger.error("llm_budget_cache_error", tenant_id=str(tenant_id), error=str(e))
+                    # In a fail-closed model, cache error = assume blocked if we can't verify
+                    # However, we allow falling back to DB once, unless circuit is open.
+                    raise
+
+            # 2. Database Check (Source of Truth)
+            try:
+                result = await self.db.execute(
+                    select(LLMBudget).where(LLMBudget.tenant_id == tenant_id)
+                )
+                budget = result.scalar_one_or_none()
+
+                if not budget or not budget.hard_limit:
+                    return
+
+                current_usage = await self.get_monthly_usage(tenant_id)
+                limit = Decimal(str(budget.monthly_limit_usd))
+
+                if current_usage >= limit:
+                    logger.error(
+                        "llm_budget_hard_limit_exceeded",
+                        tenant_id=str(tenant_id),
+                        usage_usd=float(current_usage),
+                        limit_usd=float(limit)
+                    )
+                    
+                    # Cache the blocked status to protect the DB
+                    if cache.enabled:
+                        try:
+                            await cache.client.set(f"budget_blocked:{tenant_id}", "1", ex=600)
+                        except Exception:
+                            pass
+                        
+                    raise BudgetExceededError(
+                        message=f"Monthly LLM budget of ${limit:.2f} has been exceeded.",
+                        details={"usage": float(current_usage), "limit": float(limit)}
+                    )
+            except BudgetExceededError:
+                raise
+            except Exception as e:
+                logger.error("llm_budget_db_error", tenant_id=str(tenant_id), error=str(e))
+                raise
+
+        # Initialize or get a circuit breaker for budget operations
+        # Normally this would be a class-level singleton, but for now we'll 
+        # use a fail-closed wrapper.
+        try:
+            await _perform_check()
+        except BudgetExceededError:
+            # Re-raise explicit budget errors
+            raise
+        except Exception as e:
+            # FAIL-CLOSED: Any technical error (Redis/DB down) results in a block
+            logger.critical(
+                "llm_budget_verification_system_failure", 
+                tenant_id=str(tenant_id), 
+                error=str(e),
+                resolution="fail_closed_blocked"
             )
+            raise BudgetExceededError(
+                message="LLM request blocked due to internal budget verification failure (Fail-Closed).",
+                details={"error": "service_unavailable", "technical_details": str(e)}
+            )
+
 
     async def _check_budget_and_alert(self, tenant_id: UUID) -> None:
         """

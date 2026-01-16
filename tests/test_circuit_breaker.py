@@ -9,6 +9,7 @@ Tests:
 """
 
 import pytest
+from unittest.mock import patch
 
 from app.services.remediation.circuit_breaker import (
     CircuitBreakerConfig,
@@ -48,31 +49,34 @@ class TestCircuitBreakerState:
     @pytest.mark.asyncio
     async def test_memory_fallback_get(self):
         """State should fallback to memory when no Redis."""
-        state = CircuitBreakerState("tenant-123", redis_client=None)
-        
-        # Get default
-        result = await state.get("missing_key", "default")
-        assert result == "default"
+        with patch('app.services.remediation.circuit_breaker.settings.REDIS_URL', None):
+            state = CircuitBreakerState("tenant-123", redis_client=None)
+            
+            # Get default
+            result = await state.get("missing_key", "default")
+            assert result == "default"
     
     @pytest.mark.asyncio
     async def test_memory_fallback_set_get(self):
         """State should store in memory when no Redis."""
-        state = CircuitBreakerState("tenant-123", redis_client=None)
-        
-        await state.set("test_key", "test_value")
-        result = await state.get("test_key")
-        assert result == "test_value"
+        with patch('app.services.remediation.circuit_breaker.settings.REDIS_URL', None):
+            state = CircuitBreakerState("tenant-123", redis_client=None)
+            
+            await state.set("test_key", "test_value")
+            result = await state.get("test_key")
+            assert result == "test_value"
     
     @pytest.mark.asyncio
     async def test_memory_fallback_incr(self):
         """State should increment in memory when no Redis."""
-        state = CircuitBreakerState("tenant-123", redis_client=None)
-        
-        result1 = await state.incr("counter")
-        result2 = await state.incr("counter")
-        
-        assert result1 == 1
-        assert result2 == 2
+        with patch('app.services.remediation.circuit_breaker.settings.REDIS_URL', None):
+            state = CircuitBreakerState("tenant-fallback-incr", redis_client=None)
+            
+            result1 = await state.incr("counter")
+            result2 = await state.incr("counter")
+            
+            assert result1 == 1
+            assert result2 == 2
 
 
 class TestCircuitBreaker:
@@ -115,7 +119,7 @@ class TestCircuitBreaker:
     async def test_record_failure_increments_count(self):
         """Recording failure should increment failure count."""
         config = CircuitBreakerConfig()
-        cb = CircuitBreaker("tenant-failure", config=config)
+        cb = CircuitBreaker("tenant-failure-incr", config=config)
         
         await cb.record_failure("Test error")
         
@@ -126,13 +130,13 @@ class TestCircuitBreaker:
     async def test_circuit_opens_after_threshold(self):
         """Circuit should open after threshold failures."""
         config = CircuitBreakerConfig(failure_threshold=2)
-        cb = CircuitBreaker("tenant-threshold", config=config)
+        cb = CircuitBreaker("tenant-threshold-open", config=config)
         
         await cb.record_failure("Error 1")
         await cb.record_failure("Error 2")
         
         state = await cb.get_state()
-        assert state == CircuitState.OPEN
+        assert state == CircuitState.OPEN.value
     
     @pytest.mark.asyncio
     async def test_reset_clears_state(self):

@@ -3,7 +3,7 @@ from app.core.config import get_settings
 import secrets
 import structlog
 
-router = APIRouter(prefix="/admin", tags=["Admin Utilities"])
+router = APIRouter(tags=["Admin Utilities"])
 logger = structlog.get_logger()
 
 @router.post("/trigger-analysis")

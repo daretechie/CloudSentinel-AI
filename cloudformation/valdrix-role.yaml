@@ -125,24 +125,32 @@ Resources:
                   - cloudwatch:GetMetricStatistics
                 Resource: '*'
 
-              # CUR Automation (Required for Phase 11)
-              - Sid: CURAutomation
+              # CUR Reading (Required for basic cost ingestion)
+              - Sid: CURRead
                 Effect: Allow
                 Action:
-                  - cur:PutReportDefinition
                   - cur:DescribeReportDefinitions
-                  - cur:ModifyReportDefinition
                 Resource: '*'
 
-              # S3 Management for automated CUR delivery
-              - Sid: S3ManagementForCUR
+              # S3 Reading for CUR delivery (strictly mapped to Valdrix prefix)
+              - Sid: S3ReadForCUR
                 Effect: Allow
                 Action:
-                  - s3:CreateBucket
-                  - s3:PutBucketPolicy
                   - s3:GetBucketPolicy
                   - s3:ListBucket
-                Resource: 'arn:aws:s3:::valdrix-cur-*'
+                  - s3:GetObject
+                Resource: 
+                  - 'arn:aws:s3:::valdrix-cur-*'
+                  - 'arn:aws:s3:::valdrix-cur-*/*'
+
+              # OPTIONAL: CUR Automation (Commented out for security)
+              # If you want Valdrix to automatically setup your Cost & Usage Report,
+              # add the following actions to a separate policy:
+              # - cur:PutReportDefinition
+              # - cur:ModifyReportDefinition
+              # - s3:CreateBucket
+              # - s3:PutBucketPolicy
+
 
       Tags:
         - Key: Purpose

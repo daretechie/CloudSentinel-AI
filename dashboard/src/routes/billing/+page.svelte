@@ -44,7 +44,7 @@
   
   async function loadSubscription() {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const session = data.session;
       if (!session) return;
       
       const res = await fetch(`${PUBLIC_API_URL}/billing/subscription`, {
@@ -69,7 +69,7 @@
     upgrading = tier;
     
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const session = data.session;
       if (!session) throw new Error('Not authenticated');
       
       const res = await fetch(`${PUBLIC_API_URL}/billing/checkout`, {

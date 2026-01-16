@@ -5,10 +5,7 @@ import asyncio
 import time
 import structlog
 from prometheus_client import Counter, Histogram
-from sqlalchemy import select
-from sqlalchemy.orm import selectinload
-from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
-
+import sqlalchemy as sa
 from app.models.tenant import Tenant
 from app.models.aws_connection import AWSConnection
 from app.core.tracing import set_correlation_id
@@ -16,6 +13,11 @@ from app.services.scheduler.cohorts import TenantCohort, get_tenant_cohort
 from app.services.scheduler.processors import AnalysisProcessor
 
 logger = structlog.get_logger()
+
+# Arbitrary constant for scheduler advisory locks
+# We use transaction-level locks to ensure they are released automatically
+SCHEDULER_LOCK_BASE_ID = 48293021
+
 
 # Prometheus Metrics
 SCHEDULER_JOB_RUNS = Counter(
@@ -44,62 +46,80 @@ class SchedulerOrchestrator:
 
     async def cohort_analysis_job(self, target_cohort: TenantCohort):
         """Enqueues analysis jobs for all tenants in a specific cohort."""
-        job_id = set_correlation_id()
+        import uuid
+        job_id = str(uuid.uuid4())
+        set_correlation_id(job_id)
         structlog.contextvars.bind_contextvars(correlation_id=job_id, job_type="scheduling", cohort=target_cohort.value)
         
         job_name = f"cohort_{target_cohort.value}_enqueue"
         start_time = time.time()
-        logger.info("scheduler_cohort_enqueue_starting", job=job_name, cohort=target_cohort.value)
 
         try:
             async with self.session_maker() as db:
-                # SQL-level Cohort Filtering (Optimization from Principal Audit)
-                # Instead of fetching ALL and filtering in Python, we filter in DB.
-                query = select(Tenant)
-                
-                if target_cohort == TenantCohort.HIGH_VALUE:
-                    query = query.where(Tenant.plan.in_(["enterprise", "pro"]))
-                elif target_cohort == TenantCohort.ACTIVE:
-                    query = query.where(Tenant.plan == "growth")
-                else: # DORMANT
-                    query = query.where(Tenant.plan.in_(["starter", "trial"]))
+                async with db.begin():
+                    # Distributed Safety: Acquire advisory lock for this cohort to prevent
+                    # multiple instances from enqueuing the same cohort.
+                    # ID derived from cohort name to avoid collision.
+                    lock_id = SCHEDULER_LOCK_BASE_ID + hash(target_cohort.value) % 1000
+                    lock_check = await db.execute(
+                        sa.text("SELECT pg_try_advisory_xact_lock(:id)"), 
+                        {"id": lock_id}
+                    )
+                    if not lock_check.scalar():
+                        logger.info("scheduler_cohort_enqueue_skipped_locked", cohort=target_cohort.value)
+                        return
 
-                result = await db.execute(query)
-                cohort_tenants = result.scalars().all()
+                    logger.info("scheduler_cohort_enqueue_starting", job=job_name, cohort=target_cohort.value)
+                    
+                    # SQL-level Cohort Filtering
+                    query = sa.select(Tenant)
+                    if target_cohort == TenantCohort.HIGH_VALUE:
+                        query = query.where(Tenant.plan.in_(["enterprise", "pro"]))
 
-                if not cohort_tenants:
-                    logger.info("scheduler_cohort_empty", cohort=target_cohort.value)
-                    return
+                    elif target_cohort == TenantCohort.ACTIVE:
+                        query = query.where(Tenant.plan == "growth")
+                    else: # DORMANT
+                        query = query.where(Tenant.plan.in_(["starter", "trial"]))
 
-                from app.services.jobs.processor import enqueue_job
-                from app.models.background_job import JobType
+                    result = await db.execute(query)
+                    cohort_tenants = result.scalars().all()
 
-                enqueue_tasks = []
-                for tenant in cohort_tenants:
-                    # Enqueue Analysis Job
-                    enqueue_tasks.append(enqueue_job(
-                        db=db,
-                        job_type=JobType.FINOPS_ANALYSIS,
-                        tenant_id=tenant.id,
-                        payload={"cohort": target_cohort.value}
-                    ))
-                    # Enqueue Zombie Scan Job
-                    enqueue_tasks.append(enqueue_job(
-                        db=db,
-                        job_type=JobType.ZOMBIE_SCAN,
-                        tenant_id=tenant.id,
-                        payload={"cohort": target_cohort.value}
-                    ))
-                    # Enqueue Cost Ingestion Job (New in Phase 11)
-                    enqueue_tasks.append(enqueue_job(
-                        db=db,
-                        job_type=JobType.COST_INGESTION,
-                        tenant_id=tenant.id,
-                        payload={"cohort": target_cohort.value}
-                    ))
+                    if not cohort_tenants:
+                        logger.info("scheduler_cohort_empty", cohort=target_cohort.value)
+                        return
 
-                await asyncio.gather(*enqueue_tasks)
-                await db.commit()
+                    from app.services.jobs.processor import enqueue_job
+                    from app.models.background_job import JobType
+
+                    # We don't gather inside the transaction to avoid holding it too long
+                    # but we need the jobs to stay in this transaction for consistency?
+                    # Actually enqueue_job does its own commit. That's a problem.
+                    # We should refactor enqueue_job to optionally take an existing session.
+                    
+                    # For now, we'll just insert them directly if in transaction
+                    for tenant in cohort_tenants:
+                        from app.models.background_job import BackgroundJob, JobStatus
+                        db.add(BackgroundJob(
+                            job_type=JobType.FINOPS_ANALYSIS.value,
+                            tenant_id=tenant.id,
+                            status=JobStatus.PENDING,
+                            scheduled_for=datetime.now(timezone.utc),
+                            created_at=datetime.now(timezone.utc)
+                        ))
+                        db.add(BackgroundJob(
+                            job_type=JobType.ZOMBIE_SCAN.value,
+                            tenant_id=tenant.id,
+                            status=JobStatus.PENDING,
+                            scheduled_for=datetime.now(timezone.utc),
+                            created_at=datetime.now(timezone.utc)
+                        ))
+                        db.add(BackgroundJob(
+                            job_type=JobType.COST_INGESTION.value,
+                            tenant_id=tenant.id,
+                            status=JobStatus.PENDING,
+                            scheduled_for=datetime.now(timezone.utc),
+                            created_at=datetime.now(timezone.utc)
+                        ))
 
             SCHEDULER_JOB_RUNS.labels(job_name=job_name, status="success").inc()
             self._last_run_success = True
@@ -116,26 +136,37 @@ class SchedulerOrchestrator:
 
     async def auto_remediation_job(self):
         """Weekly autonomous remediation sweep (Enqueues jobs)."""
-        job_id = set_correlation_id()
+        import uuid
+        job_id = str(uuid.uuid4())
+        set_correlation_id(job_id)
         structlog.contextvars.bind_contextvars(correlation_id=job_id, job_type="scheduling_remediation")
         
         async with self.session_maker() as db:
-            result = await db.execute(select(AWSConnection))
-            connections = result.scalars().all()
+            async with db.begin():
+                # Advisory lock for remediation
+                lock_id = SCHEDULER_LOCK_BASE_ID + 999
+                lock_check = await db.execute(
+                    sa.text("SELECT pg_try_advisory_xact_lock(:id)"), 
+                    {"id": lock_id}
+                )
+                if not lock_check.scalar():
+                    return
 
-            from app.services.jobs.processor import enqueue_job
-            from app.models.background_job import JobType
+                result = await db.execute(sa.select(AWSConnection))
 
-            enqueue_tasks = [
-                enqueue_job(
-                    db=db,
-                    job_type=JobType.REMEDIATION,
-                    tenant_id=conn.tenant_id,
-                    payload={"connection_id": str(conn.id), "region": conn.region}
-                ) for conn in connections
-            ]
-            await asyncio.gather(*enqueue_tasks)
-            await db.commit()
+                connections = result.scalars().all()
+
+                from app.models.background_job import BackgroundJob, JobType, JobStatus
+                for conn in connections:
+                    db.add(BackgroundJob(
+                        job_type=JobType.REMEDIATION.value,
+                        tenant_id=conn.tenant_id,
+                        payload={"connection_id": str(conn.id), "region": conn.region},
+                        status=JobStatus.PENDING,
+                        scheduled_for=datetime.now(timezone.utc),
+                        created_at=datetime.now(timezone.utc)
+                    ))
+
 
     def start(self):
         """Defines cron schedules and starts APScheduler."""

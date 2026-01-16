@@ -13,9 +13,10 @@ import structlog
 from app.core.auth import CurrentUser, get_current_user
 from app.db.session import get_db
 from app.models.remediation import RemediationRequest
+from app.core.pricing import PricingTier, requires_tier
 
 logger = structlog.get_logger()
-router = APIRouter(prefix="/leaderboards", tags=["Leaderboards"])
+router = APIRouter(tags=["Leaderboards"])
 
 
 # ============================================================
@@ -42,6 +43,7 @@ class LeaderboardResponse(BaseModel):
 # ============================================================
 
 @router.get("", response_model=LeaderboardResponse)
+@requires_tier(PricingTier.GROWTH, PricingTier.PRO, PricingTier.ENTERPRISE, PricingTier.TRIAL)
 async def get_leaderboard(
     period: str = Query("30d", pattern="^(7d|30d|90d|all)$"),
     current_user: CurrentUser = Depends(get_current_user),

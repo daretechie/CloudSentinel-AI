@@ -145,20 +145,31 @@ resource "aws_iam_role_policy" "cost_explorer" {
         Resource = "*"
       },
       {
-        Sid    = "CURAutomation"
+        Sid    = "CURRead"
         Effect = "Allow"
-        Action = ["cur:PutReportDefinition", "cur:DescribeReportDefinitions", "cur:ModifyReportDefinition"]
+        Action = ["cur:DescribeReportDefinitions"]
         Resource = "*"
       },
       {
-        Sid    = "S3ManagementForCUR"
+        Sid    = "S3ReadForCUR"
         Effect = "Allow"
-        Action = ["s3:CreateBucket", "s3:PutBucketPolicy", "s3:GetBucketPolicy", "s3:ListBucket"]
-        Resource = "arn:aws:s3:::valdrix-cur-*"
+        Action = ["s3:GetBucketPolicy", "s3:ListBucket", "s3:GetObject"]
+        Resource = [
+          "arn:aws:s3:::valdrix-cur-*",
+          "arn:aws:s3:::valdrix-cur-*/*"
+        ]
       }
+      # OPTIONAL: CUR Automation (Commented out for security)
+      # If you want Valdrix to automatically setup your Cost & Usage Report,
+      # add the following actions to a separate policy:
+      # - "cur:PutReportDefinition",
+      # - "cur:ModifyReportDefinition",
+      # - "s3:CreateBucket",
+      # - "s3:PutBucketPolicy"
     ]
   })
 }
+
 
 # ---------------------------------------------------------
 # INFRASTRUCTURE RELIABILITY: RDS BACKUP POLICY

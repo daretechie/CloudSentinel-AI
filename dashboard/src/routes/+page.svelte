@@ -17,6 +17,7 @@
   import { api } from '$lib/api';
   import { goto } from '$app/navigation';
   import DateRangePicker from '$lib/components/DateRangePicker.svelte';
+  import ProviderSelector from '$lib/components/ProviderSelector.svelte';
   
   let { data } = $props();
   
@@ -28,6 +29,7 @@
   let error = $derived(data.error || '');
   let startDate = $derived(data.startDate || '');
   let endDate = $derived(data.endDate || '');
+  let provider = $derived(data.provider || ''); // Default to empty (All)
   
   const supabase = createSupabaseBrowserClient();
 
@@ -43,13 +45,13 @@
     remediating = finding.resource_id;
     
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('Not authenticated');
+      const accessToken = data.session?.access_token;
+      if (!accessToken) throw new Error('Not authenticated');
       
       const response = await fetch(`${PUBLIC_API_URL}/zombies/request`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${session.access_token}`,
+          'Authorization': `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -85,10 +87,33 @@
 
   function handleDateChange(dates: { startDate: string; endDate: string }) {
     if (dates.startDate === startDate && dates.endDate === endDate) return;
-    goto(`?start_date=${dates.startDate}&end_date=${dates.endDate}`, { 
+    const providerQuery = provider ? `&provider=${provider}` : '';
+    goto(`?start_date=${dates.startDate}&end_date=${dates.endDate}${providerQuery}`, { 
       keepFocus: true, 
       noScroll: true,
       replaceState: true 
+    });
+  }
+
+  function handleProviderChange(selectedProvider: string) {
+    if (selectedProvider === provider) return;
+    
+    // Preserve date range if exists
+    let query = '';
+    if (startDate && endDate) {
+      query = `?start_date=${startDate}&end_date=${endDate}`;
+    } else {
+        query = '?';
+    }
+    
+    if (selectedProvider) {
+        query += query === '?' ? `provider=${selectedProvider}` : `&provider=${selectedProvider}`;
+    }
+    
+    goto(query, {
+      keepFocus: true,
+      noScroll: true,
+      replaceState: true
     });
   }
   
@@ -160,6 +185,12 @@
           <h1 class="text-2xl font-bold mb-1">Dashboard</h1>
           <p class="text-ink-400 text-sm">Overview of your cloud infrastructure</p>
         </div>
+        
+        <!-- Provider Selector -->
+        <ProviderSelector 
+          selectedProvider={provider}
+          onSelect={handleProviderChange}
+        />
       </div>
       
       <DateRangePicker onDateChange={handleDateChange} />

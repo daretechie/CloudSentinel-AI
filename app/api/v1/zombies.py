@@ -8,13 +8,12 @@ import structlog
 
 from app.core.auth import CurrentUser, requires_role
 from app.db.session import get_db
-from app.models.aws_connection import AWSConnection
-from app.services.adapters.aws_multitenant import MultiTenantAWSAdapter
 from app.models.remediation import RemediationAction
-from app.core.tier_guard import TierGuard, FeatureFlag
 from app.services.zombies import ZombieService, RemediationService
+from app.core.dependencies import requires_feature
+from app.core.pricing import FeatureFlag
 
-router = APIRouter(prefix="/zombies", tags=["Cloud Hygiene (Zombies)"])
+router = APIRouter(tags=["Cloud Hygiene (Zombies)"])
 logger = structlog.get_logger()
 
 # --- Schemas ---
@@ -55,18 +54,11 @@ async def scan_zombies(
 @router.post("/request")
 async def create_remediation_request(
     request: RemediationRequestCreate,
-    user: Annotated[CurrentUser, Depends(requires_role("member"))],
+    user: Annotated[CurrentUser, Depends(requires_feature(FeatureFlag.AUTO_REMEDIATION))],
     db: AsyncSession = Depends(get_db),
     region: str = Query(default="us-east-1"),
 ):
     """Create a remediation request. Requires Pro tier or higher."""
-    async with TierGuard(user, db) as guard:
-        if not guard.has(FeatureFlag.AUTO_REMEDIATION):
-            raise HTTPException(
-                status_code=403,
-                detail="Auto-remediation requires Pro tier or higher. Please upgrade."
-            )
-    
     try:
         action_enum = RemediationAction(request.action)
     except ValueError:
@@ -130,27 +122,29 @@ async def approve_remediation(
 @router.post("/execute/{request_id}")
 async def execute_remediation(
     request_id: UUID,
-    user: Annotated[CurrentUser, Depends(requires_role("admin"))],
+    user: Annotated[CurrentUser, Depends(requires_feature(FeatureFlag.AUTO_REMEDIATION))],
     db: AsyncSession = Depends(get_db),
     region: str = Query(default="us-east-1"),
 ):
     """Execute a remediation request. Requires Pro tier or higher."""
-    async with TierGuard(user, db) as guard:
-        if not guard.has(FeatureFlag.AUTO_REMEDIATION):
-            raise HTTPException(
-                status_code=403,
-                detail="Auto-remediation requires Pro tier or higher. Please upgrade."
-            )
+    # Note: requires_feature(FeatureFlag.AUTO_REMEDIATION) also checks for isAdmin via requires_role inside the dependency if we wanted, 
+    # but here we just need Pro tier. We can chain them or assume Pro implies some admin rights for execution.
+    # Actually, requires_role("admin") is better for /execute.
+    # I'll chain them if possible or just use both.
+    
+    # Check admin role
+    if user.role != "admin":
+         raise HTTPException(status_code=403, detail="Only admins can execute remediation.")
 
+    from app.models.aws_connection import AWSConnection
+    from app.services.adapters.aws_multitenant import MultiTenantAWSAdapter
+    
     result = await db.execute(select(AWSConnection).where(AWSConnection.tenant_id == user.tenant_id))
     connection = result.scalar_one_or_none()
     if not connection:
         raise HTTPException(400, "No AWS connection")
 
     adapter = MultiTenantAWSAdapter(connection)
-    # Refactored: Fetching credentials via public service/adapter methods if needed, 
-    # but here we pass them to RemediationService.
-    # TODO: Refactor RemediationService to fetch credentials internally using connection_id
     credentials = await adapter.get_credentials() 
     service = RemediationService(db=db, region=region, credentials=credentials)
 

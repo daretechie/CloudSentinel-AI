@@ -113,6 +113,10 @@ class AWSConnection(Base):
     # Relationship to tenant
     tenant = relationship("Tenant", back_populates="aws_connections")
 
+    @property
+    def provider(self) -> str:
+        return "aws"
+
     def __repr__(self):
         return f"<AWSConnection {self.aws_account_id} ({self.status})>"
 

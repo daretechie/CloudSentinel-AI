@@ -1,36 +1,82 @@
 import hashlib
 import hmac
 import base64
-from cryptography.fernet import Fernet
+from cryptography.fernet import Fernet, MultiFernet
+from typing import Optional, List
+
 from app.core.config import get_settings
 
 settings = get_settings()
 
-def _get_fernet() -> Fernet:
-    """Helper to initialize Fernet with the app's encryption key."""
-    settings = get_settings()
-    # Fernet requires a 32-byte base64 encoded key.
-    # We derive this from the ENCRYPTION_KEY string.
-    key = hashlib.sha256(settings.ENCRYPTION_KEY.encode()).digest()
-    return Fernet(base64.urlsafe_b64encode(key))
+def _get_multi_fernet(primary_key: Optional[str], legacy_keys: Optional[List[str]] = None) -> MultiFernet:
+    """
+    Returns a MultiFernet instance for secret rotation.
+    Encodes/derives keys as needed.
+    """
+    all_keys = [primary_key] if primary_key else []
+    if legacy_keys:
+        all_keys.extend(legacy_keys)
+    
+    if not all_keys:
+        # Fallback to a development key if nothing is configured
+        all_keys = ["dev_fallback_key_do_not_use_in_prod"]
 
-def encrypt_string(value: str) -> str:
-    """Symmetrically encrypt a string (for API keys, etc)."""
-    if not value or value == "":
+    fernet_instances = []
+    for k in all_keys:
+        # Derive 32-byte key from arbitrary string
+        key_bytes = hashlib.sha256(k.encode()).digest()
+        fernet_instances.append(Fernet(base64.urlsafe_b64encode(key_bytes)))
+    
+    return MultiFernet(fernet_instances)
+
+def _get_api_key_fernet() -> MultiFernet:
+    settings = get_settings()
+    return _get_multi_fernet(
+        settings.API_KEY_ENCRYPTION_KEY or settings.ENCRYPTION_KEY,
+        settings.LEGACY_ENCRYPTION_KEYS
+    )
+
+def _get_pii_fernet() -> MultiFernet:
+    settings = get_settings()
+    return _get_multi_fernet(
+        settings.PII_ENCRYPTION_KEY or settings.ENCRYPTION_KEY,
+        settings.LEGACY_ENCRYPTION_KEYS
+    )
+
+def encrypt_string(value: str, context: str = "generic") -> str:
+    """Symmetrically encrypt a string with rotation support."""
+    if not value:
         return None
-    f = _get_fernet()
+    
+    if context == "api_key":
+        f = _get_api_key_fernet()
+    elif context == "pii":
+        f = _get_pii_fernet()
+    else:
+        settings = get_settings()
+        f = _get_multi_fernet(settings.ENCRYPTION_KEY, settings.LEGACY_ENCRYPTION_KEYS)
+        
     return f.encrypt(value.encode()).decode()
 
-def decrypt_string(value: str) -> str:
-    """Symmetrically decrypt a string."""
-    if not value or value == "":
+def decrypt_string(value: str, context: str = "generic") -> str:
+    """Symmetrically decrypt a string with rotation support."""
+    if not value:
         return None
-    f = _get_fernet()
+        
     try:
+        if context == "api_key":
+            f = _get_api_key_fernet()
+        elif context == "pii":
+            f = _get_pii_fernet()
+        else:
+            settings = get_settings()
+            f = _get_multi_fernet(settings.ENCRYPTION_KEY, settings.LEGACY_ENCRYPTION_KEYS)
+            
         return f.decrypt(value.encode()).decode()
     except Exception:
-        # If decryption fails (e.g., bad key), return None instead of crashing
+        # If decryption fails with all keys, return None
         return None
+
 
 def generate_blind_index(value: str) -> str:
     """
@@ -50,3 +96,7 @@ def generate_blind_index(value: str) -> str:
     normalized_value = str(value).strip().lower()
     
     return hmac.new(key, normalized_value.encode(), hashlib.sha256).hexdigest()
+
+def generate_new_key() -> str:
+    """Generate a new Fernet key."""
+    return Fernet.generate_key().decode()

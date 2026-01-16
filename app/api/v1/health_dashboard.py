@@ -26,7 +26,7 @@ from app.models.background_job import BackgroundJob, JobStatus
 from app.models.aws_connection import AWSConnection
 
 logger = structlog.get_logger()
-router = APIRouter(prefix="/admin/health-dashboard", tags=["Investor Health"])
+router = APIRouter(tags=["Investor Health"])
 
 
 class SystemHealth(BaseModel):

@@ -11,9 +11,9 @@ from app.models.tenant import Tenant, User
 class OnboardRequest(BaseModel):
     tenant_name: str
 
-router = APIRouter(prefix="/api/v1", tags=["onboarding"])
+router = APIRouter(tags=["onboarding"])
 
-@router.post("/onboard")
+@router.post("")
 async def onboard(
     request: OnboardRequest,  # Contains: tenant_name
     user: CurrentUser = Depends(get_current_user_from_jwt),  # No DB check

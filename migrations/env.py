@@ -17,6 +17,8 @@ from app.models.cloud import CostRecord  # noqa: F401
 from app.models.notification_settings import NotificationSettings  # noqa: F401
 from app.models.remediation import RemediationRequest  # noqa: F401
 from app.models.remediation_settings import RemediationSettings  # noqa: F401
+from app.models.azure_connection import AzureConnection  # noqa: F401
+from app.models.gcp_connection import GCPConnection  # noqa: F401
 from app.models.tenant import User, Tenant  # noqa: F401
 
 from app.core.config import get_settings

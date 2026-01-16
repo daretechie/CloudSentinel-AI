@@ -21,7 +21,7 @@ from app.models.background_job import BackgroundJob, JobStatus, JobType
 from app.services.jobs.processor import JobProcessor, enqueue_job
 import structlog
 
-router = APIRouter(prefix="/jobs", tags=["Background Jobs"])
+router = APIRouter(tags=["Background Jobs"])
 logger = structlog.get_logger()
 
 

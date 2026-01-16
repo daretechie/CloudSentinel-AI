@@ -113,7 +113,10 @@ class JobProcessor:
         return results
     
     async def _fetch_pending_jobs(self, limit: int) -> list[BackgroundJob]:
-        """Fetch pending jobs that are ready to run."""
+        """
+        Fetch pending jobs that are ready to run.
+        Uses SELECT FOR UPDATE SKIP LOCKED for high-concurrency safety.
+        """
         now = datetime.now(timezone.utc)
         
         result = await self.db.execute(
@@ -125,10 +128,11 @@ class JobProcessor:
             )
             .order_by(BackgroundJob.scheduled_for)
             .limit(limit)
+            .with_for_update(skip_locked=True)
         )
         found = list(result.scalars().all())
-        print(f"DEBUG: Found {len(found)} due jobs")
         return found
+
     
     async def _process_single_job(self, job: BackgroundJob) -> None:
         """Process a single job with error handling."""
@@ -282,16 +286,21 @@ class JobProcessor:
 
         async def checkpoint_result(category_key, items):
             """Durable checkpoint: save partial results to DB."""
-            # Note: This simple checkpointing might need locking if parallel scans write to same payload key
-            # ideally we namespace checks by connection_id
-            pass 
+            if not job.payload:
+                job.payload = {}
+            if "partial_scan" not in job.payload:
+                job.payload["partial_scan"] = {}
+            
+            job.payload["partial_scan"][category_key] = items
+            # We don't commit here to avoid frequent DB writes; 
+            # ideally we'd commit every few seconds or per category
+            # but for MVP we rely on final commit.
+            # await db.commit() 
 
         # 2. Iterate and Scan
         for conn in connections:
             try:
                 # Determine regions to scan for this connection
-                # Logic: If regions specified in payload, intersection with connection region?
-                # Multi-cloud usually implies global or connection-specific region context
                 target_regions = regions if regions and hasattr(conn, "region") else [getattr(conn, "region", "global")]
                 
                 for region in target_regions:
@@ -305,17 +314,14 @@ class JobProcessor:
                     total_waste += conn_waste
                     
                     # Count items (flat list of dicts in result values)
-                    count = 0
-                    for key, val in results.items():
-                        if isinstance(val, list):
-                            count += len(val)
+                    count = sum(len(val) for key, val in results.items() if isinstance(val, list))
                     total_zombies += count
                     
                     scan_results.append({
                         "connection_id": str(conn.id),
                         "provider": detector.provider_name,
                         "region": region,
-                        "waste": conn_waste,
+                        "waste": float(conn_waste),
                         "zombies": count
                     })
 
@@ -326,27 +332,8 @@ class JobProcessor:
         return {
             "status": "completed",
             "zombies_found": total_zombies,
-            "total_waste": total_waste,
+            "total_waste": float(total_waste),
             "details": scan_results
-        }
-        
-        async def checkpoint_result(category_key, items):
-            """Durable checkpoint: save partial results to DB."""
-            if not job.payload:
-                job.payload = {}
-            if "partial_scan" not in job.payload:
-                job.payload["partial_scan"] = {}
-            
-            job.payload["partial_scan"][category_key] = items
-            await db.commit()
-
-        detector = ZombieDetector(region=regions[0], credentials=creds)
-        results = await detector.scan_all(on_category_complete=checkpoint_result)
-        
-        return {
-            "status": "completed",
-            "zombies_found": sum(len(r.get("items", [])) if isinstance(r.get("items"), list) else 0 for r in results.get("regions", []) if isinstance(r, dict)) if "regions" in results else sum(len(items) for items in results.values() if isinstance(items, list)),
-            "total_waste": results.get("total_monthly_waste", 0)
         }
 
     async def _handle_remediation(
@@ -487,6 +474,29 @@ class JobProcessor:
         persistence = CostPersistenceService(db)
         results = []
         
+        # Upsert CloudAccount for each connection to satisfy FK and enable filtering
+        from app.models.cloud import CloudAccount
+        from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+        for conn in connections:
+             stmt = pg_insert(CloudAccount).values(
+                 id=conn.id,
+                 tenant_id=conn.tenant_id,
+                 provider=conn.provider,
+                 name=getattr(conn, "name", f"{conn.provider.upper()} Connection"),
+                 credentials_encrypted="managed_by_connection_table",
+                 is_active=True
+             ).on_conflict_do_update(
+                 index_elements=['id'],
+                 set_={
+                     "provider": conn.provider,
+                     "name": getattr(conn, "name", f"{conn.provider.upper()} Connection"),
+                     "updated_at": datetime.now(timezone.utc)
+                 }
+             )
+             await db.execute(stmt)
+        await db.commit()
+        
         # 2. Process each connection via its appropriate adapter
         for conn in connections:
             try:
@@ -511,8 +521,10 @@ class JobProcessor:
                     total_cost = 0.0
                     by_service = {}
                     
-                    provider_name = getattr(conn, "provider", "unknown").lower()
-                    if hasattr(conn, "aws_account_id"): provider_name = "aws" # Fallback for AWSConnection
+                    total_cost = 0.0
+                    by_service = {}
+                    
+                    provider_name = conn.provider
                     
                     for row in raw_costs:
                         amount = Decimal(str(row["cost_usd"]))

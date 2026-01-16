@@ -21,7 +21,11 @@
   // Azure/GCP specific
   let azureSubscriptionId = $state('');
   let azureTenantId = $state('');
+  let azureClientId = $state('');
   let gcpProjectId = $state('');
+  let gcpBillingProjectId = $state('');
+  let gcpBillingDataset = $state('');
+  let gcpBillingTable = $state('');
   let cloudShellSnippet = $state('');
 
   let isLoading = $state(false);
@@ -35,10 +39,9 @@
   const API_URL = PUBLIC_API_URL || 'http://localhost:8000';
   const supabase = createSupabaseBrowserClient();
   
-  // Get access token from Supabase session
+  // Get access token from server-loaded session (avoids getSession warning)
   async function getAccessToken(): Promise<string | null> {
-    const { data: { session } } = await supabase.auth.getSession();
-    return session?.access_token ?? null;
+    return data.session?.access_token ?? null;
   }
   
   // Ensure user is onboarded in our database (creates user + tenant)
@@ -50,7 +53,7 @@
     }
     
     try {
-      const res = await fetch(`${API_URL}/api/v1/onboard`, {
+      const res = await fetch(`${API_URL}/onboard`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -86,7 +89,7 @@
                        selectedProvider === 'azure' ? '/connections/azure/setup' : 
                        '/connections/gcp/setup';
 
-      const res = await fetch(`${API_URL}/api/v1${endpoint}`, {
+      const res = await fetch(`${API_URL}${endpoint}`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -156,14 +159,14 @@
     if (selectedProvider === 'aws') {
       currentStep = 2; // For AWS, proceed to the verification input step
     } else if (selectedProvider === 'azure') {
-      if (!azureTenantId || !azureSubscriptionId) {
-        error = 'Please enter both Tenant ID and Subscription ID';
+      if (!azureTenantId || !azureSubscriptionId || !azureClientId) {
+        error = 'Please enter Tenant ID, Subscription ID, and Client ID';
         return;
       }
       isVerifying = true;
       try {
         const token = await getAccessToken();
-        const res = await fetch(`${API_URL}/api/v1/connections/azure`, {
+        const res = await fetch(`${API_URL}/connections/azure`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -173,7 +176,7 @@
             name: `Azure-${azureSubscriptionId.slice(0, 8)}`,
             azure_tenant_id: azureTenantId,
             subscription_id: azureSubscriptionId,
-            client_id: '<YOUR_CLIENT_ID>', 
+            client_id: azureClientId, 
             auth_method: 'workload_identity'
           })
         });
@@ -195,7 +198,7 @@
       isVerifying = true;
       try {
         const token = await getAccessToken();
-        const res = await fetch(`${API_URL}/api/v1/connections/gcp`, {
+        const res = await fetch(`${API_URL}/connections/gcp`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -204,6 +207,9 @@
           body: JSON.stringify({
             name: `GCP-${gcpProjectId}`,
             project_id: gcpProjectId,
+            billing_project_id: gcpBillingProjectId || gcpProjectId,
+            billing_dataset: gcpBillingDataset,
+            billing_table: gcpBillingTable,
             auth_method: 'workload_identity'
           })
         });
@@ -247,7 +253,7 @@
         return;
       }
       
-      const createRes = await fetch(`${API_URL}/api/v1/connections/aws`, {
+      const createRes = await fetch(`${API_URL}/connections/aws`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -270,7 +276,7 @@
       
       const connection = await createRes.json();
       
-      const verifyRes = await fetch(`${API_URL}/api/v1/connections/aws/${connection.id}/verify`, {
+      const verifyRes = await fetch(`${API_URL}/connections/aws/${connection.id}/verify`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` },
       });
@@ -526,6 +532,10 @@
             <label for="azSub">Subscription ID</label>
             <input type="text" id="azSub" bind:value={azureSubscriptionId} placeholder="00000000-0000-0000-0000-000000000000" />
           </div>
+          <div class="form-group">
+            <label for="azClient">Application (Client) ID</label>
+            <input type="text" id="azClient" bind:value={azureClientId} placeholder="00000000-0000-0000-0000-000000000000" />
+          </div>
         </div>
 
         <div class="info-box mb-6">
@@ -540,16 +550,35 @@
         <h2>Step 2: Connect Google Cloud</h2>
         <p class="mb-6">Connect using <strong>Identity Federation</strong>.</p>
 
-        <div class="form-group mb-8">
+        <div class="form-group mb-5">
           <label for="gcpProject">GCP Project ID</label>
           <input type="text" id="gcpProject" bind:value={gcpProjectId} placeholder="my-awesome-project" />
+        </div>
+
+        <div class="p-4 rounded-xl bg-ink-900 border border-ink-800 mb-8">
+          <h4 class="text-xs font-bold text-accent-400 uppercase tracking-wider mb-4">BigQuery Cost Export (Required for FinOps)</h4>
+          <div class="space-y-4">
+            <div class="form-group">
+              <label for="gcpBillingProject">Billing Data Project ID (Optional)</label>
+              <input type="text" id="gcpBillingProject" bind:value={gcpBillingProjectId} placeholder={gcpProjectId || 'GCP Project ID'} />
+              <p class="text-[10px] text-ink-500">Project where the BigQuery dataset resides (defaults to the project ID above).</p>
+            </div>
+            <div class="form-group">
+              <label for="gcpBillingDataset">BigQuery Dataset ID</label>
+              <input type="text" id="gcpBillingDataset" bind:value={gcpBillingDataset} placeholder="billing_dataset" />
+            </div>
+            <div class="form-group">
+              <label for="gcpBillingTable">BigQuery Table ID</label>
+              <input type="text" id="gcpBillingTable" bind:value={gcpBillingTable} placeholder="gcp_billing_export_resource_v1_..." />
+            </div>
+          </div>
         </div>
 
         <div class="info-box mb-6">
           <h4 class="text-sm font-bold mb-2">🚀 Magic Snippet</h4>
           <p class="text-xs text-ink-400 mb-3">Run this gcloud command in your GCP Console.</p>
           <div class="bg-black/50 p-3 rounded font-mono text-xs break-all text-yellow-400">
-            gcloud iam workload-identity-pools create "valdrix-pool" ... (Snippet coming soon)
+            {cloudShellSnippet || '# Establishing Workload Identity Trust... (Wait for initialization)'}
           </div>
         </div>
       {/if}
@@ -751,9 +780,6 @@
     margin-bottom: 0.5rem;
   }
 
-  .logo-circle.aws { background: rgba(255, 153, 0, 0.1); color: #FF9900; }
-  .logo-circle.azure { background: rgba(0, 120, 212, 0.1); color: #0078D4; }
-  .logo-circle.gcp { background: rgba(66, 133, 244, 0.1); color: #4284F4; }
 
   .provider-card h3 {
     font-size: 1.1rem;
@@ -847,16 +873,6 @@
     margin: 1rem 0;
   }
   
-  .external-id {
-    display: block;
-    font-size: 0.9rem;
-    padding: 0.5rem;
-    background: #000;
-    border-radius: 4px;
-    word-break: break-all;
-    margin-top: 0.5rem;
-    font-family: monospace;
-  }
   
   .code-container {
     border: 1px solid var(--border, #333);
@@ -906,57 +922,12 @@
     white-space: pre-wrap;
   }
   
-  .permissions-accordion {
-    margin: 1rem 0;
-    padding: 1rem;
-    background: var(--bg-secondary, #0f0f1a);
-    border-radius: 8px;
-  }
-  
-  .permissions-accordion summary {
-    cursor: pointer;
-    font-weight: 500;
-  }
-  
-  .permissions-accordion ul {
-    margin-top: 1rem;
-    padding-left: 1.5rem;
-  }
-  
-  .permissions-accordion li {
-    margin: 0.5rem 0;
-    font-size: 0.9rem;
-    color: var(--text-muted, #888);
-  }
-  
-  .instructions {
-    margin: 1.5rem 0;
-    padding: 1rem;
-    background: var(--bg-secondary, #0f0f1a);
-    border-radius: 8px;
-  }
-  
-  .instructions h3 {
-    margin-bottom: 0.5rem;
-  }
-  
-  .instructions ol {
-    padding-left: 1.5rem;
-  }
-  
-  .instructions li {
-    margin: 0.5rem 0;
-  }
-  
-  .instructions a {
-    color: var(--primary, #6366f1);
-  }
   
   .form-group {
     margin: 1rem 0;
   }
   
-  label, .label-text {
+  label {
     display: block;
     margin-bottom: 0.5rem;
     font-weight: 500;
@@ -1027,9 +998,4 @@
     margin-bottom: 1rem;
   }
   
-  .loading {
-    text-align: center;
-    padding: 2rem;
-    color: var(--text-muted, #888);
-  }
 </style>

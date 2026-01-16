@@ -80,7 +80,8 @@ jobs:
         run: bandit -r app -ll -ii -s B101,B104
 
       - name: Run Safety (Dependencies)
-        run: safety check || true # Allow failure for now until cleanup
+        run: safety check
+
 
       - name: TruffleHog Secret Scan
         uses: trufflesecurity/trufflehog@main

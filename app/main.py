@@ -60,6 +60,7 @@ async def lifespan(app: FastAPI):
         measure_power_secs=300,
         save_to_file=True,
         output_dir="data",
+        allow_multiple_runs=True,
     )
     tracker.start()
     app.state.emissions_tracker = tracker
@@ -146,30 +147,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Root/Health check (legacy support or moved)
-@app.get("/health", tags=["Infrastructure"])
-async def health_check():
-    """Heartbeat endpoint."""
-    scheduler_status = app.state.scheduler.get_status()
-    return {
-        "status": "active",
-        "app": settings.APP_NAME,
-        "version": settings.VERSION,
-        "scheduler": scheduler_status,
-    }
-
 # Register Routers
-app.include_router(onboard_router)
-app.include_router(connections_router)
-app.include_router(settings_router)
-app.include_router(leaderboards_router)
-app.include_router(costs_router)
-app.include_router(carbon_router)
-app.include_router(zombies_router)
-app.include_router(admin_router)
-app.include_router(billing_router)
-app.include_router(audit_router)
-app.include_router(jobs_router)
-app.include_router(health_dashboard_router)
-app.include_router(usage_router)
+app.include_router(onboard_router, prefix="/api/v1/onboard")
+app.include_router(connections_router, prefix="/api/v1/connections")
+app.include_router(settings_router, prefix="/api/v1/settings")
+app.include_router(leaderboards_router, prefix="/api/v1/leaderboards")
+app.include_router(costs_router, prefix="/api/v1/costs")
+app.include_router(carbon_router, prefix="/api/v1/carbon")
+app.include_router(zombies_router, prefix="/api/v1/zombies")
+app.include_router(admin_router, prefix="/api/v1/admin")
+app.include_router(billing_router, prefix="/api/v1/billing")
+app.include_router(audit_router, prefix="/api/v1/audit")
+app.include_router(jobs_router, prefix="/api/v1/jobs")
+app.include_router(health_dashboard_router, prefix="/api/v1/admin/health-dashboard")
+app.include_router(usage_router, prefix="/api/v1/usage")
 app.include_router(oidc_router)

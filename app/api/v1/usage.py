@@ -24,7 +24,7 @@ from app.models.llm import LLMUsage, LLMBudget
 from app.models.background_job import BackgroundJob, JobType, JobStatus
 
 logger = structlog.get_logger()
-router = APIRouter(prefix="/usage", tags=["Usage Metering"])
+router = APIRouter(tags=["Usage Metering"])
 
 
 class LLMUsageMetrics(BaseModel):

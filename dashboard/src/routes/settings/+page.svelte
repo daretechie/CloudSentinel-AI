@@ -25,9 +25,8 @@
   let success = $state('');
   
   async function getHeaders() {
-    const { data: { session } } = await supabase.auth.getSession();
     return {
-      'Authorization': `Bearer ${session?.access_token}`,
+      'Authorization': `Bearer ${data.session?.access_token}`,
       'Content-Type': 'application/json',
     };
   }
@@ -35,7 +34,7 @@
   async function loadSettings() {
     try {
       const headers = await getHeaders();
-      const res = await fetch(`${PUBLIC_API_URL}/api/v1/settings/notifications`, { headers });
+      const res = await fetch(`${PUBLIC_API_URL}/settings/notifications`, { headers });
       if (res.ok) {
         settings = await res.json();
       }
@@ -52,7 +51,7 @@
     success = '';
     try {
       const headers = await getHeaders();
-      const res = await fetch(`${PUBLIC_API_URL}/api/v1/settings/notifications`, {
+      const res = await fetch(`${PUBLIC_API_URL}/settings/notifications`, {
         method: 'PUT',
         headers,
         body: JSON.stringify(settings),
@@ -123,7 +122,7 @@
     
     try {
       const headers = await getHeaders();
-      const res = await fetch(`${PUBLIC_API_URL}/api/v1/settings/notifications/test-slack`, {
+      const res = await fetch(`${PUBLIC_API_URL}/settings/notifications/test-slack`, {
         method: 'POST',
         headers,
       });
@@ -157,7 +156,7 @@
   async function loadCarbonSettings() {
     try {
       const headers = await getHeaders();
-      const res = await fetch(`${PUBLIC_API_URL}/api/v1/settings/carbon`, { headers });
+      const res = await fetch(`${PUBLIC_API_URL}/settings/carbon`, { headers });
       
       if (res.ok) {
         carbonSettings = await res.json();
@@ -176,7 +175,7 @@
     
     try {
       const headers = await getHeaders();
-      const res = await fetch(`${PUBLIC_API_URL}/api/v1/settings/carbon`, {
+      const res = await fetch(`${PUBLIC_API_URL}/settings/carbon`, {
         method: 'PUT',
         headers,
         body: JSON.stringify(carbonSettings),
@@ -198,7 +197,7 @@
 
   async function loadModels() {
     try {
-      const res = await fetch(`${PUBLIC_API_URL}/api/v1/settings/llm/models`);
+      const res = await fetch(`${PUBLIC_API_URL}/settings/llm/models`);
       if (res.ok) {
         providerModels = await res.json();
       }
@@ -210,7 +209,7 @@
   async function loadLLMSettings() {
     try {
       const headers = await getHeaders();
-      const res = await fetch(`${PUBLIC_API_URL}/api/v1/settings/llm`, { headers });
+      const res = await fetch(`${PUBLIC_API_URL}/settings/llm`, { headers });
       
       if (res.ok) {
         llmSettings = await res.json();
@@ -229,7 +228,7 @@
     
     try {
       const headers = await getHeaders();
-      const res = await fetch(`${PUBLIC_API_URL}/api/v1/settings/llm`, {
+      const res = await fetch(`${PUBLIC_API_URL}/settings/llm`, {
         method: 'PUT',
         headers,
         body: JSON.stringify(llmSettings),
@@ -252,7 +251,7 @@
   async function loadActiveOpsSettings() {
     try {
       const headers = await getHeaders();
-      const res = await fetch(`${PUBLIC_API_URL}/api/v1/settings/activeops`, { headers });
+      const res = await fetch(`${PUBLIC_API_URL}/settings/activeops`, { headers });
       
       if (res.ok) {
         activeOpsSettings = await res.json();
@@ -271,7 +270,7 @@
     
     try {
       const headers = await getHeaders();
-      const res = await fetch(`${PUBLIC_API_URL}/api/v1/settings/activeops`, {
+      const res = await fetch(`${PUBLIC_API_URL}/settings/activeops`, {
         method: 'PUT',
         headers,
         body: JSON.stringify(activeOpsSettings),
@@ -878,67 +877,9 @@
     cursor: not-allowed;
   }
   
-  .btn-danger {
-    background: rgb(220, 38, 38);
-    color: white;
-    border: none;
-  }
-  
-  .btn-danger:hover:not(:disabled) {
-    background: rgb(185, 28, 28);
-  }
-  
-  .connection-status {
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    background: var(--color-ink-500);
-  }
-  
-  .connection-status.connected {
-    background: rgb(16, 185, 129);
-    box-shadow: 0 0 8px rgb(16, 185, 129 / 0.5);
-  }
   
   .border-ink-700 {
     border-color: var(--color-ink-700);
   }
 
-  /* Provider Status Cards */
-  .provider-status-card {
-    background: var(--color-ink-800);
-    border: 1px solid var(--color-ink-700);
-    border-radius: 12px;
-    padding: 1.5rem;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    transition: all 0.2s ease;
-  }
-
-  .provider-status-card:hover {
-    border-color: var(--color-accent-500);
-    transform: translateY(-2px);
-  }
-
-  .logo-sm {
-    width: 32px;
-    height: 32px;
-    border-radius: 6px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: bold;
-    font-size: 0.8rem;
-  }
-
-  .logo-sm.aws { background: rgba(255, 153, 0, 0.1); color: #FF9900; }
-  .logo-sm.azure { background: rgba(0, 120, 212, 0.1); color: #0078D4; }
-  .logo-sm.gcp { background: rgba(66, 133, 244, 0.1); color: #4284F4; }
-
-  .badge-accent {
-    background: rgba(99, 102, 241, 0.2);
-    color: var(--color-accent-400);
-    border: 1px solid rgba(99, 102, 241, 0.3);
-  }
 </style>

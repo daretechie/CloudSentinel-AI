@@ -19,7 +19,7 @@ from app.models.aws_connection import AWSConnection
 from app.models.azure_connection import AzureConnection
 from app.models.gcp_connection import GCPConnection
 from app.services.zombies.factory import ZombieDetectorFactory
-from app.core.tier_guard import TierGuard, FeatureFlag
+from app.core.pricing import PricingTier, FeatureFlag, is_feature_enabled
 
 logger = structlog.get_logger()
 
@@ -128,14 +128,15 @@ class ZombieService:
     async def _enrich_with_ai(self, zombies: Dict[str, Any], user: Any):
         """Enrich results with AI insights if tier allows."""
         try:
-            async with TierGuard(user, self.db) as guard:
-                if not guard.has(FeatureFlag.AI_INSIGHTS):
-                    zombies["ai_analysis"] = {
-                        "error": "AI Insights requires Starter tier or higher.",
-                        "summary": "Upgrade to unlock AI-powered analysis.",
-                        "upgrade_required": True
-                    }
-                else:
+            user_tier = getattr(user, "tier", PricingTier.TRIAL)
+            if not is_feature_enabled(user_tier, FeatureFlag.LLM_ANALYSIS):
+                zombies["ai_analysis"] = {
+                    "error": "AI Insights requires Growth tier or higher.",
+                    "summary": "Upgrade to unlock AI-powered analysis.",
+                    "upgrade_required": True
+                }
+            else:
+
                     from app.services.llm.factory import LLMFactory
                     from app.services.llm.zombie_analyzer import ZombieAnalyzer
 

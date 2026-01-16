@@ -154,8 +154,9 @@ class MultiTenantAWSAdapter(BaseAdapter):
                         "End": end_date.isoformat(),
                     },
                     "Granularity": granularity,
-                    "Metrics": ["UnblendedCost"],
+                    "Metrics": ["AmortizedCost"],
                 }
+
 
                 if usage_only:
                     request_params["Filter"] = {
@@ -189,7 +190,8 @@ class MultiTenantAWSAdapter(BaseAdapter):
                     if group_by_service and "Groups" in result:
                         for group in result["Groups"]:
                             service_name = group["Keys"][0]
-                            amount = Decimal(group["Metrics"]["UnblendedCost"]["Amount"])
+                            amount = Decimal(group["Metrics"]["AmortizedCost"]["Amount"])
+
                             normalized_records.append(CostRecord(
                                 date=dt,
                                 amount=amount,
