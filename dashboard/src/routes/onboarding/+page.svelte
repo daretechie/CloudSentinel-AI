@@ -376,15 +376,47 @@
           </button>
         </div>
         
-        <div class="code-editor mb-4 text-sm text-ink-300 bg-accent-950/20 p-4 rounded-lg border border-ink-800">
-          <h4 class="font-bold text-ink-100 mb-2">How to use manual template:</h4>
-          <ol class="list-decimal pl-4 space-y-1">
-            <li>Click <strong>Copy</strong> below to get the template.</li>
-            <li>Go to AWS Console &gt; CloudFormation &gt; Create Stack (With new resources).</li>
-            <li>Choose "Upload a template file" and paste the content (or upload the file).</li>
-            <li>Copy the <strong>RoleArn</strong> from the "Outputs" tab after creation.</li>
-            <li>Paste the RoleArn in Step 3 to verify.</li>
-          </ol>
+        <div class="manual-guide mb-8">
+          <h4 class="font-bold text-ink-100 flex items-center gap-2 mb-4">
+            <span class="text-accent-500">🛡️</span> Security & Deployment Guide
+          </h4>
+          
+          <div class="space-y-3">
+            <div class="flex items-start gap-4 p-4 bg-ink-900 border border-ink-800 rounded-xl transition-all hover:border-ink-700">
+              <div class="flex-shrink-0 w-8 h-8 rounded-lg bg-accent-500/10 flex items-center justify-center text-accent-500 font-bold">1</div>
+              <div>
+                <p class="text-sm font-semibold text-ink-100 mb-1">Acquire Infrastructure Template</p>
+                <p class="text-xs text-ink-400">Select either CloudFormation or Terraform below. Use the <strong>Copy</strong> or <strong>Download</strong> buttons to save the configuration file to your local machine.</p>
+              </div>
+            </div>
+
+            <div class="flex items-start gap-4 p-4 bg-ink-900 border border-ink-800 rounded-xl transition-all hover:border-ink-700">
+              <div class="flex-shrink-0 w-8 h-8 rounded-lg bg-accent-500/10 flex items-center justify-center text-accent-500 font-bold">2</div>
+              <div>
+                <p class="text-sm font-semibold text-ink-100 mb-1">Provision Resources in AWS</p>
+                <p class="text-xs text-ink-400">
+                  Navigate to the <a href="https://console.aws.amazon.com/cloudformation/home?region=us-east-1#/stacks/create/template" target="_blank" class="text-accent-400 hover:text-accent-300 underline underline-offset-4 decoration-accent-500/30">AWS CloudFormation Console</a>. 
+                  Select <strong>Create Stack</strong> and choose <strong>Upload a template file</strong> to begin the deployment.
+                </p>
+              </div>
+            </div>
+
+            <div class="flex items-start gap-4 p-4 bg-ink-900 border border-ink-800 rounded-xl transition-all hover:border-ink-700">
+              <div class="flex-shrink-0 w-8 h-8 rounded-lg bg-accent-500/10 flex items-center justify-center text-accent-500 font-bold">3</div>
+              <div>
+                <p class="text-sm font-semibold text-ink-100 mb-1">Finalize Deployment & Capture ARN</p>
+                <p class="text-xs text-ink-400">Follow the AWS wizard. Once the stack status is <strong>CREATE_COMPLETE</strong>, navigate to the <strong>Outputs</strong> tab to find and copy your new <strong>RoleArn</strong>.</p>
+              </div>
+            </div>
+
+            <div class="flex items-start gap-4 p-4 bg-ink-900 border border-ink-800 rounded-xl transition-all hover:border-ink-700">
+              <div class="flex-shrink-0 w-8 h-8 rounded-lg bg-accent-500/10 flex items-center justify-center text-accent-500 font-bold">4</div>
+              <div>
+                <p class="text-sm font-semibold text-ink-100 mb-1">Verify Connection</p>
+                <p class="text-xs text-ink-400">Return to this page and paste the captured <strong>RoleArn</strong> into the verification field in Step 3 to activate your connection.</p>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div class="code-container">

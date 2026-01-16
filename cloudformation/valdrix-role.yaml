@@ -23,7 +23,6 @@ Resources:
   ValdrixRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: ValdrixReadOnly
       Description: Allows Valdrix to read cost data for analysis
       MaxSessionDuration: 3600  # 1 hour (minimum for security)
       
@@ -155,6 +154,4 @@ Outputs:
   RoleArn:
     Description: The ARN of the Valdrix role. Copy this to Valdrix dashboard.
     Value: !GetAtt ValdrixRole.Arn
-    Export:
-      Name: ValdrixRoleArn
   
