@@ -2,6 +2,8 @@
   import { createSupabaseBrowserClient } from '$lib/supabase';
   import CloudLogo from '$lib/components/CloudLogo.svelte';
   
+  let { data } = $props();
+  
   // State management
   let currentStep = $state(0); // 0: Select Provider, 1: Setup, 2: Verify, 3: Done
   let selectedProvider: 'aws' | 'azure' | 'gcp' = $state('aws');
@@ -30,7 +32,7 @@
   
   import { PUBLIC_API_URL } from '$env/static/public';
   
-  const API_URL = PUBLIC_API_URL;
+  const API_URL = PUBLIC_API_URL || 'http://localhost:8000';
   const supabase = createSupabaseBrowserClient();
   
   // Get access token from Supabase session
@@ -297,6 +299,13 @@
     <div class="step" class:active={currentStep === 3}>4. Done!</div>
   </div>
   
+  {#if isLoading}
+    <div class="loading-overlay">
+      <div class="spinner mb-4"></div>
+      <p class="text-sm text-ink-300">Fetching configuration details...</p>
+    </div>
+  {/if}
+
   {#if error}
     <div class="error-banner">{error}</div>
   {/if}
@@ -430,7 +439,68 @@
           <pre class="code-block">{selectedTab === 'cloudformation' ? cloudformationYaml : terraformHcl}</pre>
         </div>
 
+        <div class="divider text-xs text-ink-500 my-8 flex items-center gap-4">
+          <div class="h-px flex-1 bg-ink-800"></div>
+          STEP 3: VERIFY CONNECTION
+          <div class="h-px flex-1 bg-ink-800"></div>
+        </div>
+
+        <div class="verification-section p-6 bg-ink-900 border border-ink-800 rounded-2xl mb-8">
+          <div class="form-group">
+            <label for="accountId">AWS Account ID (12 digits)</label>
+            <input 
+              type="text" 
+              id="accountId"
+              bind:value={awsAccountId} 
+              placeholder="123456789012"
+              maxlength="12"
+              class="input"
+            />
+          </div>
+          
+          <div class="form-group">
+            <label for="roleArn">Role ARN (from CloudFormation Outputs)</label>
+            <input 
+              type="text" 
+              id="roleArn" 
+              bind:value={roleArn} 
+              placeholder="arn:aws:iam::123456789012:role/ValdrixReadOnly"
+              class="input"
+            />
+          </div>
+
+          <div class="form-group pt-4 border-t border-ink-800 relative mt-4" class:opacity-50={!['growth', 'pro', 'enterprise', 'trial'].includes(data?.subscription?.tier)}>
+            <label class="flex items-center justify-between gap-3 cursor-pointer">
+              <div class="flex items-center gap-3">
+                <input type="checkbox" bind:checked={isManagementAccount} class="toggle" disabled={!['growth', 'pro', 'enterprise', 'trial'].includes(data?.subscription?.tier)} />
+                <span class="font-bold">Register as Management Account</span>
+              </div>
+              {#if !['growth', 'pro', 'enterprise', 'trial'].includes(data?.subscription?.tier)}
+                <span class="badge badge-warning text-[10px]">Growth Tier +</span>
+              {/if}
+            </label>
+            <p class="text-xs text-ink-500 mt-2">
+              Enable this if this account is the Management Account of an AWS Organization. 
+              Valdrix will automatically discover and help you link member accounts.
+            </p>
+          </div>
+
+          {#if isManagementAccount}
+            <div class="form-group stagger-enter mt-4">
+              <label for="org_id">Organization ID (Optional)</label>
+              <input 
+                type="text" 
+                id="org_id"
+                bind:value={organizationId}
+                placeholder="o-xxxxxxxxxx"
+                class="input"
+              />
+            </div>
+          {/if}
+        </div>
+
       {:else if selectedProvider === 'azure'}
+        <!-- ... existing azure code ... -->
         <h2>Step 2: Connect Microsoft Azure</h2>
         <p class="mb-6">Connect using <strong>Workload Identity Federation</strong> (Zero-Secret).</p>
 
@@ -473,7 +543,13 @@
 
       <div class="flex gap-4 mt-8">
         <button class="secondary-btn !w-auto px-6" onclick={() => currentStep = 0}>← Back</button>
-        <button class="primary-btn !flex-1" onclick={proceedToVerify}>Next: Verify Connection →</button>
+        {#if selectedProvider === 'aws'}
+          <button class="primary-btn !flex-1" onclick={verifyConnection} disabled={isVerifying}>
+            {isVerifying ? '⏳ Verifying...' : '✅ Verify Connection'}
+          </button>
+        {:else}
+          <button class="primary-btn !flex-1" onclick={proceedToVerify}>Next: Verify Connection →</button>
+        {/if}
       </div>
     </div>
   {/if}
@@ -505,13 +581,13 @@
         />
       </div>
 
-      <div class="form-group pt-4 border-t border-ink-800 relative" class:opacity-50={!['growth', 'pro', 'enterprise', 'trial'].includes(data.subscription?.tier)}>
+      <div class="form-group pt-4 border-t border-ink-800 relative" class:opacity-50={!['growth', 'pro', 'enterprise', 'trial'].includes(data?.subscription?.tier)}>
         <label class="flex items-center justify-between gap-3 cursor-pointer">
           <div class="flex items-center gap-3">
-            <input type="checkbox" bind:checked={isManagementAccount} class="toggle" disabled={!['growth', 'pro', 'enterprise', 'trial'].includes(data.subscription?.tier)} />
+            <input type="checkbox" bind:checked={isManagementAccount} class="toggle" disabled={!['growth', 'pro', 'enterprise', 'trial'].includes(data?.subscription?.tier)} />
             <span class="font-bold">Register as Management Account</span>
           </div>
-          {#if !['growth', 'pro', 'enterprise', 'trial'].includes(data.subscription?.tier)}
+          {#if !['growth', 'pro', 'enterprise', 'trial'].includes(data?.subscription?.tier)}
             <span class="badge badge-warning text-[10px]">Growth Tier +</span>
           {/if}
         </label>
@@ -519,7 +595,7 @@
           Enable this if this account is the Management Account of an AWS Organization. 
           Valdrix will automatically discover and help you link member accounts.
         </p>
-        {#if !['growth', 'pro', 'enterprise', 'trial'].includes(data.subscription?.tier)}
+        {#if !['growth', 'pro', 'enterprise', 'trial'].includes(data?.subscription?.tier)}
           <p class="text-[10px] text-accent-400 mt-1">⚡ Multi-account discovery requires Growth tier or higher.</p>
         {/if}
       </div>
@@ -598,8 +674,51 @@
 
   .provider-card:hover {
     border-color: var(--primary, #6366f1);
-    transform: translateY(-4px);
-    box-shadow: 0 12px 24px -10px rgba(99, 102, 241, 0.3);
+    transform: translateY(-5px);
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.4);
+  }
+
+  .loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(10, 13, 18, 0.8);
+    backdrop-filter: blur(8px);
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.3s ease-out;
+  }
+
+  .verification-section {
+    animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid var(--ink-800);
+    border-top-color: var(--accent-500);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
   }
 
   .provider-card.selected {
