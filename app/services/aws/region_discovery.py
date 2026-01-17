@@ -45,10 +45,20 @@ class RegionDiscovery:
         try:
             client_kwargs = {}
             if self.credentials:
+                # SEC-06: Defensive extraction with validation
+                ak = self.credentials.get("AccessKeyId")
+                sk = self.credentials.get("SecretAccessKey")
+                st = self.credentials.get("SessionToken")
+                
+                if not ak or not sk:
+                    logger.warning("invalid_aws_credentials_keys", 
+                                   has_ak=bool(ak), has_sk=bool(sk))
+                    return self._get_fallback_regions()
+                    
                 client_kwargs = {
-                    "aws_access_key_id": self.credentials.get("AccessKeyId"),
-                    "aws_secret_access_key": self.credentials.get("SecretAccessKey"),
-                    "aws_session_token": self.credentials.get("SessionToken"),
+                    "aws_access_key_id": ak,
+                    "aws_secret_access_key": sk,
+                    "aws_session_token": st,
                 }
 
             async with self.session.client("ec2", region_name="us-east-1", **client_kwargs) as ec2:
@@ -77,10 +87,20 @@ class RegionDiscovery:
         try:
             client_kwargs = {}
             if self.credentials:
+                # SEC-06: Defensive extraction with validation
+                ak = self.credentials.get("AccessKeyId")
+                sk = self.credentials.get("SecretAccessKey")
+                st = self.credentials.get("SessionToken")
+                
+                if not ak or not sk:
+                    logger.warning("invalid_aws_credentials_keys_hot", 
+                                   has_ak=bool(ak), has_sk=bool(sk))
+                    return await self.get_enabled_regions()
+                    
                 client_kwargs = {
-                    "aws_access_key_id": self.credentials.get("AccessKeyId"),
-                    "aws_secret_access_key": self.credentials.get("SecretAccessKey"),
-                    "aws_session_token": self.credentials.get("SessionToken"),
+                    "aws_access_key_id": ak,
+                    "aws_secret_access_key": sk,
+                    "aws_session_token": st,
                 }
 
             end_date = date.today()

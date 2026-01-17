@@ -24,8 +24,8 @@ class CostAggregator:
             select(CostRecord)
             .where(
                 CostRecord.tenant_id == tenant_id,
-                CostRecord.timestamp >= start_date,
-                CostRecord.timestamp <= end_date
+                CostRecord.recorded_at >= start_date,
+                CostRecord.recorded_at <= end_date
             )
         )
         
@@ -44,7 +44,7 @@ class CostAggregator:
             total_cost += r.cost_usd
             by_service[r.service] = by_service.get(r.service, Decimal(0)) + r.cost_usd
             schema_records.append(SchemaCostRecord(
-                date=r.timestamp,
+                date=r.recorded_at,
                 amount=r.cost_usd,
                 service=r.service,
                 region=r.region

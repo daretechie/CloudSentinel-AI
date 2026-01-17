@@ -11,6 +11,7 @@ from app.services.llm.analyzer import FinOpsAnalyzer
 from app.models.llm import LLMUsage
 from app.core.dependencies import get_analyzer, requires_feature
 from app.services.costs.aggregator import CostAggregator
+from app.core.rate_limit import rate_limit, ANALYSIS_LIMIT
 
 class CostResponse(BaseModel):
     analysis: Any
@@ -34,6 +35,7 @@ async def get_costs(
 
 
 @router.get("/analyze", response_model=CostResponse)
+@rate_limit(ANALYSIS_LIMIT)
 async def analyze_costs(
     start_date: date,
     end_date: date,

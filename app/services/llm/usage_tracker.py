@@ -317,15 +317,19 @@ class UsageTracker:
             # Send Slack alert
             settings = get_settings()
             if settings.SLACK_BOT_TOKEN and settings.SLACK_CHANNEL_ID:
-                from app.services.notifications import SlackService
-                slack = SlackService(settings.SLACK_BOT_TOKEN, settings.SLACK_CHANNEL_ID)
+                try:
+                    from app.services.notifications import SlackService
+                    slack = SlackService(settings.SLACK_BOT_TOKEN, settings.SLACK_CHANNEL_ID)
 
-                severity = "critical" if usage_percent >= 100 else "warning"
-                await slack.send_alert(
-                    title="LLM Budget Alert",
-                    message=f"*Usage:* ${current_usage:.2f} / ${limit:.2f} ({usage_percent:.0f}%)\n*Threshold:* {threshold_percent}%\n*Status:* {'EXCEEDED' if usage_percent >= 100 else 'Warning'}",
-                    severity=severity,
-                )
+                    severity = "critical" if usage_percent >= 100 else "warning"
+                    await slack.send_alert(
+                        title="LLM Budget Alert",
+                        message=f"*Usage:* ${current_usage:.2f} / ${limit:.2f} ({usage_percent:.0f}%)\n*Threshold:* {threshold_percent}%\n*Status:* {'EXCEEDED' if usage_percent >= 100 else 'Warning'}",
+                        severity=severity,
+                    )
+                except Exception as e:
+                    # Log but DON'T block the usage record (Fail-soft for alerts)
+                    logger.error("llm_budget_alert_failed", tenant_id=str(tenant_id), error=str(e))
 
                 logger.warning(
                     "llm_budget_threshold_crossed",

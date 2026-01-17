@@ -1,6 +1,6 @@
 from typing import Annotated, Optional
 from uuid import UUID
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, Query, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import BaseModel
@@ -12,6 +12,7 @@ from app.models.remediation import RemediationAction
 from app.services.zombies import ZombieService, RemediationService
 from app.core.dependencies import requires_feature
 from app.core.pricing import FeatureFlag
+from app.core.rate_limit import rate_limit, analysis_limit
 
 router = APIRouter(tags=["Cloud Hygiene (Zombies)"])
 logger = structlog.get_logger()
@@ -34,7 +35,9 @@ class ReviewRequest(BaseModel):
 # --- Endpoints ---
 
 @router.get("")
+@rate_limit("10/minute") # Protect expensive scan operation
 async def scan_zombies(
+    request: Request,
     user: Annotated[CurrentUser, Depends(requires_role("member"))],
     db: AsyncSession = Depends(get_db),
     region: str = Query(default="us-east-1"),
@@ -120,21 +123,17 @@ async def approve_remediation(
         raise HTTPException(404, str(e))
 
 @router.post("/execute/{request_id}")
+@rate_limit("5/minute") # Strict limit for destructive actions
 async def execute_remediation(
+    request: Request,
     request_id: UUID,
-    user: Annotated[CurrentUser, Depends(requires_feature(FeatureFlag.AUTO_REMEDIATION))],
+    user: Annotated[CurrentUser, Depends(requires_role("admin"))],
     db: AsyncSession = Depends(get_db),
     region: str = Query(default="us-east-1"),
 ):
-    """Execute a remediation request. Requires Pro tier or higher."""
-    # Note: requires_feature(FeatureFlag.AUTO_REMEDIATION) also checks for isAdmin via requires_role inside the dependency if we wanted, 
-    # but here we just need Pro tier. We can chain them or assume Pro implies some admin rights for execution.
-    # Actually, requires_role("admin") is better for /execute.
-    # I'll chain them if possible or just use both.
-    
-    # Check admin role
-    if user.role != "admin":
-         raise HTTPException(status_code=403, detail="Only admins can execute remediation.")
+    """Execute a remediation request. Requires Pro tier or higher and Admin role."""
+    # Note: requires_feature(FeatureFlag.AUTO_REMEDIATION) also checks for isAdmin if we wanted, 
+    # but here we use requires_role("admin") explicitly for SEC-02.
 
     from app.models.aws_connection import AWSConnection
     from app.services.adapters.aws_multitenant import MultiTenantAWSAdapter

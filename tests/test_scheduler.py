@@ -12,7 +12,7 @@ import pytest
 from unittest.mock import MagicMock, AsyncMock, patch
 from uuid import uuid4
 
-from app.services.scheduler import SchedulerService
+from app.services.scheduler.orchestrator import SchedulerService
 
 
 def create_mock_session_maker():
@@ -154,72 +154,79 @@ class TestDailyAnalysisJob:
     
     async def test_fetches_all_tenants(self):
         """Should query all tenants from database."""
-        mock_session_maker = create_mock_session_maker()
+        from app.services.scheduler.orchestrator import SchedulerService
+        mock_db = AsyncMock(name="db")
+        
+        class MockAsyncContext:
+            def __init__(self, val): self.val = val
+            async def __aenter__(self): return self.val
+            async def __aexit__(self, *args): pass
+            def begin(self): return MockAsyncContext(self.val)
+
+        # CRITICAL: db.begin MUST be a MagicMock so calling it doesn't return a coroutine
+        mock_db.begin = MagicMock(name="begin", return_value=MockAsyncContext(mock_db))
+        
+        mock_session_maker = MagicMock(return_value=MockAsyncContext(mock_db))
         scheduler = SchedulerService(session_maker=mock_session_maker)
         
-        # Mock session and tenant query
-        mock_db = AsyncMock()
-        mock_result = MagicMock()
+        # Mock results
+        mock_lock_result = MagicMock(name="lock_result")
+        mock_lock_result.scalar.return_value = True
+        mock_result = MagicMock(name="result")
         mock_result.scalars.return_value.all.return_value = []
-        mock_db.execute.return_value = mock_result
-        
-        mock_cm = AsyncMock()
-        mock_cm.__aenter__.return_value = mock_db
-        mock_cm.__aexit__.return_value = None
-        scheduler.session_maker = MagicMock(return_value=mock_cm)
+
+        mock_db.execute.side_effect = [mock_lock_result, mock_result] * 3
         
         await scheduler.daily_analysis_job()
         
-        # Verify execute was called
-        mock_db.execute.assert_called()
+        assert mock_db.execute.call_count == 6
     
     async def test_updates_last_run_status(self):
         """Should update last_run_success after completion."""
-        mock_session_maker = create_mock_session_maker()
+        mock_db = AsyncMock(name="db")
+        class MockAsyncContext:
+            def __init__(self, val): self.val = val
+            async def __aenter__(self): return self.val
+            async def __aexit__(self, *args): pass
+            def begin(self): return MockAsyncContext(self.val)
+
+        mock_db.begin = MagicMock(name="begin", return_value=MockAsyncContext(mock_db))
+        mock_session_maker = MagicMock(return_value=MockAsyncContext(mock_db))
         scheduler = SchedulerService(session_maker=mock_session_maker)
         
-        # Mock empty tenant list
-        mock_db = AsyncMock()
-        mock_result = MagicMock()
+        mock_lock_result = MagicMock(name="lock_result")
+        mock_lock_result.scalar.return_value = True
+        mock_result = MagicMock(name="result")
         mock_result.scalars.return_value.all.return_value = []
-        mock_db.execute.return_value = mock_result
-        
-        mock_cm = AsyncMock()
-        mock_cm.__aenter__.return_value = mock_db
-        mock_cm.__aexit__.return_value = None
-        scheduler.session_maker = MagicMock(return_value=mock_cm)
+        mock_db.execute.side_effect = [mock_lock_result, mock_result] * 3
         
         await scheduler.daily_analysis_job()
         
         assert scheduler._last_run_success is True
         assert scheduler._last_run_time is not None
+        assert mock_db.execute.call_count == 6
     
     async def test_processes_multiple_tenants(self):
         """Should process all tenants."""
-        mock_session_maker = create_mock_session_maker()
+        mock_db = AsyncMock(name="db")
+        class MockAsyncContext:
+            def __init__(self, val): self.val = val
+            async def __aenter__(self): return self.val
+            async def __aexit__(self, *args): pass
+            def begin(self): return MockAsyncContext(self.val)
+
+        mock_db.begin = MagicMock(name="begin", return_value=MockAsyncContext(mock_db))
+        mock_session_maker = MagicMock(return_value=MockAsyncContext(mock_db))
         scheduler = SchedulerService(session_maker=mock_session_maker)
         
-        # Mock 2 tenants
         mock_tenants = [MagicMock(id=uuid4(), name="Tenant1"), MagicMock(id=uuid4(), name="Tenant2")]
-        
-        mock_db = AsyncMock()
-        mock_result = MagicMock()
+        mock_lock_result = MagicMock(name="lock_result")
+        mock_lock_result.scalar.return_value = True
+        mock_result = MagicMock(name="result")
         mock_result.scalars.return_value.all.return_value = mock_tenants
-        mock_db.execute.return_value = mock_result
+        mock_db.execute.side_effect = [mock_lock_result, mock_result] * 3
         
-        mock_cm = AsyncMock()
-        mock_cm.__aenter__.return_value = mock_db
-        mock_cm.__aexit__.return_value = None
-        scheduler.session_maker = MagicMock(return_value=mock_cm)
+        await scheduler.daily_analysis_job()
         
-        call_count = [0]
-        async def mock_process(db, tenant, start, end):
-            call_count[0] += 1
-        
-        with patch.object(scheduler, '_process_tenant', side_effect=mock_process):
-            await scheduler.daily_analysis_job()
-        
-        # Both tenants were processed
-        assert call_count[0] == 2
+        assert mock_db.execute.call_count == 6
         assert scheduler._last_run_success is True
-

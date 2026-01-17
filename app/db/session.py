@@ -50,14 +50,22 @@ else:
 # - max_overflow: Extra connections allowed during traffic spikes (20 for burst handling)
 # - pool_pre_ping: Checks if connection is alive before using (prevents stale connections)
 # - pool_recycle: Recycle connections after 5 min (Supavisor/Neon compatibility)
+# Pool Configuration: Use NullPool for testing to avoid connection leaks across loops
+pool_args = {}
+if settings.TESTING:
+    from sqlalchemy.pool import NullPool
+    pool_args["poolclass"] = NullPool
+else:
+    pool_args["pool_size"] = settings.DB_POOL_SIZE
+    pool_args["max_overflow"] = settings.DB_MAX_OVERFLOW
+
 engine = create_async_engine(
     settings.DATABASE_URL,
     echo=settings.DEBUG,
-    pool_size=5,        # Zero-Budget: Reduced to stay within free tier limits
-    max_overflow=10,    # Zero-Budget: Reduced to prevent connection exhaustion
     pool_pre_ping=True,
     pool_recycle=300,   # Recycle every 5 min for Supavisor
     connect_args=connect_args,
+    **pool_args
 )
 
 # Session Factory: Creates new database sessions

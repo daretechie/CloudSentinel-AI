@@ -49,10 +49,20 @@ async def test_ingest_latest_parquet():
     df.to_parquet(parquet_buffer)
     parquet_bytes = parquet_buffer.getvalue()
     
-    mock_body = AsyncMock()
-    mock_body.read.return_value = parquet_bytes
-    
-    mock_s3.get_object.return_value = {"Body": mock_body}
+    class MockStream:
+        def __init__(self, data):
+            self.data = data
+            self.offset = 0
+        async def __aenter__(self):
+            return self
+        async def __aexit__(self, exc_type, exc_val, exc_tb):
+            pass
+        async def read(self, amt):
+            chunk = self.data[self.offset : self.offset + amt]
+            self.offset += len(chunk)
+            return chunk
+
+    mock_s3.get_object.return_value = {"Body": MockStream(parquet_bytes)}
 
     # 3. Patch aioboto3.Session
     with patch("aioboto3.Session") as MockSession:

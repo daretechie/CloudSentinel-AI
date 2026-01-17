@@ -1,10 +1,11 @@
 import pytest
 import os
+import uuid
 import sys
 import tempfile
 from datetime import datetime, timezone, timedelta
 from decimal import Decimal
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 import sqlalchemy as sa
 from sqlalchemy import select
 from app.models.aws_connection import AWSConnection
@@ -15,27 +16,32 @@ from app.services.jobs.processor import JobProcessor, enqueue_job
 
 @pytest.mark.asyncio
 async def test_end_to_end_cost_ingestion_pipeline(db):
-    print("DEBUG: STARTING TEST CLEAN")
-    sys.stdout.flush()
+    # Patch session methods to avoid transaction conflicts in tests (asyncpg/SAVEPOINT issues)
+    # We use a mock context manager for begin and begin_nested
+    class MockAsyncContext:
+        async def __aenter__(self): return self
+        async def __aexit__(self, *args): return False
+
+    db.commit = AsyncMock(side_effect=db.flush)
+    db.rollback = AsyncMock()
+    db.begin = MagicMock(return_value=MockAsyncContext())
+    db.begin_nested = MagicMock(return_value=MockAsyncContext())
+    # Set RLS context for the session
+    tenant_id = uuid.uuid4()
+    await db.execute(sa.text(f"SELECT set_config('app.current_tenant_id', '{tenant_id}', true)"))
     
-    # Disable RLS and Cleanup for test
-    await db.execute(sa.text("ALTER TABLE background_jobs DISABLE ROW LEVEL SECURITY"))
-    await db.execute(sa.text("ALTER TABLE cost_records DISABLE ROW LEVEL SECURITY"))
-    await db.execute(sa.text("ALTER TABLE cloud_accounts DISABLE ROW LEVEL SECURITY"))
-    await db.execute(sa.text("ALTER TABLE tenants DISABLE ROW LEVEL SECURITY"))
-    await db.execute(sa.text("ALTER TABLE users DISABLE ROW LEVEL SECURITY"))
+    # 1. Setup Initial Data
+    tenant = Tenant(id=tenant_id, name="Enterprise Corp", plan="enterprise")
     
+    # Cleanup for test (Uses the existing transaction)
     await db.execute(sa.text("DELETE FROM background_jobs"))
     await db.execute(sa.text("DELETE FROM cost_records"))
     await db.execute(sa.text("DELETE FROM aws_connections"))
-    await db.execute(sa.text("DELETE FROM users"))
     await db.execute(sa.text("DELETE FROM tenants"))
-    await db.commit()
+    await db.execute(sa.text("DELETE FROM users"))
     
-    # 1. Setup Tenant and Connection
-    tenant = Tenant(name="Enterprise Corp", plan="enterprise")
     db.add(tenant)
-    await db.commit()
+    await db.flush()
     await db.refresh(tenant)
     print(f"DEBUG: Created Tenant ID: {tenant.id}")
     
@@ -43,6 +49,7 @@ async def test_end_to_end_cost_ingestion_pipeline(db):
     await db.execute(sa.text(f"SET app.current_tenant_id = '{tenant.id}'"))
 
     connection = AWSConnection(
+        id=uuid.uuid4(),
         tenant_id=tenant.id,
         aws_account_id="123456789012",
         role_arn="arn:aws:iam::123456789012:role/Valdrix",
@@ -52,7 +59,7 @@ async def test_end_to_end_cost_ingestion_pipeline(db):
         cur_status="active"
     )
     db.add(connection)
-    await db.commit()
+    await db.flush()
 
     # 2. Mock the AWSCURAdapter to return sample data instead of calling S3
     from app.schemas.costs import CloudUsageSummary, CostRecord as CostRecordSchema
@@ -84,7 +91,20 @@ async def test_end_to_end_cost_ingestion_pipeline(db):
 
     # Patch the Factory to return our mock summary
     mock_adapter = AsyncMock()
-    mock_adapter.get_costs.return_value = mock_summary
+    
+    async def mock_stream(*args, **kwargs):
+        for r in mock_summary.records:
+            yield {
+                "timestamp": r.date,
+                "service": r.service,
+                "region": r.region,
+                "cost_usd": float(r.amount),
+                "currency": "USD",
+                "amount_raw": float(r.amount),
+                "usage_type": r.usage_type
+            }
+            
+    mock_adapter.stream_cost_and_usage = mock_stream
 
     with patch("app.services.adapters.factory.AdapterFactory.get_adapter", return_value=mock_adapter):
         # 3. Enqueue the job

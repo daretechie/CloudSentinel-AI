@@ -2,10 +2,12 @@ from typing import List, Dict, Any
 import structlog
 from google.cloud import compute_v1
 from app.services.zombies.zombie_plugin import ZombiePlugin
+from app.services.zombies.registry import registry
 from decimal import Decimal
 
 logger = structlog.get_logger()
 
+@registry.register("gcp")
 class GCPUnattachedDisksPlugin(ZombiePlugin):
     """
     Detects unattached Persistent Disks in GCP.
@@ -27,7 +29,8 @@ class GCPUnattachedDisksPlugin(ZombiePlugin):
                 zone=zone,
             )
             
-            disks = client.list(request=request)
+            import asyncio
+            disks = await asyncio.to_thread(client.list, request=request)
             
             for disk in disks:
                 # If 'users' list is empty, the disk is unattached

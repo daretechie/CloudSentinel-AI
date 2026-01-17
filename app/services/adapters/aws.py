@@ -1,5 +1,6 @@
-from typing import List, Dict, Any
-from datetime import date
+from typing import List, Dict, Any, Any as AnyType
+from datetime import date, datetime, timezone
+from decimal import Decimal
 import aioboto3
 from botocore.exceptions import ClientError
 import structlog
@@ -15,6 +16,23 @@ class AWSAdapter(CostAdapter):
         self.settings = get_settings()
         # Create session
         self.session = aioboto3.Session()
+
+    async def verify_connection(self) -> bool:
+        """Verify AWS credentials (placeholder)."""
+        return True
+
+    async def get_cost_and_usage(
+        self,
+        start_date: datetime,
+        end_date: datetime,
+        granularity: str = "DAILY"
+    ) -> List[Dict[str, Any]]:
+        """Standardized interface for cost collection."""
+        return await self.get_daily_costs(start_date.date(), end_date.date())
+
+    async def discover_resources(self, resource_type: str, region: str = None) -> List[Dict[str, Any]]:
+        """Legacy adapter resource discovery."""
+        return []
 
     async def get_daily_costs(self, start_date: date, end_date: date) -> List[Dict[str, Any]]:
         """
@@ -58,10 +76,30 @@ class AWSAdapter(CostAdapter):
 
 
 
-    async def get_resource_usage(self, service_name: str) -> List[Dict[str, Any]]:
+    async def stream_cost_and_usage(
+        self,
+        start_date: datetime,
+        end_date: datetime,
+        granularity: str = "DAILY"
+    ) -> Any:
         """
-        Fetches granular resource usage metrics from CloudWatch.
-        Note: Current implementation relies on Cost Explorer for aggregate analysis.
+        Stream cost data from AWS Cost Explorer.
         """
-        logger.debug("resource_usage_interface_not_active", service=service_name)
+        results = await self.get_daily_costs(start_date.date(), end_date.date())
+        for result in results:
+            dt = datetime.fromisoformat(result["TimePeriod"]["Start"]).replace(tzinfo=timezone.utc)
+            if "Total" in result:
+                amount = Decimal(result["Total"]["UnblendedCost"]["Amount"])
+                yield {
+                    "timestamp": dt,
+                    "service": "Total",
+                    "region": self.settings.AWS_DEFAULT_REGION,
+                    "cost_usd": amount,
+                    "currency": "USD",
+                    "amount_raw": amount,
+                    "usage_type": "Usage"
+                }
+
+    async def get_resource_usage(self, service_name: str, resource_id: str = None) -> List[Dict[str, Any]]:
+        """Placeholder."""
         return []

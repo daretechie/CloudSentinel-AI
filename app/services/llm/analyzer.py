@@ -16,70 +16,18 @@ from app.services.cache import get_cache_service
 from app.services.llm.guardrails import LLMGuardrails, FinOpsAnalysisResult
 from app.services.analysis.forecaster import SymbolicForecaster
 from opentelemetry import trace
-
 tracer = trace.get_tracer(__name__)
-
 logger = structlog.get_logger()
 
-# The "System Prompt" - defines the AI's personality and task
-FINOPS_SYSTEM_PROMPT = """You are a FinOps cost analysis expert specializing in cloud infrastructure optimization.
-TASK:
-Analyze the provided cloud cost data and identify cost optimization opportunities.
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    wait_exponential,
+    retry_if_exception_type,
+)
+from app.core.exceptions import AIAnalysisError
 
-INPUT DATA FORMAT:
-- Resource usage metrics (CPU, memory, network)
-- Cost trends over the past 30 days
-- Resource metadata (type, region, tags)
-
-ANALYSIS CRITERIA:
-1. Anomalies: Cost changes greater than 30% week-over-week or unexpected spending patterns
-2. Zombie Resources: Resources with less than 5% utilization for 7 or more consecutive days
-3. Optimizations: Right-sizing opportunities with greater than 20% potential savings, reserved instance candidates, and idle resources
-
-OUTPUT FORMAT (STRICT JSON ONLY):
-{{
-  "anomalies": [
-    {{
-      "resource": "resource-id or name",
-      "issue": "description of anomaly",
-      "cost_impact": "$XX/month",
-      "severity": "high|medium|low"
-    }}
-  ],
-  "zombie_resources": [
-    {{
-      "resource": "resource-id",
-      "type": "EC2|RDS|ELB|Other",
-      "current_cost": "$XX/month",
-      "utilization": "X%",
-      "recommendation": "terminate|resize|investigate"
-    }}
-  ],
-  "recommendations": [
-    {{
-      "action": "specific action to take",
-      "resource": "affected resource(s)",
-      "estimated_savings": "$XX/month",
-      "priority": "high|medium|low",
-      "effort": "low|medium|high",
-      "confidence": "high|medium|low"
-    }}
-  ],
-  "summary": {{
-    "total_estimated_savings": "$XXX/month",
-    "top_priority_action": "most impactful recommendation",
-    "risk_level": "low|medium|high"
-  }}
-}}
-
-RULES:
-- Return valid JSON only (no markdown, no explanations)
-- Use exact enum values as specified
-- Base all conclusions strictly on the provided data
-- If no issues are found, return empty arrays and set total_estimated_savings to "$0/month"
-- Prioritize recommendations by ROI (estimated savings versus implementation effort)
-- Interprete any "symbolic_forecast" data provided to explain the "why" behind predicted trends
-"""
+# System prompts are now managed in prompts.yaml
 
 class FinOpsAnalyzer:
     """
@@ -90,8 +38,22 @@ class FinOpsAnalyzer:
     """
     def __init__(self, llm: BaseChatModel):
         self.llm = llm
+        
+        # Load prompt from registry (Phase 21: Audit Hardening)
+        import yaml
+        import os
+        prompt_path = os.path.join(os.path.dirname(__file__), "prompts.yaml")
+        try:
+            with open(prompt_path, "r") as f:
+                registry = yaml.safe_load(f)
+                system_prompt = registry["finops_analysis"]["system"]
+        except Exception as e:
+            logger.error("failed_to_load_prompts_yaml", error=str(e))
+            # Fallback to a minimal prompt if registry fails
+            system_prompt = "You are a FinOps expert. Analyze the cost data and return JSON."
+            
         self.prompt = ChatPromptTemplate.from_messages([
-            ("system", FINOPS_SYSTEM_PROMPT),
+            ("system", system_prompt),
             ("user", "Analyze this cloud cost data:\n{cost_data}")
         ])
 
@@ -248,7 +210,7 @@ class FinOpsAnalyzer:
         self, usage_summary: Any, provider: str, model: str, byok_key: Optional[str]
     ) -> tuple[str, Dict]:
         """Orchestrates the LangChain invocation."""
-        sanitized_data = LLMGuardrails.sanitize_input(usage_summary.model_dump())
+        sanitized_data = await LLMGuardrails.sanitize_input(usage_summary.model_dump())
         
         with tracer.start_as_current_span("symbolic_forecast"):
             symbolic_forecast = SymbolicForecaster.forecast(usage_summary.records)
@@ -263,13 +225,22 @@ class FinOpsAnalyzer:
 
         chain = self.prompt | current_llm
 
+        @retry(
+            stop=stop_after_attempt(3),
+            wait=wait_exponential(multiplier=1, min=4, max=10),
+            retry=retry_if_exception_type(Exception),
+            reraise=True,
+        )
+        async def _invoke_with_retry():
+            logger.info("invoking_llm", provider=provider, model=model)
+            response = await chain.ainvoke({"cost_data": formatted_data})
+            return response.content, getattr(response, "response_metadata", {})
+
         with tracer.start_as_current_span("llm_invocation") as span:
             span.set_attribute("llm.provider", provider)
             span.set_attribute("llm.model", model)
             try:
-                logger.info("invoking_llm", provider=provider, model=model)
-                response = await chain.ainvoke({"cost_data": formatted_data})
-                return response.content, getattr(response, "response_metadata", {})
+                return await _invoke_with_retry()
             except Exception as e:
                 logger.error("llm_invocation_failed", provider=provider, error=str(e))
                 from app.core.exceptions import AIAnalysisError
@@ -315,8 +286,12 @@ class FinOpsAnalyzer:
             # Fallback: try raw parsing if validation fails but it's still JSON
             try:
                 llm_result = json.loads(self._strip_markdown(content))
-            except:
+            except json.JSONDecodeError as jde:
+                logger.error("llm_fallback_json_parse_failed", error=str(jde), content_snippet=content[:100])
                 llm_result = {"error": "AI analysis format invalid", "raw_content": content}
+            except Exception as ex:
+                logger.error("llm_fallback_failed_unexpectedly", error=str(ex))
+                llm_result = {"error": "AI analysis processing failed", "raw_content": content}
 
         # 3. Combine with Symbolic Forecast (Neuro-Symbolic Bridge)
         symbolic_forecast = SymbolicForecaster.forecast(usage_summary.records)

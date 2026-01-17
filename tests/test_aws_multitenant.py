@@ -1,6 +1,7 @@
 import pytest
 from unittest.mock import MagicMock, AsyncMock, patch
 from datetime import date, datetime, timezone, timedelta
+from decimal import Decimal
 from app.services.adapters.aws_multitenant import MultiTenantAWSAdapter
 from app.models.aws_connection import AWSConnection
 from botocore.exceptions import ClientError
@@ -36,7 +37,7 @@ async def test_get_credentials_success(adapter):
     mock_session.client.return_value.__aenter__.return_value = mock_sts
     
     with patch.object(adapter, 'session', mock_session):
-        creds = await adapter._get_credentials()
+        creds = await adapter.get_credentials()
         
         assert creds["AccessKeyId"] == "ASIA..."
         assert adapter._credentials is not None
@@ -57,7 +58,7 @@ async def test_get_credentials_cached(adapter):
     mock_session = MagicMock() # Should not be used
     
     with patch.object(adapter, 'session', mock_session):
-        creds = await adapter._get_credentials()
+        creds = await adapter.get_credentials()
         assert creds["AccessKeyId"] == "CACHED"
         mock_session.client.assert_not_called()
 
@@ -80,7 +81,7 @@ async def test_get_credentials_expired(adapter):
     mock_session.client.return_value.__aenter__.return_value = mock_sts
     
     with patch.object(adapter, 'session', mock_session):
-        creds = await adapter._get_credentials()
+        creds = await adapter.get_credentials()
         assert creds["AccessKeyId"] == "NEW"
         mock_session.client.assert_called_once()
 
@@ -93,22 +94,27 @@ async def test_get_daily_costs_success(adapter):
     
     mock_ce = AsyncMock()
     mock_ce.get_cost_and_usage.return_value = {
-        "ResultsByTime": [{"TimePeriod": {"Start": "2024-01-01"}, "Total": {"UnblendedCost": {"Amount": "100"}}}]
+        "ResultsByTime": [
+            {
+                "TimePeriod": {"Start": "2024-01-01T00:00:00Z"}, 
+                "Groups": [{"Keys": ["S3"], "Metrics": {"AmortizedCost": {"Amount": "100.0", "Unit": "USD"}}}]
+            }
+        ]
     }
     
     mock_session = MagicMock()
     mock_session.client.return_value.__aenter__.return_value = mock_ce
     
     with patch.object(adapter, 'session', mock_session):
-        results = await adapter.get_daily_costs(date(2024, 1, 1), date(2024, 1, 2))
+        results = await adapter.get_daily_costs(datetime(2024, 1, 1, tzinfo=timezone.utc), datetime(2024, 1, 2, tzinfo=timezone.utc))
         
-        assert len(results) == 1
-        assert results[0]["Total"]["UnblendedCost"]["Amount"] == "100"
+        assert len(results.records) == 1
+        assert results.total_cost == Decimal("100.0")
         
         # Verify client calls
         call_kwargs = mock_ce.get_cost_and_usage.call_args[1]
         assert call_kwargs["TimePeriod"]["Start"] == "2024-01-01"
-        assert "UnblendedCost" in call_kwargs["Metrics"]
+        assert "AmortizedCost" in call_kwargs["Metrics"]
 
 @pytest.mark.asyncio
 async def test_get_daily_costs_pagination(adapter):
@@ -117,18 +123,29 @@ async def test_get_daily_costs_pagination(adapter):
     adapter._credentials_expire_at = datetime.now(timezone.utc) + timedelta(hours=1)
     
     mock_ce = AsyncMock()
-    # First response with token
-    mock_ce.get_cost_and_usage.side_effect = [
-        {"ResultsByTime": [{"A": 1}], "NextPageToken": "page2"},
-        {"ResultsByTime": [{"B": 2}]} # Second response without token
-    ]
-    
     mock_session = MagicMock()
     mock_session.client.return_value.__aenter__.return_value = mock_ce
     
     with patch.object(adapter, 'session', mock_session):
-        results = await adapter.get_daily_costs(date(2024, 1, 1), date(2024, 1, 2))
-        assert len(results) == 2
+        # Create full mock response for page 1
+        mock_ce.get_cost_and_usage.side_effect = [
+            {
+                "ResultsByTime": [{
+                    "TimePeriod": {"Start": "2024-01-01T00:00:00Z"},
+                    "Groups": [{"Keys": ["S3"], "Metrics": {"AmortizedCost": {"Amount": "100"}}}]
+                }],
+                "NextPageToken": "page2"
+            },
+            {
+                "ResultsByTime": [{
+                    "TimePeriod": {"Start": "2024-01-02T00:00:00Z"},
+                    "Groups": [{"Keys": ["EC2"], "Metrics": {"AmortizedCost": {"Amount": "50"}}}]
+                }],
+            }
+        ]
+        results = await adapter.get_daily_costs(datetime(2024, 1, 1, tzinfo=timezone.utc), datetime(2024, 1, 2, tzinfo=timezone.utc))
+        assert len(results.records) == 2
+        assert results.total_cost == Decimal("150")
         assert mock_ce.get_cost_and_usage.call_count == 2
 
 @pytest.mark.asyncio

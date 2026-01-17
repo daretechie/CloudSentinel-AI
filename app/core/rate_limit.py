@@ -32,66 +32,48 @@ def context_aware_key(request: Request) -> str:
     if auth_header and auth_header.startswith("Bearer "):
         token = auth_header.split(" ")[1]
         try:
-            # We use the sub directly for identification (NAT-safe)
-            # No need for full verification here as it's just for identification,
-            # downstream dependencies will handle real verification.
-            import jwt
-            payload = jwt.decode(token, options={"verify_signature": False})
-            user_id = payload.get("sub")
-            if user_id:
-                return f"user:{user_id}"
+            # SEC-02: Hash token for rate limiting instead of decoding
+            # This prevents bypass via forged JWTs with same 'sub' claim
+            import hashlib
+            token_hash = hashlib.sha256(token.encode()).hexdigest()[:16]
+            return f"token:{token_hash}"
         except Exception:
             pass
 
     return get_remote_address(request)
 
-# Create limiter instance with context-aware identification and distributed storage
-settings = get_settings()
-storage_uri = settings.REDIS_URL or "memory://"
+def get_limiter() -> Limiter:
+    """Lazy initialization of the Limiter instance."""
+    global _limiter
+    if _limiter is None:
+        settings = get_settings()
+        storage_uri = settings.REDIS_URL or "memory://"
+        _limiter = Limiter(
+            key_func=context_aware_key,
+            storage_uri=storage_uri,
+            strategy="fixed-window"
+        )
+    return _limiter
 
-limiter = Limiter(
-    key_func=context_aware_key,
-    storage_uri=storage_uri,
-    strategy="fixed-window" # Standard strategy
-)
-
+_limiter = None
 
 def setup_rate_limiting(app: FastAPI) -> None:
     """
     Configure rate limiting for the FastAPI application.
-
-    Default limits (configurable via settings):
-    - 100 requests/minute for general API
-    - 10 requests/minute for analysis endpoints (LLM calls)
-    - 30 requests/minute for authentication
     """
-    get_settings()
-
+    l = get_limiter()
     # Add rate limit exceeded handler
-    app.state.limiter = limiter
+    app.state.limiter = l
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-
-    logger.info("rate_limiting_configured", default_limit="100/minute")
-
+    logger.info("rate_limiting_configured")
 
 # Rate limit decorators for use in routes
 def rate_limit(limit: str = "100/minute"):
-    """
-    Decorator to apply rate limiting to an endpoint.
+    """Decorator to apply rate limiting to an endpoint."""
+    return get_limiter().limit(limit)
 
-    Usage:
-        @router.get("/expensive-operation")
-        @rate_limit("10/minute")
-        async def expensive_operation():
-            ...
-
-    Args:
-        limit: Rate limit string (e.g., "100/minute", "10/second", "1000/hour")
-    """
-    return limiter.limit(limit)
-
-
-# Pre-configured rate limiters for common use cases
-standard_limit = limiter.limit("100/minute")
-analysis_limit = limiter.limit("10/minute")  # For LLM-based analysis (expensive)
-auth_limit = limiter.limit("30/minute")      # For auth endpoints
+# Pre-configured rate limits (now using strings for delay)
+# Route handlers can use @rate_limit("100/minute") or these helpers
+STANDARD_LIMIT = "100/minute"
+ANALYSIS_LIMIT = "10/minute"
+AUTH_LIMIT = "30/minute"

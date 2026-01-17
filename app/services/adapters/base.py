@@ -25,20 +25,21 @@ class BaseAdapter(ABC):
         end_date: datetime,
         granularity: str = "DAILY"
     ) -> List[Dict[str, Any]]:
+        """Fetch cost data as a list (legacy)."""
+        pass
+
+    @abstractmethod
+    async def stream_cost_and_usage(
+        self,
+        start_date: datetime,
+        end_date: datetime,
+        granularity: str = "DAILY"
+    ) -> Any:
+        # Use Any for now as a workaround for AsyncGenerator type hint in abstractmethod
+        # Real implementations will return AsyncGenerator[Dict[str, Any], None]
         """
-        Fetch cost data normalized to the standard Valdrix format.
-        
-        Returns list of dicts:
-        {
-            "timestamp": datetime,
-            "service": str,
-            "region": str,
-            "usage_type": str,
-            "cost_usd": Decimal,
-            "currency": str,
-            "amount_raw": Decimal,  # Original currency amount
-            "tags": dict            # Optional raw tags
-        }
+        Stream cost data normalized to the standard Valdrix format.
+        Used for memory-efficient ingestion.
         """
         pass
     

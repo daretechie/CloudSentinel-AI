@@ -90,17 +90,7 @@ class CarbonCalculator:
         region: str = "us-east-1",
     ) -> Dict[str, Any]:
         """
-        Calculate carbon footprint from AWS cost data.
-
-        IMPORTANT: For accurate results, pass GROSS USAGE data
-        (excluding credits/refunds). Use adapter.get_gross_usage().
-
-        Args:
-            cost_data: Cost records from AWS Cost Explorer (use gross usage!)
-            region: AWS region (for carbon intensity lookup)
-
-        Returns:
-            Dict with total emissions, breakdown, efficiency score, and equivalencies
+        Legacy cost-proxy calculation. Still used for manual uploads or quick views.
         """
         total_cost_usd = Decimal("0")
         total_energy_kwh = Decimal("0")
@@ -117,7 +107,7 @@ class CarbonCalculator:
                             group.get("Metrics", {})
                             .get("UnblendedCost", {})
                             .get("Amount", "0")
-                        )
+                            )
                         if cost_amount > 0:
                             total_cost_usd += cost_amount
                             # Get factor for this specific service or use default
@@ -131,7 +121,7 @@ class CarbonCalculator:
                         record.get("Total", {})
                         .get("UnblendedCost", {})
                         .get("Amount", "0")
-                    )
+                        )
                     if cost_amount > 0:
                         total_cost_usd += cost_amount
                         energy_factor = Decimal(str(SERVICE_ENERGY_FACTORS["default"]))
@@ -141,6 +131,54 @@ class CarbonCalculator:
                 logger.warning("carbon_calc_skip_record", error=str(e))
                 continue
 
+        return self._finalize_calculation(total_cost_usd, total_energy_kwh, region)
+
+    def calculate_from_records(
+        self,
+        records: List[Any], # List[CostRecord]
+        region: str = "us-east-1",
+    ) -> Dict[str, Any]:
+        """
+        High-precision SKU-level calculation. 
+        Uses amount_raw if it represents actual usage quantities.
+        """
+        total_cost_usd = Decimal("0")
+        total_energy_kwh = Decimal("0")
+
+        for record in records:
+            total_cost_usd += record.cost_usd
+            
+            # If we have raw usage (vCPU-Hours, GB-Months), we can be much more accurate.
+            # In a full implementation, we'd map usage_type to precise kWh consumption.
+            # For now, we use amount_raw as a refined proxy or direct kWh if the CUR adapter 
+            # pre-calculates it.
+            
+            if record.amount_raw and record.amount_raw > 0:
+                # Refined conversion logic: 
+                # EC2 Compute: amount_raw (Hours) * Watts per vCPU / 1000
+                if "EC2" in record.service and "vCPU-Hours" in str(record.usage_type):
+                    # Average 2026 server: 10W per vCPU active
+                    total_energy_kwh += record.amount_raw * Decimal("0.010") 
+                else:
+                    # Fallback to refined cost-proxy if usage_type isn't mapped
+                    factor_key = record.service if record.service in SERVICE_ENERGY_FACTORS else "default"
+                    energy_factor = Decimal(str(SERVICE_ENERGY_FACTORS[factor_key]))
+                    total_energy_kwh += record.cost_usd * energy_factor
+            else:
+                # Absolute fallback
+                factor_key = record.service if record.service in SERVICE_ENERGY_FACTORS else "default"
+                energy_factor = Decimal(str(SERVICE_ENERGY_FACTORS[factor_key]))
+                total_energy_kwh += record.cost_usd * energy_factor
+
+        return self._finalize_calculation(total_cost_usd, total_energy_kwh, region)
+
+    def _finalize_calculation(
+        self, 
+        total_cost_usd: Decimal, 
+        total_energy_kwh: Decimal, 
+        region: str
+    ) -> Dict[str, Any]:
+        """Shared logic for emissions calculation and result formatting."""
         # Apply PUE (datacenter overhead)
         total_energy_with_pue = total_energy_kwh * Decimal(str(AWS_PUE))
 
@@ -160,10 +198,12 @@ class CarbonCalculator:
         total_co2_kg = scope2_co2_kg + scope3_co2_kg
 
         # Calculate Carbon Efficiency Score (gCO2e per $1 of usage)
-        # Lower is better - this is a key FinOps Carbon KPI
         carbon_efficiency_score = 0.0
         if total_cost_usd > 0:
             carbon_efficiency_score = float(total_co2_kg * 1000 / total_cost_usd)
+        elif total_co2_kg > 0:
+            # If cost is 0 but co2 is not (rare but possible in some edge cases)
+            carbon_efficiency_score = 9999.9  # High inefficiency sentinel
 
         # Calculate equivalencies for user-friendly display
         equivalencies = self._calculate_equivalencies(float(total_co2_kg))
@@ -243,7 +283,7 @@ class CarbonCalculator:
         for region, intensity in sorted(REGION_CARBON_INTENSITY.items(), key=lambda x: x[1]):
             if region == "default":
                 continue
-            if intensity < current_intensity:
+            if intensity < current_intensity and current_intensity > 0:
                 savings_percent = round((1 - intensity / current_intensity) * 100, 1)
                 recommendations.append({
                     "region": region,

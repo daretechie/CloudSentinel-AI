@@ -68,9 +68,21 @@ class GCPAdapter(BaseAdapter):
 
         client = self._get_bq_client()
         
-        # Determine the table path
+        # Determine and validate the table path (SEC-06)
         billing_project = self.connection.billing_project_id or self.connection.project_id
-        table_path = f"{billing_project}.{self.connection.billing_dataset}.{self.connection.billing_table}"
+        billing_dataset = self.connection.billing_dataset
+        billing_table = self.connection.billing_table
+
+        # Strict validation: GCP resource IDs must be alphanumeric plus hyphens/underscores/dots
+        # This prevents injection into the f-string query below
+        import re
+        safe_pattern = re.compile(r"^[a-zA-Z0-9.\-_]+$")
+        if not all(safe_pattern.match(s) for s in [billing_project, billing_dataset, billing_table]):
+             logger.error("gcp_bq_invalid_table_path", 
+                          project=billing_project, dataset=billing_dataset, table=billing_table)
+             return []
+
+        table_path = f"{billing_project}.{billing_dataset}.{billing_table}"
 
         # Standard GCP Billing Export Query
         query = f"""
@@ -84,7 +96,7 @@ class GCPAdapter(BaseAdapter):
               AND usage_start_time <= @end_date
             GROUP BY service, timestamp
             ORDER BY timestamp DESC
-        """
+        """ # nosec: B608
         
         job_config = bigquery.QueryJobConfig(
             query_parameters=[
@@ -103,13 +115,27 @@ class GCPAdapter(BaseAdapter):
                     "service": row.service,
                     "cost_usd": float(row.cost_usd),
                     "currency": row.currency,
-                    "region": "global" # Detailed region usually needs separate field mapping
+                    "region": "global" 
                 }
                 for row in results
             ]
         except Exception as e:
             logger.error("gcp_bq_query_failed", table=table_path, error=str(e))
             return []
+
+    async def stream_cost_and_usage(
+        self,
+        start_date: datetime,
+        end_date: datetime,
+        granularity: str = "DAILY"
+    ) -> Any:
+        """
+        Stream GCP costs from BigQuery.
+        Yields records one-by-one from the BigQuery result set.
+        """
+        records = await self.get_cost_and_usage(start_date, end_date, granularity)
+        for r in records:
+            yield r
 
     async def discover_resources(self, resource_type: str, region: str = None) -> List[Dict[str, Any]]:
         """

@@ -18,6 +18,7 @@ from sqlalchemy import select
 import structlog
 
 from app.models.remediation import RemediationRequest, RemediationStatus, RemediationAction
+from app.services.security.audit_log import AuditLogger, AuditEventType
 
 logger = structlog.get_logger()
 
@@ -220,9 +221,42 @@ class RemediationService:
                 resource=request.resource_id,
             )
 
+            # Permanent Audit Log (SEC-03) - SOC2 compliant
+            audit_logger = AuditLogger(db=self.db, tenant_id=tenant_id)
+            await audit_logger.log(
+                event_type=AuditEventType.REMEDIATION_EXECUTED,
+                actor_id=request.reviewed_by_user_id,
+                resource_id=request.resource_id,
+                resource_type=request.resource_type,
+                success=True,
+                details={
+                    "request_id": str(request_id),
+                    "action": request.action.value,
+                    "backup_id": request.backup_resource_id,
+                    "savings": float(request.estimated_monthly_savings or 0)
+                }
+            )
+
         except Exception as e:
+            # ... (logger.error already there)
             request.status = RemediationStatus.FAILED
             request.execution_error = str(e)[:500]
+            
+            # Log failure in SOC2 Audit Log
+            audit_logger = AuditLogger(db=self.db, tenant_id=tenant_id)
+            await audit_logger.log(
+                event_type=AuditEventType.REMEDIATION_FAILED,
+                actor_id=request.reviewed_by_user_id,
+                resource_id=request.resource_id,
+                resource_type=request.resource_type,
+                success=False,
+                error_message=str(e),
+                details={
+                    "request_id": str(request_id),
+                    "action": request.action.value
+                }
+            )
+            
             logger.error(
                 "remediation_failed",
                 request_id=str(request_id),

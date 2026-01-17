@@ -25,7 +25,8 @@ async def test_verify_connection_success():
     db.execute.return_value = mock_result
 
     with patch.object(AWSConnectionService, 'verify_role_access', AsyncMock(return_value=(True, None))):
-        res = await AWSConnectionService.verify_connection(db, connection_id, tenant_id)
+        service = AWSConnectionService(db)
+        res = await service.verify_connection(connection_id, tenant_id)
         
         assert res["status"] == "active"
         assert mock_conn.status == "active"
@@ -53,7 +54,8 @@ async def test_verify_connection_failure():
 
     with patch.object(AWSConnectionService, 'verify_role_access', AsyncMock(return_value=(False, "AccessDenied"))):
         with pytest.raises(HTTPException) as excinfo:
-            await AWSConnectionService.verify_connection(db, connection_id, tenant_id)
+            service = AWSConnectionService(db)
+            await service.verify_connection(connection_id, tenant_id)
         
         assert excinfo.value.status_code == 400
         assert "AccessDenied" in excinfo.value.detail

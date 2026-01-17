@@ -10,7 +10,9 @@ def pii_redactor(logger, method_name, event_dict):
     """
     pii_fields = {
         "email", "user_email", "phone", "password", "token", "secret", 
-        "cvv", "api_key", "aws_secret_key", "stripe_customer_id"
+        "cvv", "api_key", "aws_secret_key", "stripe_customer_id",
+        "_openai_api_key", "_claude_api_key", "_google_api_key", "_groq_api_key",
+        "paystack_auth_code", "authorization_code", "client_secret"
     }
     
     # Redact top-level fields

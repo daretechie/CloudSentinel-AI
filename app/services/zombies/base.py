@@ -22,28 +22,29 @@ class BaseZombieDetector(ABC):
     - Provide a bridge between generic plugins and provider-specific clients.
     """
 
-    def __init__(self, region: str = "global", credentials: Optional[Dict[str, str]] = None):
+    from sqlalchemy.ext.asyncio import AsyncSession
+    def __init__(self, region: str = "global", credentials: Optional[Dict[str, str]] = None, db: Optional[AsyncSession] = None):
         """
         Initializes the detector for a specific region.
         
         Args:
             region: Cloud region (e.g., 'us-east-1').
             credentials: Optional provider-specific credentials override.
+            db: Optional database session for persistence.
         """
         self.region = region
         self.credentials = credentials
+        self.db = db
         self.plugins: List[ZombiePlugin] = [] 
 
     @abstractmethod
     def _initialize_plugins(self):
         """Register provider-specific plugins for the cloud service."""
-        pass
 
     @property
     @abstractmethod
     def provider_name(self) -> str:
         """The cloud provider identifier (e.g., 'aws')."""
-        pass
 
     async def scan_all(self, on_category_complete=None) -> Dict[str, Any]:
         """
@@ -87,7 +88,7 @@ class BaseZombieDetector(ABC):
 
             # Calculate the total monthly waste across all items
             total = Decimal("0")
-            for key, items in results.items():
+            for items in results.values():
                 if isinstance(items, list):
                     for item in items:
                         total += Decimal(str(item.get("monthly_cost", 0)))

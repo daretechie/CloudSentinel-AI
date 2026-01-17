@@ -14,7 +14,7 @@ from unittest.mock import AsyncMock
 
 from app.services.zombies.detector import ZombieDetector
 from app.services.zombies.zombie_plugin import ZombiePlugin, ESTIMATED_COSTS
-from app.services.zombies.plugins import (
+from app.services.zombies.aws_provider.plugins import (
     UnattachedVolumesPlugin, OldSnapshotsPlugin, IdleS3BucketsPlugin,
     UnusedElasticIpsPlugin, IdleInstancesPlugin,
     OrphanLoadBalancersPlugin, UnderusedNatGatewaysPlugin,

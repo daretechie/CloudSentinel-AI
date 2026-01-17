@@ -23,7 +23,7 @@ class TestCostsEndpoint:
     
     async def test_costs_without_auth_returns_401(self, ac: AsyncClient):
         """Test that costs endpoint requires authentication."""
-        response = await ac.get("/costs?start_date=2026-01-01&end_date=2026-01-02")
+        response = await ac.get("/api/v1/costs?start_date=2026-01-01&end_date=2026-01-02")
         
         # FastAPI returns 401 for missing header with HTTPBearer
         assert response.status_code == 401
@@ -31,7 +31,7 @@ class TestCostsEndpoint:
     async def test_costs_with_invalid_token_returns_401(self, ac: AsyncClient):
         """Test that invalid token is rejected."""
         response = await ac.get(
-            "/costs?start_date=2026-01-01&end_date=2026-01-02",
+            "/api/v1/costs?start_date=2026-01-01&end_date=2026-01-02",
             headers={"Authorization": "Bearer invalid-token-12345"}
         )
         
@@ -44,7 +44,7 @@ class TestAnalyzeEndpoint:
     
     async def test_analyze_without_auth_returns_401(self, ac: AsyncClient):
         """Test that analyze endpoint requires authentication."""
-        response = await ac.get("/current?start_date=2026-01-01&end_date=2026-01-02")
+        response = await ac.get("/api/v1/costs/analyze?start_date=2026-01-01&end_date=2026-01-02")
         
         assert response.status_code == 401
 
@@ -55,7 +55,7 @@ class TestLLMUsageEndpoint:
     
     async def test_llm_usage_without_auth_returns_401(self, ac: AsyncClient):
         """Test that LLM usage endpoint requires authentication."""
-        response = await ac.get("/llm/usage")
+        response = await ac.get("/api/v1/costs/llm/usage")
         
         assert response.status_code == 401
 
@@ -66,7 +66,7 @@ class TestCarbonEndpoint:
     
     async def test_carbon_without_auth_returns_401(self, ac: AsyncClient):
         """Test that carbon endpoint requires authentication."""
-        response = await ac.get("/carbon?start_date=2026-01-01&end_date=2026-01-02")
+        response = await ac.get("/api/v1/carbon?start_date=2026-01-01&end_date=2026-01-02")
         
         assert response.status_code == 401
 
@@ -77,14 +77,14 @@ class TestZombiesEndpoint:
     
     async def test_zombies_without_auth_returns_401(self, ac: AsyncClient):
         """Test that zombies endpoint requires authentication."""
-        response = await ac.get("/zombies")
+        response = await ac.get("/api/v1/zombies")
         
         assert response.status_code == 401
     
     async def test_zombies_request_without_auth_returns_401(self, ac: AsyncClient):
         """Test that zombie request endpoint requires authentication."""
         response = await ac.post(
-            "/zombies/request",
+            "/api/v1/zombies/request",
             json={
                 "resource_id": "test-123", 
                 "resource_type": "volume",
@@ -98,7 +98,7 @@ class TestZombiesEndpoint:
     async def test_zombies_approve_without_auth_returns_401(self, ac: AsyncClient):
         """Test that zombie approve endpoint requires authentication."""
         from uuid import uuid4
-        response = await ac.post(f"/zombies/approve/{uuid4()}")
+        response = await ac.post(f"/api/v1/zombies/approve/{uuid4()}")
         
         assert response.status_code == 401
 
@@ -109,7 +109,7 @@ class TestAdminEndpoint:
     
     async def test_admin_trigger_without_key_returns_422(self, ac: AsyncClient):
         """Test that admin trigger requires X-Admin-Key header."""
-        response = await ac.post("/admin/trigger-analysis")
+        response = await ac.post("/api/v1/admin/trigger-analysis")
         
         # FastAPI returns 422 if required Header is missing
         assert response.status_code == 422
@@ -122,16 +122,16 @@ class TestConnectionsEndpoint:
     async def test_sync_org_without_auth_returns_401(self, ac: AsyncClient):
         """Test that sync-org endpoint requires authentication."""
         from uuid import uuid4
-        response = await ac.post(f"/connections/aws/{uuid4()}/sync-org")
+        response = await ac.post(f"/api/v1/settings/connections/aws/{uuid4()}/sync-org")
         assert response.status_code == 401
 
     async def test_list_discovered_without_auth_returns_401(self, ac: AsyncClient):
         """Test that list discovered accounts endpoint requires authentication."""
-        response = await ac.get("/connections/aws/discovered")
+        response = await ac.get("/api/v1/settings/connections/aws/discovered")
         assert response.status_code == 401
         
     async def test_link_discovered_without_auth_returns_401(self, ac: AsyncClient):
         """Test that link discovered account endpoint requires authentication."""
         from uuid import uuid4
-        response = await ac.post(f"/connections/aws/discovered/{uuid4()}/link")
+        response = await ac.post(f"/api/v1/settings/connections/aws/discovered/{uuid4()}/link")
         assert response.status_code == 401

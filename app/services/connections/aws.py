@@ -22,6 +22,9 @@ from app.services.connections.cur_automation import IAMCURManager
 logger = structlog.get_logger()
 
 class AWSConnectionService:
+    def __init__(self, db: AsyncSession):
+        self.db = db
+
     @staticmethod
     def get_setup_templates(external_id: str) -> dict:
         """
@@ -107,10 +110,9 @@ class AWSConnectionService:
             logger.warning("aws_connection_verification_failed", role_arn=role_arn, error_code=error_code)
             return False, f"{error_code}: {error_message}"
 
-    @classmethod
-    async def verify_connection(cls, db: AsyncSession, connection_id: UUID, tenant_id: UUID) -> dict:
+    async def verify_connection(self, connection_id: UUID, tenant_id: UUID) -> dict:
         """Fetch connection, verify role access, and update status."""
-        result = await db.execute(
+        result = await self.db.execute(
             select(AWSConnection).where(
                 AWSConnection.id == connection_id,
                 AWSConnection.tenant_id == tenant_id
@@ -121,17 +123,17 @@ class AWSConnectionService:
         if not connection:
             raise HTTPException(status_code=404, detail="Connection not found")
 
-        success, error = await cls.verify_role_access(connection.role_arn, connection.external_id)
+        success, error = await self.verify_role_access(connection.role_arn, connection.external_id)
 
         connection.status = "active" if success else "error"
         connection.last_verified_at = datetime.now(timezone.utc)
         connection.error_message = error
-        await db.commit()
+        await self.db.commit()
 
         if success:
             # Trigger CUR Automation if not already active
             if connection.cur_status == "none":
-                await cls.setup_cur(db, connection)
+                await self.setup_cur(connection)
             
             return {"status": "active", "message": "Connection verified successfully"}
         else:
@@ -140,28 +142,27 @@ class AWSConnectionService:
                 detail=f"Connection verification failed: {error}"
             )
 
-    @classmethod
-    async def setup_cur(cls, db: AsyncSession, connection: AWSConnection):
+    async def setup_cur(self, connection: AWSConnection):
         """
         Trigger automated S3/CUR setup for a connection.
         """
         manager = IAMCURManager(connection)
         connection.cur_status = "setting_up"
-        await db.commit()
+        await self.db.commit()
 
         try:
             result = await manager.setup_cur_automation()
             connection.cur_bucket_name = result["bucket_name"]
             connection.cur_report_name = result["report_name"]
             connection.cur_status = "active"
-            await db.commit()
+            await self.db.commit()
             logger.info("cur_automation_triggered", 
                         connection_id=str(connection.id), 
                         bucket=result["bucket_name"])
         except Exception as e:
             connection.cur_status = "error"
             connection.error_message = f"CUR Setup Failed: {str(e)}"
-            await db.commit()
+            await self.db.commit()
             logger.error("cur_automation_trigger_failed", 
                          connection_id=str(connection.id), 
                          error=str(e))

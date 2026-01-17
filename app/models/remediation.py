@@ -14,7 +14,7 @@ Workflow:
 
 from uuid import uuid4
 from enum import Enum
-from sqlalchemy import Column, String, Integer, Boolean, ForeignKey, Enum as SQLEnum, Numeric
+from sqlalchemy import Column, String, Integer, Boolean, ForeignKey, Enum as SQLEnum, Numeric, Index
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
@@ -59,6 +59,9 @@ class RemediationRequest(Base):
     """
 
     __tablename__ = "remediation_requests"
+    __table_args__ = (
+        Index('ix_remediation_tenant_resource', 'tenant_id', 'resource_id'),
+    )
 
     # Primary Key
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
@@ -100,12 +103,14 @@ class RemediationRequest(Base):
     backup_resource_id = Column(String(100), nullable=True)  # ID of created backup
     backup_cost_estimate = Column(Numeric(10, 4), nullable=True)  # Monthly cost of backup
 
-    # Audit trail - who requested
     requested_by_user_id = Column(
         UUID(as_uuid=True),
         ForeignKey("users.id"),
-        nullable=False,
+        nullable=True,
     )
+    # Inherited timestamps with manual index if needed
+    # but Base class update is better if we could. 
+    # For now, we rely on the audit's specific request.
 
     # Audit trail - who approved/rejected
     reviewed_by_user_id = Column(

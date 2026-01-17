@@ -31,6 +31,8 @@ class CloudUsageSummary(BaseModel):
     by_service: Dict[str, Decimal] = Field(default_factory=dict)
     by_region: Dict[str, Decimal] = Field(default_factory=dict)
     by_tag: Dict[str, Dict[str, Decimal]] = Field(default_factory=dict) # e.g., {"Project": {"Prod": 10.5, "Dev": 5.2}}
+    
+    metadata: Dict[str, Any] = Field(default_factory=dict) # Added for Phase 21: Truncation flags, etc.
 
 class ResourceCandidate(BaseModel):
     """Normalized resource identified for optimization/remediation."""

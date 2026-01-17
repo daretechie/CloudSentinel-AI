@@ -48,11 +48,13 @@ class CostRecord(Base):
     # GreenOps
     carbon_kg: Mapped[float | None] = mapped_column(Numeric(10, 4), nullable=True)
 
-    recorded_at: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    recorded_at: Mapped[date] = mapped_column(Date, primary_key=True, nullable=False, index=True)
     timestamp: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
 
     account: Mapped["CloudAccount"] = relationship(back_populates="cost_records")
 
     __table_args__ = (
-        UniqueConstraint('account_id', 'timestamp', 'service', 'region', 'usage_type', name='uix_account_cost_granularity'),
+        UniqueConstraint('account_id', 'timestamp', 'service', 'region', 'usage_type', 'recorded_at', name='uix_account_cost_granularity'),
+        {"postgresql_partition_by": 'RANGE (recorded_at)'},
     )
+

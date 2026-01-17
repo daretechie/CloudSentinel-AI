@@ -6,7 +6,9 @@ import time
 import structlog
 from prometheus_client import Counter, Histogram
 import sqlalchemy as sa
+from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
 from app.models.tenant import Tenant
+
 from app.models.aws_connection import AWSConnection
 from app.core.tracing import set_correlation_id
 from app.services.scheduler.cohorts import TenantCohort, get_tenant_cohort
@@ -57,9 +59,6 @@ class SchedulerOrchestrator:
         try:
             async with self.session_maker() as db:
                 async with db.begin():
-                    # Distributed Safety: Acquire advisory lock for this cohort to prevent
-                    # multiple instances from enqueuing the same cohort.
-                    # ID derived from cohort name to avoid collision.
                     lock_id = SCHEDULER_LOCK_BASE_ID + hash(target_cohort.value) % 1000
                     lock_check = await db.execute(
                         sa.text("SELECT pg_try_advisory_xact_lock(:id)"), 
@@ -68,8 +67,6 @@ class SchedulerOrchestrator:
                     if not lock_check.scalar():
                         logger.info("scheduler_cohort_enqueue_skipped_locked", cohort=target_cohort.value)
                         return
-
-                    logger.info("scheduler_cohort_enqueue_starting", job=job_name, cohort=target_cohort.value)
                     
                     # SQL-level Cohort Filtering
                     query = sa.select(Tenant)
@@ -167,6 +164,34 @@ class SchedulerOrchestrator:
                         created_at=datetime.now(timezone.utc)
                     ))
 
+    async def billing_sweep_job(self):
+        """Daily sweep to find subscriptions due for renewal."""
+        from app.services.billing.paystack_billing import TenantSubscription, SubscriptionStatus
+        from app.models.background_job import BackgroundJob, JobType, JobStatus
+        
+        async with self.session_maker() as db:
+            async with db.begin():
+                # Find active subscriptions where next_payment_date is in the past
+                query = sa.select(TenantSubscription).where(
+                    TenantSubscription.status == SubscriptionStatus.ACTIVE.value,
+                    TenantSubscription.next_payment_date <= datetime.now(timezone.utc),
+                    TenantSubscription.paystack_auth_code.isnot(None)
+                )
+                result = await db.execute(query)
+                due_subscriptions = result.scalars().all()
+
+                for sub in due_subscriptions:
+                    # Enqueue individual renewal job
+                    db.add(BackgroundJob(
+                        job_type=JobType.RECURRING_BILLING.value,
+                        tenant_id=sub.tenant_id,
+                        payload={"subscription_id": str(sub.id)},
+                        status=JobStatus.PENDING,
+                        scheduled_for=datetime.now(timezone.utc),
+                        created_at=datetime.now(timezone.utc)
+                    ))
+                
+                logger.info("billing_sweep_completed", due_count=len(due_subscriptions))
 
     def start(self):
         """Defines cron schedules and starts APScheduler."""
@@ -201,6 +226,13 @@ class SchedulerOrchestrator:
             id="weekly_remediation_sweep",
             replace_existing=True
         )
+        # Billing: Daily 4AM
+        self.scheduler.add_job(
+            self.billing_sweep_job,
+            trigger=CronTrigger(hour=4, minute=0, timezone="UTC"),
+            id="daily_billing_sweep",
+            replace_existing=True
+        )
         self.scheduler.start()
 
     def stop(self):
@@ -213,3 +245,24 @@ class SchedulerOrchestrator:
             "last_run_time": self._last_run_time,
             "jobs": [job.id for job in self.scheduler.get_jobs()]
         }
+
+
+class SchedulerService(SchedulerOrchestrator):
+    """
+    Proxy class for backward compatibility. 
+    Inherits from refactored Orchestrator to maintain existing API.
+    """
+    
+    def __init__(self, session_maker):
+        super().__init__(session_maker)
+        logger.info("scheduler_proxy_initialized", refactor_version="1.0-modular")
+
+    async def daily_analysis_job(self):
+        """Legacy entry point, proxies to a full scan."""
+        from .cohorts import TenantCohort
+        # High value → Active → Dormant
+        await self.cohort_analysis_job(TenantCohort.HIGH_VALUE)
+        await self.cohort_analysis_job(TenantCohort.ACTIVE)
+        await self.cohort_analysis_job(TenantCohort.DORMANT)
+        self._last_run_success = True
+        self._last_run_time = datetime.now(timezone.utc).isoformat()

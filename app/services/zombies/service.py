@@ -37,16 +37,12 @@ class ZombieService:
         """
         Scan all cloud accounts (AWS, Azure, GCP) for a tenant and return aggregated results.
         """
-        # 1. Fetch all cloud connections
-        aws_q = await self.db.execute(select(AWSConnection).where(AWSConnection.tenant_id == tenant_id))
-        azure_q = await self.db.execute(select(AzureConnection).where(AzureConnection.tenant_id == tenant_id))
-        gcp_q = await self.db.execute(select(GCPConnection).where(GCPConnection.tenant_id == tenant_id))
-        
-        aws_connections = aws_q.scalars().all()
-        azure_connections = azure_q.scalars().all()
-        gcp_connections = gcp_q.scalars().all()
-
-        all_connections = list(aws_connections) + list(azure_connections) + list(gcp_connections)
+        # 1. Fetch all cloud connections generically
+        # Phase 21: Decoupling from concrete models
+        all_connections = []
+        for model in [AWSConnection, AzureConnection, GCPConnection]:
+           q = await self.db.execute(select(model).where(model.tenant_id == tenant_id))
+           all_connections.extend(q.scalars().all())
 
         if not all_connections:
             return {
@@ -86,7 +82,7 @@ class ZombieService:
                 scan_region = region if isinstance(conn, AWSConnection) else "global"
                 
                 # AWSCrossAccount logic for creds if needed, though DetectorFactory/Detector handle it
-                detector = ZombieDetectorFactory.get_detector(conn, region=scan_region)
+                detector = ZombieDetectorFactory.get_detector(conn, region=scan_region, db=self.db)
                 
                 # Execute detector scan (runs all plugins for that provider)
                 results = await detector.scan_all()

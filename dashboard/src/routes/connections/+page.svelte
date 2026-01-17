@@ -39,7 +39,7 @@
       const headers = await getHeaders();
       
       // AWS
-      const awsRes = await fetch(`${PUBLIC_API_URL}/connections/aws`, { headers });
+      const awsRes = await fetch(`${PUBLIC_API_URL}/settings/connections/aws`, { headers });
       if (awsRes.ok) {
         awsConnections = await awsRes.json();
         awsConnection = awsConnections.length > 0 ? awsConnections[0] : null;
@@ -47,14 +47,14 @@
       loadingAWS = false;
 
       // Azure
-      const azureRes = await fetch(`${PUBLIC_API_URL}/connections/azure`, { headers });
+      const azureRes = await fetch(`${PUBLIC_API_URL}/settings/connections/azure`, { headers });
       if (azureRes.ok) {
         azureConnections = await azureRes.json();
       }
       loadingAzure = false;
 
       // GCP
-      const gcpRes = await fetch(`${PUBLIC_API_URL}/connections/gcp`, { headers });
+      const gcpRes = await fetch(`${PUBLIC_API_URL}/settings/connections/gcp`, { headers });
       if (gcpRes.ok) {
         gcpConnections = await gcpRes.json();
       }
@@ -73,7 +73,7 @@
     loadingDiscovered = true;
     try {
       const headers = await getHeaders();
-      const res = await fetch(`${PUBLIC_API_URL}/connections/aws/discovered`, { headers });
+      const res = await fetch(`${PUBLIC_API_URL}/settings/connections/aws/discovered`, { headers });
       if (res.ok) {
         discoveredAccounts = await res.json();
       }
@@ -91,7 +91,7 @@
     error = '';
     try {
       const headers = await getHeaders();
-      const res = await fetch(`${PUBLIC_API_URL}/connections/aws/${awsConnection.id}/sync-org`, {
+      const res = await fetch(`${PUBLIC_API_URL}/settings/connections/aws/${awsConnection.id}/sync-org`, {
         method: 'POST',
         headers
       });
@@ -117,7 +117,7 @@
     error = '';
     try {
       const headers = await getHeaders();
-      const res = await fetch(`${PUBLIC_API_URL}/connections/${provider}/${id}`, {
+      const res = await fetch(`${PUBLIC_API_URL}/settings/connections/${provider}/${id}`, {
         method: 'DELETE',
         headers
       });
@@ -152,7 +152,7 @@
     error = '';
     try {
       const headers = await getHeaders();
-      const res = await fetch(`${PUBLIC_API_URL}/connections/aws/discovered/${discoveredId}/link`, {
+      const res = await fetch(`${PUBLIC_API_URL}/settings/connections/aws/discovered/${discoveredId}/link`, {
         method: 'POST',
         headers
       });

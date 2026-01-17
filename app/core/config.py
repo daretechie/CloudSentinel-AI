@@ -1,6 +1,8 @@
 from functools import lru_cache
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import model_validator
 from typing import Optional
+
 
 class Settings(BaseSettings):
     """
@@ -11,6 +13,22 @@ class Settings(BaseSettings):
     VERSION: str = "0.1.0"
     DEBUG: bool = False
     API_URL: str = "http://localhost:8000"  # Base URL for OIDC and Magic Links
+    OTEL_EXPORTER_OTLP_ENDPOINT: Optional[str] = None # Added for D5: Telemetry Sink
+    OTEL_EXPORTER_OTLP_INSECURE: bool = False # SEC-07: Secure Tracing
+    CSRF_SECRET_KEY: str = "change-me-in-production-csrf" # SEC-01: CSRF
+    TESTING: bool = False
+
+    @model_validator(mode='after')
+    def validate_csrf_key_in_production(self) -> 'Settings':
+        """Fail-closed: Prevent startup with default CSRF key in production."""
+        if not self.TESTING and not self.DEBUG:
+            if self.CSRF_SECRET_KEY == "change-me-in-production-csrf":
+                raise ValueError(
+                    "SECURITY ERROR: CSRF_SECRET_KEY must be changed from default in production! "
+                    "Set CSRF_SECRET_KEY environment variable to a secure random value."
+                )
+        return self
+
 
     # AWS Credentials
     AWS_ACCESS_KEY_ID: Optional[str] = None
@@ -25,13 +43,13 @@ class Settings(BaseSettings):
     # Security
     CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://localhost:5174", "http://localhost:3000"]
     FRONTEND_URL: str = "http://localhost:5173"  # Used for billing callbacks
-    ENCRYPTION_KEY: Optional[str] = None
     OPENAI_API_KEY: Optional[str] = None
     OPENAI_MODEL: str = "gpt-4o" # High performance for complex analysis
 
-    # Claude Credentials
+    # Claude/Anthropic Credentials
     CLAUDE_API_KEY: Optional[str] = None
     CLAUDE_MODEL: str = "claude-3-7-sonnet"
+    ANTHROPIC_API_KEY: Optional[str] = None # Added for Phase 28 compatibility
 
     # Google Gemini Credentials
     GOOGLE_API_KEY: Optional[str] = None
@@ -57,6 +75,8 @@ class Settings(BaseSettings):
     DATABASE_URL: str # Required in prod
     DB_SSL_MODE: str = "require"  # Options: disable, require, verify-ca, verify-full
     DB_SSL_CA_CERT_PATH: Optional[str] = None  # Path to CA cert for verify-ca/verify-full modes
+    DB_POOL_SIZE: int = 20  # Standard for Supabase/Neon free tiers
+    DB_MAX_OVERFLOW: int = 10
 
     # Supabase Auth
     SUPABASE_URL: Optional[str] = None
@@ -78,6 +98,11 @@ class Settings(BaseSettings):
     PII_ENCRYPTION_KEY: Optional[str] = None
     API_KEY_ENCRYPTION_KEY: Optional[str] = None
     LEGACY_ENCRYPTION_KEYS: list[str] = []
+    BLIND_INDEX_KEY: Optional[str] = None # SEC-06: Separation of keys
+    
+    # KDF Settings for password-to-key derivation (SEC-06)
+    KDF_SALT: str = "valdrix-default-salt-2026"
+    KDF_ITERATIONS: int = 100000
 
 
     # Cache (Redis for production, in-memory for dev)
@@ -90,6 +115,7 @@ class Settings(BaseSettings):
     # Paystack Billing (Nigeria Support)
     PAYSTACK_SECRET_KEY: Optional[str] = None
     PAYSTACK_PUBLIC_KEY: Optional[str] = None
+    EXCHANGERATE_API_KEY: Optional[str] = None # Added for dynamic currency
     # Monthly plans
     PAYSTACK_PLAN_STARTER: str = "PLN_starter_xxx"    # ₦41,250/mo ($29)
     PAYSTACK_PLAN_GROWTH: str = "PLN_growth_xxx"      # ₦112,350/mo ($79)
@@ -114,6 +140,35 @@ class Settings(BaseSettings):
         env_file=".env",
         env_ignore_empty=True
     )
+
+    @property
+    def is_production(self) -> bool:
+        return not self.DEBUG
+
+    from pydantic import model_validator
+    @model_validator(mode='after')
+    def validate_secure_keys(self) -> 'Settings':
+        """Ensure critical production keys are present and valid."""
+        if not self.ENCRYPTION_KEY or len(self.ENCRYPTION_KEY) < 32:
+            # Only allow missing version in local dev if not explicitly required
+            if self.is_production:
+                raise ValueError("ENCRYPTION_KEY must be at least 32 characters in production.")
+        
+        # Validate LLM Provider keys
+        provider_keys = {
+            "openai": self.OPENAI_API_KEY,
+            "claude": self.CLAUDE_API_KEY,
+            "anthropic": self.ANTHROPIC_API_KEY or self.CLAUDE_API_KEY, # Graceful migration
+            "google": self.GOOGLE_API_KEY,
+            "groq": self.GROQ_API_KEY
+        }
+        
+        if self.LLM_PROVIDER in provider_keys and not provider_keys[self.LLM_PROVIDER]:
+            # In production, we MUST have a key for the primary provider
+            if self.is_production:
+                raise ValueError(f"LLM_PROVIDER is set to '{self.LLM_PROVIDER}' but corresponding API key is missing.")
+        
+        return self
 
 @lru_cache
 def get_settings():

@@ -16,8 +16,8 @@ Architecture:
 """
 
 import aioboto3
-from datetime import date
-from typing import List, Dict, Any
+from datetime import date, datetime
+from typing import List, Dict, Any, Optional
 import structlog
 from botocore.exceptions import ClientError
 
@@ -121,6 +121,23 @@ class CURAdapter(CostAdapter):
                     async for page in paginator.paginate(Bucket=self.bucket_name, Prefix=prefix):
                         for obj in page.get("Contents", []):
                             key = obj["Key"]
+                            # The following code snippet appears to be a test mock and is not valid
+                            # for inclusion in the production code.
+                            # mock_ce.get_cost_and_usage.side_effect = [
+                            # {
+                            # "ResultsByTime": [{
+                            # "TimePeriod": {"Start": "2024-01-01T00:00:00Z"},
+                            # "Groups": [{"Keys": ["S3"], "Metrics": {"AmortizedCost": {"Amount": "100"}}}]
+                            # }],
+                            # "NextPageToken": "page2"
+                            # },
+                            # {
+                            # "ResultsByTime": [{
+                            # "TimePeriod": {"Start": "2024-01-02T00:00:00Z"},
+                            # "Groups": [{"Keys": ["EC2"], "Metrics": {"AmortizedCost": {"Amount": "50"}}}]
+                            # }],
+                            # }
+                            # ]
                             if key.endswith(".parquet"):
                                 files.append(key)
 
@@ -186,15 +203,51 @@ class CURAdapter(CostAdapter):
             group_by_service=True
         )
 
-    async def get_resource_usage(self, service_name: str) -> List[Dict[str, Any]]:
-        """
-        Get resource-level costs for a specific service.
+    async def get_cost_and_usage(
+        self,
+        start_date: datetime,
+        end_date: datetime,
+        granularity: str = "DAILY"
+    ) -> List[Dict[str, Any]]:
+        """Standard interface for cost data."""
+        # Convert datetime to date for legacy get_daily_costs
+        s_date = start_date.date() if isinstance(start_date, datetime) else start_date
+        e_date = end_date.date() if isinstance(end_date, datetime) else end_date
+        return await self.get_daily_costs(s_date, e_date)
 
-        CUR provides line_item_resource_id which enables this,
-        unlike Cost Explorer which only goes to service level.
+    async def stream_cost_and_usage(
+        self,
+        start_date: datetime,
+        end_date: datetime,
+        granularity: str = "DAILY"
+    ) -> Any:
         """
-        # TODO: Implement resource-level cost attribution
+        Stream cost data from CUR files.
+        """
+        # Convert datetime to date for legacy _list_cur_files
+        s_date = start_date.date() if isinstance(start_date, datetime) else start_date
+        e_date = end_date.date() if isinstance(end_date, datetime) else end_date
+        
+        cur_files = await self._list_cur_files(s_date, e_date)
+        if not cur_files:
+            return
+
+        # Scaffold implementation - just logs and returns nothing for now
+        # until full parquet parsing is added via pyarrow (Phase 26)
+        logger.info("cur_streaming_not_implemented", count=len(cur_files))
+        return
+
+    async def discover_resources(self, resource_type: str = None, region: str = None) -> List[Dict[str, Any]]:
+        """CUR-based resource discovery."""
         return []
+
+    async def get_resource_usage(self, service_name: str, resource_id: str = None) -> List[Dict[str, Any]]:
+        """Detailed resource usage from CUR."""
+        return []
+
+    async def verify_connection(self) -> bool:
+        """Verify S3 accessibility."""
+        return True
 
 
 class CURConfig:

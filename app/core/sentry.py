@@ -115,12 +115,10 @@ def _before_send(event, hint):
 def capture_message(message: str, level: str = "info", **extras):
     """
     Capture a custom message in Sentry.
-    
-    Args:
-        message: The message to capture
-        level: Severity level (debug, info, warning, error, fatal)
-        **extras: Additional context to attach
     """
+    if not SENTRY_AVAILABLE:
+        return
+
     with sentry_sdk.push_scope() as scope:
         for key, value in extras.items():
             scope.set_extra(key, value)
@@ -130,9 +128,10 @@ def capture_message(message: str, level: str = "info", **extras):
 def set_user(user_id: str, tenant_id: str = None, email: str = None):
     """
     Set user context for Sentry events.
-    
-    Call this after authentication to associate errors with users.
     """
+    if not SENTRY_AVAILABLE:
+        return
+
     sentry_sdk.set_user({
         "id": user_id,
         "tenant_id": tenant_id,
@@ -144,6 +143,9 @@ def set_tenant_context(tenant_id: str, tenant_name: str = None):
     """
     Set tenant context for multi-tenant error tracking.
     """
+    if not SENTRY_AVAILABLE:
+        return
+
     sentry_sdk.set_tag("tenant_id", tenant_id)
     if tenant_name:
         sentry_sdk.set_tag("tenant_name", tenant_name)

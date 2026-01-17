@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Dict, Any
 import structlog
 from azure.identity.aio import ClientSecretCredential
@@ -57,7 +57,7 @@ class AzureAdapter(BaseAdapter):
                 break
             return True
         except Exception as e:
-            logger.error("azure_verify_failed", error=str(e), tenant_id=str(self.connection.tenant_id))
+            logger.error("azure_verify_failed", error=str(e), tenant_id=str(self.connection.azure_tenant_id))
             return False
 
     async def get_cost_and_usage(
@@ -67,13 +67,15 @@ class AzureAdapter(BaseAdapter):
         granularity: str = "DAILY"
     ) -> List[Dict[str, Any]]:
         """
-        Fetch Azure costs using the Query API.
+        Fetch costs using Azure Query API.
         """
         try:
             client = await self._get_cost_client()
-            scope = f"/subscriptions/{self.connection.subscription_id}"
             
-            query = QueryDefinition(
+            # Azure Query API requires a scope (subscription in this case)
+            scope = f"subscriptions/{self.connection.subscription_id}"
+            
+            query_definition = QueryDefinition(
                 type="ActualCost",
                 timeframe="Custom",
                 time_period=QueryTimePeriod(
@@ -81,53 +83,54 @@ class AzureAdapter(BaseAdapter):
                     to=end_date
                 ),
                 dataset=QueryDataset(
-                    granularity=granularity.capitalize(),
+                    granularity=granularity,
                     aggregation={
                         "totalCost": QueryAggregation(name="PreTaxCost", function="Sum")
                     },
                     grouping=[
-                        QueryGrouping(type="Dimension", name="ResourceGroup"),
-                        QueryGrouping(type="Dimension", name="ServiceName")
+                        QueryGrouping(type="Dimension", name="ServiceName"),
+                        QueryGrouping(type="Dimension", name="ResourceLocation")
                     ]
                 )
             )
             
-            result = await client.query.usage(scope=scope, parameters=query)
+            response = await client.query.usage(scope=scope, parameters=query_definition)
             
-            # Map Azure columns to standard format
-            # Columns usually: [PreTaxCost, ResourceGroup, ServiceName, Currency, UsageDate]
-            columns = [col.name for col in result.columns]
-            data = []
-            for row in result.rows:
-                entry = dict(zip(columns, row))
-                
-                # Parse date if present
-                usage_date = entry.get("UsageDate")
-                timestamp = datetime.now() # Fallback
-                if usage_date:
-                    try:
-                        timestamp = datetime.strptime(str(usage_date), "%Y-%m-%d")
-                    except ValueError:
-                        try:
-                            timestamp = datetime.fromisoformat(str(usage_date))
-                        except Exception:
-                            pass
-
-                data.append({
-                    "timestamp": timestamp,
-                    "service": entry.get("ServiceName", "Unknown"),
-                    "region": "global", # Azure Query API grouping by ResourceGroup usually
-                    "usage_type": entry.get("ResourceGroup", "Unknown"),
-                    "cost_usd": float(entry.get("PreTaxCost", 0)),
-                    "currency": entry.get("Currency", "USD"),
-                    "amount_raw": float(entry.get("PreTaxCost", 0)),
-                    "tags": {"resource_group": entry.get("ResourceGroup")}
-                })
-            
-            return data
+            records = []
+            if response and response.rows:
+                # Column indices based on grouping: PreTaxCost (0), ServiceName (1), ResourceLocation (2), UsageDate (3)
+                for row in response.rows:
+                    dt = datetime.strptime(str(row[3]).strip(), "%Y%m%d").replace(tzinfo=timezone.utc)
+                    records.append({
+                        "timestamp": dt,
+                        "service": row[1],
+                        "region": row[2],
+                        "cost_usd": float(row[0]),
+                        "currency": "USD",
+                        "amount_raw": float(row[0]),
+                        "usage_type": "Usage"
+                    })
+            return records
+                    
+            return records
         except Exception as e:
-            logger.error("azure_cost_fetch_failed", error=str(e), tenant_id=str(self.connection.tenant_id))
-            raise AdapterError(f"Azure cost fetch failed: {str(e)}")
+            from app.core.exceptions import AdapterError
+            logger.error("azure_cost_fetch_failed", error=str(e))
+            raise AdapterError(f"Azure cost fetch failed: {str(e)}") from e
+
+    async def stream_cost_and_usage(
+        self,
+        start_date: datetime,
+        end_date: datetime,
+        granularity: str = "DAILY"
+    ) -> Any:
+        """
+        Stream Azure costs.
+        Currently wraps the Query API (which is list-based) but yields individually to match interface.
+        """
+        records = await self.get_cost_and_usage(start_date, end_date, granularity)
+        for r in records:
+            yield r
 
     async def discover_resources(self, resource_type: str, region: str = None) -> List[Dict[str, Any]]:
         """

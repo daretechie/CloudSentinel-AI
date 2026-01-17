@@ -20,6 +20,9 @@ from app.models.remediation_settings import RemediationSettings  # noqa: F401
 from app.models.azure_connection import AzureConnection  # noqa: F401
 from app.models.gcp_connection import GCPConnection  # noqa: F401
 from app.models.tenant import User, Tenant  # noqa: F401
+from app.models.pricing import PricingPlan, ExchangeRate  # noqa: F401
+from app.models.background_job import BackgroundJob  # noqa: F401
+from app.services.billing.paystack_billing import TenantSubscription  # noqa: F401
 
 from app.core.config import get_settings
 from sqlalchemy.ext.asyncio import create_async_engine

@@ -17,6 +17,10 @@ def setup_tracing(app=None):
     """
     settings = get_settings()
     
+    if settings.TESTING:
+        logger.info("setup_tracing_skipped_in_test")
+        return
+    
     # 1. Define Resource
     resource = Resource(attributes={
         ResourceAttributes.SERVICE_NAME: "valdrix-api",
@@ -28,10 +32,11 @@ def setup_tracing(app=None):
     trace.set_tracer_provider(provider)
     
     # 3. Add Exporter (OTLP if endpoint provided, otherwise Console)
-    otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
+    otlp_endpoint = settings.OTEL_EXPORTER_OTLP_ENDPOINT
     if otlp_endpoint:
-        logger.info("setup_tracing_otlp", endpoint=otlp_endpoint)
-        otlp_exporter = OTLPSpanExporter(endpoint=otlp_endpoint, insecure=True)
+        insecure = settings.OTEL_EXPORTER_OTLP_INSECURE
+        logger.info("setup_tracing_otlp", endpoint=otlp_endpoint, insecure=insecure)
+        otlp_exporter = OTLPSpanExporter(endpoint=otlp_endpoint, insecure=insecure)
         provider.add_span_processor(BatchSpanProcessor(otlp_exporter))
     else:
         logger.info("setup_tracing_console")
@@ -51,3 +56,13 @@ def set_correlation_id(correlation_id: str):
     current_span = trace.get_current_span()
     if current_span:
         current_span.set_attribute("correlation_id", correlation_id)
+
+def get_current_trace_id() -> str:
+    """
+    Returns the current trace ID in hex format.
+    Used for correlating logs and Sentry events.
+    """
+    span = trace.get_current_span()
+    if span and span.get_span_context().is_valid:
+        return format(span.get_span_context().trace_id, '032x')
+    return None

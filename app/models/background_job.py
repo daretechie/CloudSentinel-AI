@@ -36,6 +36,7 @@ class JobType(str, Enum):
     REPORT_GENERATION = "report_generation"
     NOTIFICATION = "notification"
     COST_INGESTION = "cost_ingestion"
+    RECURRING_BILLING = "recurring_billing"
 
 
 class BackgroundJob(Base):
@@ -59,7 +60,7 @@ class BackgroundJob(Base):
         ForeignKey("tenants.id", ondelete="CASCADE"), 
         nullable=True
     )
-    status: Mapped[str] = mapped_column(String(20), default=JobStatus.PENDING)
+    status: Mapped[str] = mapped_column(String(20), default=JobStatus.PENDING, index=True)
     payload: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     result: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     attempts: Mapped[int] = mapped_column(Integer, default=0)
@@ -68,7 +69,7 @@ class BackgroundJob(Base):
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     
     # Relationships
     tenant: Mapped["Tenant"] = relationship("Tenant", back_populates="background_jobs")

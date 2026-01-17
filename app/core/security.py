@@ -8,10 +8,13 @@ from app.core.config import get_settings
 
 settings = get_settings()
 
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+
 def _get_multi_fernet(primary_key: Optional[str], legacy_keys: Optional[List[str]] = None) -> MultiFernet:
     """
     Returns a MultiFernet instance for secret rotation.
-    Encodes/derives keys as needed.
+    Supports both legacy SHA256 derivation and modern PBKDF2 (SEC-06).
     """
     all_keys = [primary_key] if primary_key else []
     if legacy_keys:
@@ -22,10 +25,28 @@ def _get_multi_fernet(primary_key: Optional[str], legacy_keys: Optional[List[str
         all_keys = ["dev_fallback_key_do_not_use_in_prod"]
 
     fernet_instances = []
+    settings = get_settings()
+    salt = settings.KDF_SALT.encode()
+    iterations = settings.KDF_ITERATIONS
+
     for k in all_keys:
-        # Derive 32-byte key from arbitrary string
-        key_bytes = hashlib.sha256(k.encode()).digest()
-        fernet_instances.append(Fernet(base64.urlsafe_b64encode(key_bytes)))
+        key_bytes = k.encode()
+        
+        # 1. Primary: Use PBKDF2HMAC (Secure KDF)
+        kdf = PBKDF2HMAC(
+            algorithm=hashes.SHA256(),
+            length=32,
+            salt=salt,
+            iterations=iterations,
+        )
+        derived_primary = kdf.derive(key_bytes)
+        fernet_instances.append(Fernet(base64.urlsafe_b64encode(derived_primary)))
+        
+        # 2. Legacy: Use raw SHA256 digest (Old derivation)
+        # We keep this as a secondary option so existing data can still be decrypted.
+        # MultiFernet.encrypt always uses the FIRST instance (derived_primary).
+        legacy_bytes = hashlib.sha256(key_bytes).digest()
+        fernet_instances.append(Fernet(base64.urlsafe_b64encode(legacy_bytes)))
     
     return MultiFernet(fernet_instances)
 
@@ -73,8 +94,11 @@ def decrypt_string(value: str, context: str = "generic") -> str:
             f = _get_multi_fernet(settings.ENCRYPTION_KEY, settings.LEGACY_ENCRYPTION_KEYS)
             
         return f.decrypt(value.encode()).decode()
-    except Exception:
-        # If decryption fails with all keys, return None
+    except Exception as e:
+        import structlog
+        logger = structlog.get_logger()
+        logger.error("decryption_failed", context=context, error=str(e))
+        # Return None instead of "" to distinguish from an empty but valid field
         return None
 
 
@@ -90,7 +114,12 @@ def generate_blind_index(value: str) -> str:
         return None
     
     settings = get_settings()
-    key = settings.ENCRYPTION_KEY.encode()
+    # SEC-06: Use separate key for blind indexing if available
+    key_str = settings.BLIND_INDEX_KEY or settings.ENCRYPTION_KEY
+    if not key_str:
+        return None
+        
+    key = key_str.encode()
     
     # Normalize (lowercase) for consistent indexing of emails/names
     normalized_value = str(value).strip().lower()

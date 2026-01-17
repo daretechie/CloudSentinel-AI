@@ -21,6 +21,15 @@ logger = structlog.get_logger()
 router = APIRouter(tags=["Billing"])
 settings = get_settings()
 
+class ExchangeRateUpdate(BaseModel):
+    rate: float
+    provider: str = "manual"
+
+class PricingPlanUpdate(BaseModel):
+    price_usd: float
+    features: Optional[dict] = None
+    limits: Optional[dict] = None
+
 
 class CheckoutRequest(BaseModel):
     tier: str  # starter, growth, pro, enterprise
@@ -32,6 +41,54 @@ class SubscriptionResponse(BaseModel):
     tier: str
     status: str
     next_payment_date: Optional[str] = None
+
+
+@router.get("/plans")
+async def get_public_plans(db: AsyncSession = Depends(get_db)):
+    """
+    Get public pricing plans for the landing page.
+    No authentication required.
+    Tries DB first, fallbacks to TIER_CONFIG.
+    """
+    from app.models.pricing import PricingPlan
+    from sqlalchemy import select
+    from app.core.pricing import TIER_CONFIG, PricingTier
+    
+    # 1. Try fetching from DB
+    try:
+        result = await db.execute(select(PricingPlan).where(PricingPlan.is_active == True))
+        db_plans = result.scalars().all()
+        if db_plans:
+            return [{
+                "id": p.id,
+                "name": p.name,
+                "price": float(p.price_usd),
+                "period": "/mo",
+                "description": p.description,
+                "features": p.display_features,
+                "cta": p.cta_text,
+                "popular": p.is_popular
+            } for p in db_plans]
+    except Exception as e:
+        logger.warning("failed_to_fetch_plans_from_db", error=str(e))
+
+    # 2. Fallback to hardcoded TIER_CONFIG
+    public_plans = []
+    for tier in [PricingTier.STARTER, PricingTier.GROWTH, PricingTier.PRO]:
+        config = TIER_CONFIG.get(tier)
+        if config:
+            public_plans.append({
+                "id": tier.value,
+                "name": config["name"],
+                "price": config["price_usd"]["monthly"],
+                "period": "/mo",
+                "description": config["description"],
+                "features": config["display_features"],
+                "cta": config["cta"],
+                "popular": tier == PricingTier.GROWTH
+            })
+            
+    return public_plans
 
 
 @router.get("/subscription", response_model=SubscriptionResponse)
@@ -62,6 +119,27 @@ async def get_subscription(
     except Exception as e:
         logger.error("get_subscription_failed", error=str(e))
         raise HTTPException(500, "Failed to fetch subscription")
+
+
+@router.get("/features")
+async def get_features(
+    user: Annotated[CurrentUser, Depends(requires_role("member"))],
+):
+    """
+    Get enabled features and limits for the user's current tier.
+    Central authority for frontend and backend gating.
+    """
+    from app.core.pricing import PricingTier, get_tier_config
+    
+    user_tier = getattr(user, "tier", PricingTier.STARTER)
+    config = get_tier_config(user_tier)
+    
+    return {
+        "tier": user_tier,
+        "features": list(config.get("features", [])),
+        "limits": config.get("limits", {})
+    }
+
 
 
 @router.post("/checkout")
@@ -191,3 +269,90 @@ async def handle_webhook(request: Request, db: AsyncSession = Depends(get_db)):
         logger.error("webhook_failed", error=str(e))
         raise HTTPException(500, "Webhook processing failed")
 
+# ==================== Admin Endpoints ====================
+
+@router.post("/admin/rates")
+async def update_exchange_rate(
+    request: ExchangeRateUpdate,
+    user: Annotated[CurrentUser, Depends(requires_role("admin"))],
+    db: AsyncSession = Depends(get_db)
+):
+    """Manually update exchange rate."""
+    from app.models.pricing import ExchangeRate
+    from sqlalchemy import select
+    from datetime import datetime, timezone
+
+    result = await db.execute(
+        select(ExchangeRate).where(
+            ExchangeRate.from_currency == "USD",
+            ExchangeRate.to_currency == "NGN"
+        )
+    )
+    rate_obj = result.scalar_one_or_none()
+
+    if rate_obj:
+        rate_obj.rate = request.rate
+        rate_obj.provider = request.provider
+        rate_obj.last_updated = datetime.now(timezone.utc)
+    else:
+        db.add(ExchangeRate(
+            from_currency="USD",
+            to_currency="NGN",
+            rate=request.rate,
+            provider=request.provider
+        ))
+    
+    await db.commit()
+    return {"status": "success", "rate": request.rate}
+
+@router.get("/admin/rates")
+async def get_exchange_rate(
+    user: Annotated[CurrentUser, Depends(requires_role("admin"))],
+    db: AsyncSession = Depends(get_db)
+):
+    """Get current exchange rate."""
+    from app.models.pricing import ExchangeRate
+    from sqlalchemy import select
+
+    result = await db.execute(
+        select(ExchangeRate).where(
+            ExchangeRate.from_currency == "USD",
+            ExchangeRate.to_currency == "NGN"
+        )
+    )
+    rate_obj = result.scalar_one_or_none()
+    
+    if not rate_obj:
+        return {"rate": 1450.0, "provider": "fallback"}
+        
+    return {
+        "rate": float(rate_obj.rate),
+        "provider": rate_obj.provider,
+        "last_updated": rate_obj.last_updated.isoformat()
+    }
+
+@router.post("/admin/plans/{plan_id}")
+async def update_pricing_plan(
+    plan_id: str,
+    request: PricingPlanUpdate,
+    user: Annotated[CurrentUser, Depends(requires_role("admin"))],
+    db: AsyncSession = Depends(get_db)
+):
+    """Update pricing plan details."""
+    from app.models.pricing import PricingPlan
+    from sqlalchemy import select
+
+    result = await db.execute(select(PricingPlan).where(PricingPlan.id == plan_id))
+    plan = result.scalar_one_or_none()
+
+    if not plan:
+        raise HTTPException(404, "Plan not found")
+
+    plan.price_usd = request.price_usd
+    if request.features:
+        plan.features = request.features
+    if request.limits:
+        plan.limits = request.limits
+    
+    await db.commit()
+    return {"status": "success", "plan_id": plan_id}

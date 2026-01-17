@@ -4,13 +4,14 @@ Safety Settings API
 Manages circuit breaker and safety controls for tenants.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 import structlog
 
 from app.core.auth import CurrentUser, get_current_user
 from app.db.session import get_db
+from app.core.rate_limit import rate_limit
 
 logger = structlog.get_logger()
 router = APIRouter(tags=["Safety"])
@@ -35,7 +36,9 @@ class SafetyStatusResponse(BaseModel):
 # ============================================================
 
 @router.get("/safety", response_model=SafetyStatusResponse)
+@rate_limit("20/minute")
 async def get_safety_status(
+    request: Request,
     current_user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -84,7 +87,9 @@ async def get_safety_status(
 
 
 @router.post("/safety/reset")
+@rate_limit("5/minute")
 async def reset_circuit_breaker(
+    request: Request,
     current_user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):

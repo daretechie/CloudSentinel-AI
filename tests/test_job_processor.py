@@ -86,8 +86,11 @@ class TestJobProcessor:
     async def test_marks_job_completed_on_success(self):
         """Job status should change to COMPLETED on success."""
         mock_db = AsyncMock()
-        mock_db.begin_nested.return_value.__aenter__ = AsyncMock()
-        mock_db.begin_nested.return_value.__aexit__ = AsyncMock()
+        mock_db.begin_nested = MagicMock()
+        mock_ctx = MagicMock()
+        mock_ctx.__aenter__ = AsyncMock()
+        mock_ctx.__aexit__ = AsyncMock(return_value=False)
+        mock_db.begin_nested.return_value = mock_ctx
         
         mock_job = create_mock_job()
         
@@ -111,8 +114,11 @@ class TestJobProcessor:
     async def test_retries_on_failure(self):
         """Job should be rescheduled on failure with backoff."""
         mock_db = AsyncMock()
-        mock_db.begin_nested.return_value.__aenter__ = AsyncMock()
-        mock_db.begin_nested.return_value.__aexit__ = AsyncMock()
+        mock_db.begin_nested = MagicMock()
+        mock_ctx = MagicMock()
+        mock_ctx.__aenter__ = AsyncMock()
+        mock_ctx.__aexit__ = AsyncMock(return_value=False)
+        mock_db.begin_nested.return_value = mock_ctx
         
         mock_job = create_mock_job(attempts=0, max_attempts=3)
         
@@ -139,8 +145,11 @@ class TestJobProcessor:
     async def test_dead_letter_on_max_attempts(self):
         """Job should go to dead letter after max attempts."""
         mock_db = AsyncMock()
-        mock_db.begin_nested.return_value.__aenter__ = AsyncMock()
-        mock_db.begin_nested.return_value.__aexit__ = AsyncMock()
+        mock_db.begin_nested = MagicMock()
+        mock_ctx = MagicMock()
+        mock_ctx.__aenter__ = AsyncMock()
+        mock_ctx.__aexit__ = AsyncMock(return_value=False)
+        mock_db.begin_nested.return_value = mock_ctx
         
         mock_job = create_mock_job(attempts=2, max_attempts=3)  # This will be attempt 3
         

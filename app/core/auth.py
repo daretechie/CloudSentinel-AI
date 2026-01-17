@@ -57,7 +57,7 @@ def decode_jwt(token: str) -> dict:
         payload = jwt.decode(
             token,
             settings.SUPABASE_JWT_SECRET,
-            algorithms=["HS256", "ES256"],
+            algorithms=["HS256"],
             audience="authenticated",  # Supabase uses this audience
         )
         return payload
@@ -145,9 +145,15 @@ async def get_current_user(
             tenant_id=user.tenant_id,
             role=user.role
         )
+    except HTTPException:
+        # Re-raise known HTTP exceptions (like 403 User not found)
+        raise
     except Exception as e:
-        logger.error("auth_failed", error=str(e))
-        raise e
+        logger.error("auth_failed_unexpectedly", error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Authentication failed due to an internal server error"
+        )
 
 
 

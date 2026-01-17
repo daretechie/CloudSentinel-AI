@@ -161,29 +161,41 @@ class LLMFactory:
         logger.info("Initializing LLM", provider=effective_provider, byok=api_key is not None)
 
         if effective_provider == "openai":
+            key = api_key or settings.OPENAI_API_KEY
+            if not key:
+                raise ValueError("OPENAI_API_KEY not configured - set it in environment variables")
             return ChatOpenAI(
-                api_key=api_key or settings.OPENAI_API_KEY,
+                api_key=key,
                 model=settings.OPENAI_MODEL,
                 temperature=0
             )
 
         elif effective_provider == "claude" or effective_provider == "anthropic":
+            key = api_key or settings.ANTHROPIC_API_KEY or settings.CLAUDE_API_KEY
+            if not key:
+                raise ValueError("ANTHROPIC_API_KEY or CLAUDE_API_KEY not configured")
             return ChatAnthropic(
-                api_key=api_key or settings.CLAUDE_API_KEY,
+                api_key=key,
                 model=settings.CLAUDE_MODEL,
                 temperature=0
             )
 
         elif effective_provider == "google":
+            key = api_key or settings.GOOGLE_API_KEY
+            if not key:
+                raise ValueError("GOOGLE_API_KEY not configured - set it in environment variables")
             return ChatGoogleGenerativeAI(
-                google_api_key=api_key or settings.GOOGLE_API_KEY,
+                google_api_key=key,
                 model=settings.GOOGLE_MODEL,
                 temperature=0
             )
 
         elif effective_provider == "groq":
+            key = api_key or settings.GROQ_API_KEY
+            if not key:
+                raise ValueError("GROQ_API_KEY not configured - set it in environment variables")
             return ChatGroq(
-                api_key=api_key or settings.GROQ_API_KEY,
+                api_key=key,
                 model=settings.GROQ_MODEL,
                 temperature=0
             )

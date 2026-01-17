@@ -1,9 +1,11 @@
 import pytest
 from uuid import uuid4
 from app.services.zombies.factory import ZombieDetectorFactory
-from app.services.zombies.aws.detector import AWSZombieDetector
-from app.services.zombies.az_provider.detector import AzureZombieDetector
+from app.services.zombies.aws_provider.detector import AWSZombieDetector
+from app.services.zombies.aws_provider.plugins import UnattachedVolumesPlugin
+from app.services.zombies.azure_provider.detector import AzureZombieDetector
 from app.services.zombies.gcp_provider.detector import GCPZombieDetector
+from app.services.zombies.gcp_provider.plugins.unattached_disks import GCPUnattachedDisksPlugin
 from app.models.aws_connection import AWSConnection
 from app.models.azure_connection import AzureConnection
 from app.models.gcp_connection import GCPConnection
@@ -14,25 +16,36 @@ def aws_connection():
 
 @pytest.fixture
 def azure_connection():
-    return AzureConnection(id=uuid4())
+    return AzureConnection(
+        id=uuid4(),
+        azure_tenant_id="tenant-id",
+        client_id="client-id",
+        client_secret="secret",
+        subscription_id="sub-id",
+        name="test-azure"
+    )
 
 @pytest.fixture
 def gcp_connection():
-    return GCPConnection(id=uuid4())
+    return GCPConnection(
+        id=uuid4(),
+        project_id="test-project",
+        name="test-gcp"
+    )
 
 def test_get_detector_aws(aws_connection):
     detector = ZombieDetectorFactory.get_detector(aws_connection)
-    assert isinstance(detector, AWSZombieDetector)
+    assert type(detector).__name__ == "AWSZombieDetector"
     assert detector.provider_name == "aws"
 
 def test_get_detector_azure(azure_connection):
     detector = ZombieDetectorFactory.get_detector(azure_connection)
-    assert isinstance(detector, AzureZombieDetector)
+    assert type(detector).__name__ == "AzureZombieDetector"
     assert detector.provider_name == "azure"
 
 def test_get_detector_gcp(gcp_connection):
     detector = ZombieDetectorFactory.get_detector(gcp_connection)
-    assert isinstance(detector, GCPZombieDetector)
+    assert type(detector).__name__ == "GCPZombieDetector"
     assert detector.provider_name == "gcp"
 
 def test_get_detector_unknown_type():

@@ -18,9 +18,10 @@ from datetime import datetime, timezone
 from decimal import Decimal
 import aioboto3
 import structlog
-
 from app.services.zombies.zombie_plugin import ZombiePlugin
-from app.services.zombies.aws.plugins import (
+
+from app.services.zombies.aws_provider.detector import AWSZombieDetector
+from app.services.zombies.aws_provider.plugins import (
     UnattachedVolumesPlugin, OldSnapshotsPlugin, IdleS3BucketsPlugin,
     UnusedElasticIpsPlugin, IdleInstancesPlugin,
     OrphanLoadBalancersPlugin, UnderusedNatGatewaysPlugin,

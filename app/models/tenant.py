@@ -14,6 +14,10 @@ from app.core.config import get_settings
 settings = get_settings()
 _encryption_key = settings.ENCRYPTION_KEY
 
+if not _encryption_key:
+    # Fail-fast at import time to prevent accidental plaintext storage
+    raise RuntimeError("ENCRYPTION_KEY not set. Cannot start securely.")
+
 class Tenant(Base):
     __tablename__ = "tenants"
 

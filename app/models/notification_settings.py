@@ -48,18 +48,7 @@ class NotificationSettings(Base):
     alert_on_budget_exceeded: Mapped[bool] = mapped_column(Boolean, default=True)
     alert_on_zombie_detected: Mapped[bool] = mapped_column(Boolean, default=True)
 
-    # Timestamps
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        server_default=text("now()"),
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
-        server_default=text("now()"),
-    )
+    # Timestamps are inherited from Base
 
     # Relationship
     tenant = relationship("Tenant", back_populates="notification_settings")

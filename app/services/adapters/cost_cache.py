@@ -218,7 +218,8 @@ class CostCache:
         """Generate a unique cache key."""
         key_parts = [prefix, tenant_id] + [str(a) for a in args]
         key_string = ":".join(key_parts)
-        return f"valdrix:{hashlib.md5(key_string.encode()).hexdigest()}"
+        # Switch from MD5 to SHA256 for stronger collision resistance (SEC-05)
+        return f"valdrix:{hashlib.sha256(key_string.encode()).hexdigest()}"
 
     def _tenant_pattern(self, tenant_id: str) -> str:
         """Generate pattern for all tenant keys."""

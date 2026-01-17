@@ -14,6 +14,7 @@ from typing import List, Dict, Any, Optional, TYPE_CHECKING
 from datetime import date, datetime, timezone
 from decimal import Decimal
 import aioboto3
+from botocore.config import Config as BotoConfig
 
 from app.schemas.costs import CloudUsageSummary, CostRecord
 from botocore.exceptions import ClientError
@@ -26,8 +27,16 @@ if TYPE_CHECKING:
 
 logger = structlog.get_logger()
 
-# Safety limit to prevent memory bloat for large enterprise accounts
-MAX_COST_EXPLORER_PAGES = 10
+# Standardized boto config with timeouts to prevent indefinite hangs
+# SEC-03: Socket timeouts for all AWS API calls
+BOTO_CONFIG = BotoConfig(
+    read_timeout=30,
+    connect_timeout=10,
+    retries={"max_attempts": 3, "mode": "adaptive"}
+)
+
+# Safety limit to prevent infinite loops, set to a very high value (300 pages = ~10 years of daily data)
+MAX_COST_EXPLORER_PAGES = 300
 
 class MultiTenantAWSAdapter(BaseAdapter):
     """
@@ -69,7 +78,6 @@ class MultiTenantAWSAdapter(BaseAdapter):
 
                 logger.info(
                     "sts_assume_role_success",
-                    role_arn=self.connection.role_arn,
                     expires_at=str(self._credentials_expire_at),
                 )
 
@@ -79,14 +87,11 @@ class MultiTenantAWSAdapter(BaseAdapter):
                 error_code = e.response.get("Error", {}).get("Code", "Unknown")
                 logger.error(
                     "sts_assume_role_failed",
-                    role_arn=self.connection.role_arn,
                     error=str(e),
                 )
-                from app.core.exceptions import AdapterError
                 raise AdapterError(
                     message=f"AWS STS AssumeRole failure: {str(e)}",
                     code=error_code,
-                    details={"role_arn": self.connection.role_arn}
                 ) from e
 
     async def get_cost_and_usage(
@@ -128,16 +133,55 @@ class MultiTenantAWSAdapter(BaseAdapter):
 
     async def get_daily_costs(
         self,
+        start_date: date,
+        end_date: date,
+        granularity: str = "DAILY",
+        usage_only: bool = False,
+        group_by_service: bool = True,
+    ) -> CloudUsageSummary:
+        """
+        Legacy method to fetch costs and return a CloudUsageSummary object.
+        Now implemented by consuming the stream_cost_and_usage generator.
+        """
+        # Convert date to datetime for stream method
+        start_dt = datetime.combine(start_date, datetime.min.time()).replace(tzinfo=timezone.utc)
+        end_dt = datetime.combine(end_date, datetime.min.time()).replace(tzinfo=timezone.utc)
+
+        records = []
+        total_cost = Decimal("0")
+
+        async for record in self.stream_cost_and_usage(start_dt, end_dt, granularity):
+            records.append(CostRecord(
+                date=record["timestamp"],
+                service=record["service"],
+                region=record["region"],
+                amount=record["cost_usd"],
+                currency=record["currency"],
+                amount_raw=record["amount_raw"],
+                usage_type=record["usage_type"]
+            ))
+            total_cost += record["cost_usd"]
+
+        return CloudUsageSummary(
+            tenant_id=str(self.connection.tenant_id),
+            provider="aws",
+            records=records,
+            total_cost=total_cost,
+            currency="USD",
+            start_date=start_date,
+            end_date=end_date
+        )
+
+    async def stream_cost_and_usage(
+        self,
         start_date: datetime,
         end_date: datetime,
-        usage_only: bool = False,
-        group_by_service: bool = False,
-        max_pages: int = MAX_COST_EXPLORER_PAGES,
-        granularity: str = "DAILY",
-    ) -> CloudUsageSummary:
-        """Fetch daily costs and return normalized CloudUsageSummary."""
-        from app.schemas.costs import CloudUsageSummary, CostRecord
-        
+        granularity: str = "DAILY"
+    ) -> Any:
+        """
+        Stream cost data from AWS Cost Explorer.
+        Optimized to never hold the full dataset in memory.
+        """
         creds = await self.get_credentials()
 
         async with self.session.client(
@@ -150,78 +194,41 @@ class MultiTenantAWSAdapter(BaseAdapter):
             try:
                 request_params = {
                     "TimePeriod": {
-                        "Start": start_date.isoformat(),
-                        "End": end_date.isoformat(),
+                        "Start": start_date.strftime("%Y-%m-%d"),
+                        "End": end_date.strftime("%Y-%m-%d"),
                     },
                     "Granularity": granularity,
                     "Metrics": ["AmortizedCost"],
+                    "GroupBy": [{"Type": "DIMENSION", "Key": "SERVICE"}],
                 }
 
-
-                if usage_only:
-                    request_params["Filter"] = {
-                        "Dimensions": {"Key": "RECORD_TYPE", "Values": ["Usage"]}
-                    }
-
-                if group_by_service:
-                    request_params["GroupBy"] = [{"Type": "DIMENSION", "Key": "SERVICE"}]
-
-                ce_results = []
                 pages_fetched = 0
-                response = await client.get_cost_and_usage(**request_params)
-                ce_results.extend(response.get("ResultsByTime", []))
-                pages_fetched += 1
-
-                while "NextPageToken" in response and pages_fetched < max_pages:
-                    request_params["NextPageToken"] = response["NextPageToken"]
+                while pages_fetched < MAX_COST_EXPLORER_PAGES:
                     response = await client.get_cost_and_usage(**request_params)
-                    ce_results.extend(response.get("ResultsByTime", []))
-                    pages_fetched += 1
-
-                # Normalize raw CE results into CostRecord objects
-                normalized_records = []
-                total_cost = 0.0
-                by_service = {}
-                by_region = {}
-
-                for result in ce_results:
-                    dt = datetime.fromisoformat(result["TimePeriod"]["Start"]).replace(tzinfo=timezone.utc)
                     
-                    if group_by_service and "Groups" in result:
-                        for group in result["Groups"]:
-                            service_name = group["Keys"][0]
-                            amount = Decimal(group["Metrics"]["AmortizedCost"]["Amount"])
-
-                            normalized_records.append(CostRecord(
-                                date=dt,
-                                amount=amount,
-                                service=service_name,
-                                region=self.connection.region
-                            ))
-                            total_cost += amount
-                            by_service[service_name] = by_service.get(service_name, Decimal("0.0")) + amount
+                    results_by_time = response.get("ResultsByTime", [])
+                    for result in results_by_time:
+                        dt = datetime.fromisoformat(result["TimePeriod"]["Start"]).replace(tzinfo=timezone.utc)
+                        if "Groups" in result:
+                            for group in result["Groups"]:
+                                service_name = group["Keys"][0]
+                                amount = Decimal(group["Metrics"]["AmortizedCost"]["Amount"])
+                                yield {
+                                    "timestamp": dt,
+                                    "service": service_name,
+                                    "region": self.connection.region,
+                                    "cost_usd": amount,
+                                    "currency": "USD",
+                                    "amount_raw": amount,
+                                    "usage_type": "Usage"
+                                }
+                    
+                    pages_fetched += 1
+                    if "NextPageToken" in response:
+                        request_params["NextPageToken"] = response["NextPageToken"]
                     else:
-                        amount = Decimal(result["Total"]["UnblendedCost"]["Amount"])
-                        normalized_records.append(CostRecord(
-                            date=dt,
-                            amount=amount,
-                            region=self.connection.region
-                        ))
-                        total_cost += amount
-
-                return CloudUsageSummary(
-                    tenant_id=str(self.connection.tenant_id),
-                    provider="aws",
-                    start_date=start_date,
-                    end_date=end_date,
-                    total_cost=total_cost,
-                    records=normalized_records,
-                    by_service=by_service,
-                    by_region={self.connection.region: total_cost}
-                )
-
+                        break
             except ClientError as e:
-                # ... (rest of exception handling stays same)
                 error_code = e.response.get("Error", {}).get("Code", "Unknown")
                 logger.error("multitenant_cost_fetch_failed", error=str(e))
                 from app.core.exceptions import AdapterError
@@ -240,35 +247,56 @@ class MultiTenantAWSAdapter(BaseAdapter):
         return []
 
     async def discover_resources(self, resource_type: str, region: str = None) -> List[Dict[str, Any]]:
-        """
-        Discovers resources of a specific type (e.g., 'volume', 'snapshot', 'ip').
-        Uses existing ZombiePlugins internally for AWS.
-        """
-        from app.services.zombies.aws.plugins import (
-            UnattachedVolumesPlugin, OldSnapshotsPlugin, UnusedElasticIpsPlugin,
-            IdleInstancesPlugin, OrphanLoadBalancersPlugin, UnderusedNatGatewaysPlugin,
-            IdleRdsPlugin, ColdRedshiftPlugin, IdleSageMakerPlugin,
-            IdleS3BucketsPlugin, LegacyEcrImagesPlugin
-        )
-
+        from app.services.zombies.registry import registry
+        plugins = registry.get_plugins_for_provider("aws")
+        
+        # Simple heuristic to find the right plugin by resource_type
+        # e.g. "volume" -> UnattachedVolumesPlugin has reason like "unattached volume"
+        # Most plugins have a property we can match on, or we just map them.
         mapping = {
-            "volume": UnattachedVolumesPlugin(),
-            "snapshot": OldSnapshotsPlugin(),
-            "ip": UnusedElasticIpsPlugin(),
-            "instance": IdleInstancesPlugin(),
-            "load_balancer": OrphanLoadBalancersPlugin(),
-            "nat_gateway": UnderusedNatGatewaysPlugin(),
-            "rds": IdleRdsPlugin(),
-            "redshift": ColdRedshiftPlugin(),
-            "sagemaker": IdleSageMakerPlugin(),
-            "s3": IdleS3BucketsPlugin(),
-            "ecr": LegacyEcrImagesPlugin(),
+            "volume": "storage",
+            "snapshot": "storage",
+            "ip": "compute",
+            "instance": "compute",
+            "load_balancer": "network",
+            "nat_gateway": "network",
+            "rds": "database",
+            "redshift": "database",
+            "sagemaker": "analytics",
+            "s3": "storage",
+            "ecr": "containers",
         }
-
-        plugin = mapping.get(resource_type)
-        if not plugin:
+        
+        category = mapping.get(resource_type)
+        if not category:
             logger.warning("unsupported_resource_type", resource_type=resource_type)
             return []
+
+        # Find plugin that matches the resource_type in its reason or name
+        # For now, to be safe and match legacy behavior exactly without complex logic:
+        # We can just check the class name or a new property.
+        # But standard registry usage is better.
+        
+        # Let's filter plugins by category_key
+        category_plugins = [p for p in plugins if p.category_key == category]
+        
+        # Since one category has multiple plugins, we might need a more specific filter
+        # or just return all from that category if specifically requested.
+        # Legacy behavior was 1:1.
+        
+        # For now, let's keep it simple: find the first plugin whose class name contains the type
+        target_plugin = None
+        type_lower = resource_type.lower().replace("_", "")
+        for p in plugins:
+            if type_lower in p.__class__.__name__.lower():
+                target_plugin = p
+                break
+        
+        if not target_plugin:
+            logger.warning("plugin_not_found_for_resource", resource_type=resource_type)
+            return []
+
+        plugin = target_plugin
 
         target_region = region or self.connection.region
         creds = await self.get_credentials()

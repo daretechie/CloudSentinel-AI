@@ -118,8 +118,9 @@ class TestCircuitBreaker:
     @pytest.mark.asyncio
     async def test_record_failure_increments_count(self):
         """Recording failure should increment failure count."""
+        import uuid
         config = CircuitBreakerConfig()
-        cb = CircuitBreaker("tenant-failure-incr", config=config)
+        cb = CircuitBreaker(f"tenant-failure-incr-{uuid.uuid4()}", config=config)
         
         await cb.record_failure("Test error")
         
@@ -129,14 +130,15 @@ class TestCircuitBreaker:
     @pytest.mark.asyncio
     async def test_circuit_opens_after_threshold(self):
         """Circuit should open after threshold failures."""
+        import uuid
         config = CircuitBreakerConfig(failure_threshold=2)
-        cb = CircuitBreaker("tenant-threshold-open", config=config)
+        cb = CircuitBreaker(f"tenant-threshold-open-{uuid.uuid4()}", config=config)
         
         await cb.record_failure("Error 1")
         await cb.record_failure("Error 2")
         
         state = await cb.get_state()
-        assert state == CircuitState.OPEN.value
+        assert state == CircuitState.OPEN
     
     @pytest.mark.asyncio
     async def test_reset_clears_state(self):

@@ -3,6 +3,9 @@ import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi_csrf_protect import CsrfProtect
+from fastapi_csrf_protect.exceptions import CsrfProtectError
+from pydantic import BaseModel
 from prometheus_fastapi_instrumentator import Instrumentator
 
 from app.core.config import get_settings
@@ -22,11 +25,12 @@ import app.models.remediation
 import app.models.background_job
 import app.models.azure_connection
 import app.models.gcp_connection
+import app.services.security.audit_log
 
 
 from codecarbon import EmissionsTracker
-from app.api.v1.onboard import router as onboard_router
-from app.api.v1.connections import router as connections_router
+from app.api.v1.settings.onboard import router as onboard_router
+from app.api.v1.settings.connections import router as connections_router
 from app.api.v1.settings import router as settings_router
 from app.api.v1.leaderboards import router as leaderboards_router
 from app.api.v1.costs import router as costs_router
@@ -43,6 +47,17 @@ from app.api.oidc import router as oidc_router
 # Configure logging and Sentry
 setup_logging()
 init_sentry()
+settings = get_settings()
+
+class CsrfSettings(BaseModel):
+    """Configuration for CSRF protection."""
+    secret_key: str = settings.CSRF_SECRET_KEY
+    cookie_samesite: str = "lax"
+
+@CsrfProtect.load_config
+def get_csrf_config():
+    return CsrfSettings()
+
 logger = structlog.get_logger()
 
 @asynccontextmanager
@@ -62,13 +77,18 @@ async def lifespan(app: FastAPI):
         output_dir="data",
         allow_multiple_runs=True,
     )
-    tracker.start()
+    if not settings.TESTING:
+        tracker.start()
     app.state.emissions_tracker = tracker
 
     # Pass shared session factory to scheduler (DI pattern)
     from app.db.session import async_session_maker
     scheduler = SchedulerService(session_maker=async_session_maker)
-    scheduler.start()
+    if not settings.TESTING:
+        scheduler.start()
+        logger.info("scheduler_started")
+    else:
+        logger.info("scheduler_skipped_in_testing")
     app.state.scheduler = scheduler
 
     # Setup rate limiting
@@ -81,6 +101,11 @@ async def lifespan(app: FastAPI):
     logger.info("Shutting down...")
     scheduler.stop()
     tracker.stop()
+
+    # Item 18: Async Database Engine Cleanup
+    from app.db.session import engine
+    await engine.dispose()
+    logger.info("db_engine_disposed")
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -110,6 +135,18 @@ async def valdrix_exception_handler(request: Request, exc: ValdrixException):
         },
     )
 
+@app.exception_handler(CsrfProtectError)
+async def csrf_protect_exception_handler(request: Request, exc: CsrfProtectError):
+    """Handle CSRF protection exceptions."""
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "status": "error",
+            "message": exc.message,
+            "code": "csrf_error"
+        },
+    )
+
 @app.exception_handler(Exception)
 async def generic_exception_handler(request: Request, exc: Exception):
     """Handle unhandled exceptions."""
@@ -122,6 +159,17 @@ async def generic_exception_handler(request: Request, exc: Exception):
             "code": "internal_server_error"
         },
     )
+
+@app.get("/health", tags=["Lifecycle"])
+async def health_check():
+    """Simple health check for load balancers."""
+    from datetime import datetime, timezone
+    return {
+        "status": "active",
+        "app": settings.APP_NAME,
+        "version": settings.VERSION,
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
 
 # Initialize Prometheus Metrics
 Instrumentator().instrument(app).expose(app)
@@ -147,9 +195,33 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# CSRF Protection Middleware - processes after CORS but before auth
+@app.middleware("http")
+async def csrf_protect_middleware(request: Request, call_next):
+    """
+    Global CSRF protection middleware.
+    Blocks unsafe methods (POST, PUT, DELETE, PATCH) if CSRF token is missing/invalid.
+    Allows safe methods (GET, HEAD, OPTIONS, TRACE).
+    """
+    if request.method not in ("GET", "HEAD", "OPTIONS", "TRACE"):
+        # Skip CSRF for health checks and in testing mode
+        if settings.TESTING:
+            return await call_next(request)
+
+        if request.url.path.startswith("/api/v1"):
+            csrf = CsrfProtect()
+            try:
+                csrf.validate_csrf(request)
+            except CsrfProtectError as e:
+                # Log and block
+                logger.warning("csrf_validation_failed", path=request.url.path, method=request.method)
+                return await csrf_protect_exception_handler(request, e)
+
+    return await call_next(request)
+
 # Register Routers
-app.include_router(onboard_router, prefix="/api/v1/onboard")
-app.include_router(connections_router, prefix="/api/v1/connections")
+app.include_router(onboard_router, prefix="/api/v1/settings/onboard")
+app.include_router(connections_router, prefix="/api/v1/settings/connections")
 app.include_router(settings_router, prefix="/api/v1/settings")
 app.include_router(leaderboards_router, prefix="/api/v1/leaderboards")
 app.include_router(costs_router, prefix="/api/v1/costs")

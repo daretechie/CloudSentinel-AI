@@ -11,16 +11,17 @@ Tests:
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 
-from app.core.tier_guard import (
+from app.core.pricing import (
     PricingTier,
     FeatureFlag,
-    TIER_FEATURES,
+    TIER_CONFIG as TIER_FEATURES,
     TIER_LIMITS,
     has_feature,
     get_limit,
     get_tenant_tier,
-    TierGuard,
+    TierGuard
 )
+# I need to check what TierGuard and others are now called.
 
 
 class TestFeatureAccess:
@@ -108,6 +109,11 @@ class TestGetTenantTier:
         # This test verifies that get_tenant_tier handles subscription lookup
         # The actual DB integration is tested in integration tests
         mock_db = AsyncMock()
+        mock_db.begin_nested = MagicMock()
+        mock_ctx = MagicMock()
+        mock_ctx.__aenter__ = AsyncMock()
+        mock_ctx.__aexit__ = AsyncMock(return_value=False)
+        mock_db.begin_nested.return_value = mock_ctx
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = None  # No subscription = Free
         mock_db.execute.return_value = mock_result
@@ -196,6 +202,8 @@ class TestTierFeatureMatrix:
             higher_tier = tier_order[i + 1]
             lower_features = TIER_FEATURES[lower_tier]
             higher_features = TIER_FEATURES[higher_tier]
+            lower_feats = lower_features.get("features", set())
+            higher_feats = higher_features.get("features", set())
             
-            for feature in lower_features:
-                assert feature in higher_features, f"{higher_tier} missing {feature} from {lower_tier}"
+            for feature in lower_feats:
+                assert feature in higher_feats, f"{higher_tier} missing {feature} from {lower_tier}"

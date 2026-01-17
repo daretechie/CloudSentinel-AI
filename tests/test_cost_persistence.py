@@ -27,8 +27,8 @@ async def test_cost_persistence_idempotency(db):
 
     service = CostPersistenceService(db)
     
-    # 2. Prepare Sample Data
-    now = datetime.now(timezone.utc)
+    # 2. Prepare Sample Data (Fixed Date for Test Stability)
+    now = datetime(2026, 1, 15, 12, 0, 0, tzinfo=timezone.utc)
     summary = CloudUsageSummary(
         tenant_id=str(tenant.id),
         provider="aws",
@@ -56,8 +56,12 @@ async def test_cost_persistence_idempotency(db):
     # 3. First Ingestion
     await service.save_summary(summary, str(account.id))
     
-    # Verify count
-    result = await db.execute(select(func.count()).select_from(CostRecord))
+    # Verify count for this account
+    result = await db.execute(
+        select(func.count())
+        .select_from(CostRecord)
+        .where(CostRecord.account_id == account.id)
+    )
     count = result.scalar()
     assert count == 2
 
@@ -65,7 +69,11 @@ async def test_cost_persistence_idempotency(db):
     await service.save_summary(summary, str(account.id))
     
     # Verify count is STILL 2 (Idempotency check)
-    result = await db.execute(select(func.count()).select_from(CostRecord))
+    result = await db.execute(
+        select(func.count())
+        .select_from(CostRecord)
+        .where(CostRecord.account_id == account.id)
+    )
     count = result.scalar()
     assert count == 2
 
@@ -74,6 +82,12 @@ async def test_cost_persistence_idempotency(db):
     await service.save_summary(summary, str(account.id))
     
     # Verify count is still 2, but value is updated
-    result = await db.execute(select(CostRecord).where(CostRecord.service == "AmazonEC2"))
+    result = await db.execute(
+        select(CostRecord)
+        .where(
+            CostRecord.account_id == account.id,
+            CostRecord.service == "AmazonEC2"
+        )
+    )
     record = result.scalar_one()
     assert record.cost_usd == Decimal("75.00")

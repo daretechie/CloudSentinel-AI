@@ -13,6 +13,8 @@
   import { createSupabaseBrowserClient } from '$lib/supabase';
   import { goto } from '$app/navigation';
   
+  import { onMount } from 'svelte';
+  
   let { data } = $props();
   
   const supabase = createSupabaseBrowserClient();
@@ -20,21 +22,15 @@
   let upgrading = $state('');
   let error = $state('');
   
-  const plans = [
+  // Dynamic plans from API, with defaults for SSR/Fallback
+  let plans = $state([
     {
       id: 'starter',
       name: 'Starter',
       price: 29,
       period: '/mo',
       description: 'For small teams getting started with cloud cost visibility.',
-      features: [
-        'Single cloud provider (AWS)',
-        'Cost dashboards & trends',
-        'Budget alerts',
-        'Basic zombie detection',
-        'Email notifications',
-        'Up to $10K monthly cloud spend'
-      ],
+      features: ['Single cloud provider (AWS)', 'Cost dashboards', 'Budget alerts'],
       cta: 'Start with Starter',
       popular: false
     },
@@ -44,16 +40,7 @@
       price: 79,
       period: '/mo',
       description: 'For growing teams who need AI-powered cost intelligence.',
-      features: [
-        'Everything in Starter, plus:',
-        'Multi-cloud support (AWS, Azure, GCP)',
-        'AI-driven cost analysis',
-        'Full zombie detection suite',
-        'GreenOps (Carbon tracking)',
-        'Slack integration',
-        'Cost forecasting (30-90 days)',
-        'Up to $50K monthly cloud spend'
-      ],
+      features: ['Multi-cloud support', 'AI insights', 'GreenOps'],
       cta: 'Start Free Trial',
       popular: true
     },
@@ -63,19 +50,25 @@
       price: 199,
       period: '/mo',
       description: 'For teams who want automated optimization and full API access.',
-      features: [
-        'Everything in Growth, plus:',
-        'Automated remediation (opt-in)',
-        'Reserved Instance intelligence',
-        'Full API access (read + write)',
-        'Advanced forecasting',
-        'Priority support',
-        'Up to $200K monthly cloud spend'
-      ],
+      features: ['Automated remediation', 'Priority support', 'Full API access'],
       cta: 'Start Free Trial',
       popular: false
     }
-  ];
+  ]);
+
+  onMount(async () => {
+    try {
+      const res = await fetch(`${PUBLIC_API_URL}/billing/plans`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.length > 0) {
+          plans = data;
+        }
+      }
+    } catch (e) {
+      console.error('Failed to fetch dynamic pricing', e);
+    }
+  });
   
   async function selectPlan(planId: string) {
     if (upgrading) return;

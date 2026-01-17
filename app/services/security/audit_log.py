@@ -101,6 +101,7 @@ class AuditLog(Base):
     # Event classification
     event_type: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
     event_timestamp: Mapped[datetime] = mapped_column(
+        primary_key=True,  # Part of Partition Key
         default=lambda: datetime.now(timezone.utc),
         nullable=False,
         index=True
@@ -139,7 +140,9 @@ class AuditLog(Base):
     __table_args__ = (
         Index("ix_audit_tenant_time", "tenant_id", "event_timestamp"),
         Index("ix_audit_type_time", "event_type", "event_timestamp"),
+        {"postgresql_partition_by": 'RANGE (event_timestamp)'},
     )
+
 
 
 class AuditLogger:

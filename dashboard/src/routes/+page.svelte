@@ -212,220 +212,27 @@
       </div>
     {:else}
       <!-- Stats Grid -->
-      <div class="grid gap-5 md:grid-cols-2 lg:grid-cols-4">
-        <!-- Period Cost -->
-        <div class="card card-stat stagger-enter" style="animation-delay: 0ms;">
-          <p class="text-sm text-ink-400 mb-1">{periodLabel} Cost</p>
-          <p class="text-3xl font-bold" style="color: var(--color-accent-400);">
-            ${costs?.total_cost?.toFixed(2) ?? '0.00'}
-          </p>
-          <p class="text-xs text-ink-500 mt-2">
-            vs last period
-          </p>
-        </div>
-        
-        <!-- Carbon Footprint -->
-        <div class="card card-stat stagger-enter" style="animation-delay: 50ms;">
-          <p class="text-sm text-ink-400 mb-1">Carbon Footprint</p>
-          <p class="text-3xl font-bold" style="color: var(--color-success-400);">
-            {carbon?.total_co2_kg?.toFixed(2) ?? '0.00'} kg
-          </p>
-          <p class="text-xs text-ink-500 mt-2">
-            CO₂ emissions
-          </p>
-        </div>
-        
-        <!-- Zombie Resources -->
-        <div class="card card-stat stagger-enter" style="animation-delay: 100ms;">
-          <p class="text-sm text-ink-400 mb-1">Zombie Resources</p>
-          <p class="text-3xl font-bold" style="color: var(--color-warning-400);">
-            {zombieCount}
-          </p>
-          <p class="text-xs text-ink-500 mt-2">
-            Unused resources found
-          </p>
-        </div>
-        
-        <!-- Monthly Waste -->
-        <div class="card card-stat stagger-enter" style="animation-delay: 150ms;">
-          <p class="text-sm text-ink-400 mb-1">Monthly Waste</p>
-          <p class="text-3xl font-bold" style="color: var(--color-danger-400);">
-            ${zombies?.total_monthly_waste?.toFixed(2) ?? '0.00'}
-          </p>
-          <p class="text-xs text-ink-500 mt-2">
-            Potential savings
-          </p>
-        </div>
-      </div>
+      <StatsGrid 
+        costs={costs}
+        carbon={carbon}
+        zombieCount={zombieCount}
+        totalMonthlyWaste={zombies?.total_monthly_waste}
+        periodLabel={periodLabel}
+      />
       
       <!-- AI Insights - Interactive Cards -->
       {#if zombies?.ai_analysis}
         {@const aiData = zombies.ai_analysis}
         
-        <!-- Hero Savings Card -->
-        <div class="glass-panel stagger-enter col-span-full" style="animation-delay: 200ms;">
-          <div class="flex items-center justify-between">
-            <div>
-              <p class="text-sm text-ink-400 mb-1">Potential Monthly Savings</p>
-              <p class="text-5xl font-bold text-gradient">
-                {aiData.total_monthly_savings || '$0.00'}
-              </p>
-              <p class="text-sm text-ink-400 mt-2">
-                {aiData.summary || 'Analysis complete.'} 
-                <span class="block mt-1 font-semibold text-accent-400">Value Optimizer: Continuously eliminating waste and technical debt.</span>
-              </p>
-            </div>
-            <div class="hero-icon text-6xl">💰</div>
-          </div>
-        </div>
+        <SavingsHero aiData={aiData} />
         
         <!-- AI Findings Table - Scalable Design -->
         {#if aiData.resources && aiData.resources.length > 0}
-          {@const pageSize = 10}
-          {@const totalPages = Math.ceil(aiData.resources.length / pageSize)}
-          
-          <div class="card stagger-enter" style="animation-delay: 250ms;">
-            <!-- Table Header -->
-            <div class="flex items-center justify-between mb-4">
-              <h3 class="text-lg font-semibold">
-                🧟 Zombie Resources ({aiData.resources.length})
-              </h3>
-              <div class="flex items-center gap-2 text-xs text-ink-400">
-                <span>Page {currentPage + 1} of {totalPages}</span>
-              </div>
-            </div>
-            
-            <!-- Responsive Table -->
-            <div class="overflow-x-auto">
-              <table class="w-full text-sm">
-                <thead>
-                    <tr class="border-b border-ink-700 text-left text-xs text-ink-400 uppercase tracking-wider">
-                    <th class="pb-3 pr-4">Provider</th>
-                    <th class="pb-3 pr-4">Resource</th>
-                    <th class="pb-3 pr-4">Type</th>
-                    <th class="pb-3 pr-4">Cost</th>
-                    <th class="pb-3 pr-4">Confidence</th>
-                    <th class="pb-3 pr-4">Risk</th>
-                    <th class="pb-3 text-right">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {#each aiData.resources.slice(currentPage * pageSize, (currentPage + 1) * pageSize) as finding, i}
-                    <tr class="border-b border-ink-800 hover:bg-ink-800/50 transition-colors">
-                      <!-- Provider -->
-                      <td class="py-3 pr-4">
-                        <div class="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-tighter
-                          {finding.provider === 'aws' ? 'bg-orange-500/10 text-orange-400 border border-orange-500/20' : 
-                           finding.provider === 'azure' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : 
-                           'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20'}">
-                          <CloudLogo provider={finding.provider} size={10} />
-                          <span>{finding.provider === 'aws' ? 'AWS' : finding.provider === 'azure' ? 'Azure' : 'GCP'}</span>
-                        </div>
-                      </td>
-                      <!-- Resource ID -->
-                      <td class="py-3 pr-4">
-                        <div class="font-mono text-xs truncate max-w-[150px]" title={finding.resource_id}>
-                          {finding.resource_id}
-                        </div>
-                        <!-- Expandable explanation -->
-                        <details class="mt-1">
-                          <summary class="text-xs text-ink-500 cursor-pointer hover:text-accent-400">
-                            View details
-                          </summary>
-                          <p class="text-xs text-ink-400 mt-1 max-w-xs">
-                            {finding.explanation}
-                          </p>
-                          {#if finding.confidence_reason}
-                            <p class="text-xs text-ink-500 mt-1 italic">
-                              {finding.confidence_reason}
-                            </p>
-                          {/if}
-                        </details>
-                      </td>
-                      
-                      <!-- Type Badge -->
-                      <td class="py-3 pr-4">
-                        <span class="badge badge-default text-xs">
-                          {finding.resource_type || 'Resource'}
-                        </span>
-                      </td>
-                      
-                      <!-- Monthly Cost -->
-                      <td class="py-3 pr-4 font-semibold text-success-400">
-                        {finding.monthly_cost || '$0'}
-                      </td>
-                      
-                      <!-- Confidence -->
-                      <td class="py-3 pr-4">
-                        <span class="inline-flex items-center gap-1">
-                          <span class="w-2 h-2 rounded-full {finding.confidence === 'high' ? 'bg-danger-400' : finding.confidence === 'medium' ? 'bg-warning-400' : 'bg-success-400'}"></span>
-                          <span class="text-xs capitalize">{finding.confidence}</span>
-                        </span>
-                      </td>
-                      
-                      <!-- Risk -->
-                      <td class="py-3 pr-4">
-                        <span class="text-xs {finding.risk_if_deleted === 'high' ? 'text-danger-400' : finding.risk_if_deleted === 'medium' ? 'text-warning-400' : 'text-ink-400'}">
-                          {finding.risk_if_deleted || 'low'}
-                        </span>
-                      </td>
-                      
-                      <!-- Action Button -->
-                      <td class="py-3 text-right">
-                        <button 
-                          class="btn btn-ghost text-xs hover:bg-accent-500/20 hover:text-accent-400"
-                          onclick={() => handleRemediate(finding)}
-                          disabled={remediating === finding.resource_id}
-                        >
-                          {#if remediating === finding.resource_id}
-                            <span class="animate-pulse">...</span>
-                          {:else}
-                            {finding.recommended_action || 'Review'}
-                          {/if}
-                        </button>
-                      </td>
-                    </tr>
-                  {/each}
-                </tbody>
-              </table>
-            </div>
-            
-            <!-- Pagination -->
-            {#if totalPages > 1}
-              <div class="flex items-center justify-between mt-4 pt-4 border-t border-ink-800">
-                <button 
-                  class="btn btn-ghost text-xs"
-                  disabled={currentPage === 0}
-                  onclick={() => currentPage = Math.max(0, currentPage - 1)}
-                >
-                  ← Previous
-                </button>
-                
-                <div class="flex items-center gap-1">
-                  {#each Array(Math.min(totalPages, 5)) as _, p}
-                    {@const pageNum = totalPages <= 5 ? p : 
-                      currentPage < 3 ? p :
-                      currentPage > totalPages - 3 ? totalPages - 5 + p :
-                      currentPage - 2 + p}
-                    <button 
-                      class="w-8 h-8 rounded text-xs {currentPage === pageNum ? 'bg-accent-500 text-white' : 'hover:bg-ink-700'}"
-                      onclick={() => currentPage = pageNum}
-                    >
-                      {pageNum + 1}
-                    </button>
-                  {/each}
-                </div>
-                
-                <button 
-                  class="btn btn-ghost text-xs"
-                  disabled={currentPage >= totalPages - 1}
-                  onclick={() => currentPage = Math.min(totalPages - 1, currentPage + 1)}
-                >
-                  Next →
-                </button>
-              </div>
-            {/if}
-          </div>
+          <FindingsTable 
+            resources={aiData.resources}
+            onRemediate={handleRemediate}
+            remediating={remediating}
+          />
         {/if}
         
         <!-- General Recommendations -->
@@ -456,29 +263,7 @@
       {/if}
       
       <!-- Carbon Impact Section -->
-      {#if carbon?.equivalencies}
-        <div class="card stagger-enter" style="animation-delay: 200ms;">
-          <h2 class="text-lg font-semibold mb-5">Carbon Impact</h2>
-          <div class="grid gap-6 md:grid-cols-4 text-center">
-            <div class="p-4 rounded-lg bg-ink-800/50">
-              <p class="text-2xl font-bold text-ink-100">{carbon.equivalencies.miles_driven}</p>
-              <p class="text-sm text-ink-400 mt-1">Miles Driven</p>
-            </div>
-            <div class="p-4 rounded-lg bg-ink-800/50">
-              <p class="text-2xl font-bold text-ink-100">{carbon.equivalencies.trees_needed_for_year}</p>
-              <p class="text-sm text-ink-400 mt-1">Trees Needed</p>
-            </div>
-            <div class="p-4 rounded-lg bg-ink-800/50">
-              <p class="text-2xl font-bold text-ink-100">{carbon.equivalencies.smartphone_charges}</p>
-              <p class="text-sm text-ink-400 mt-1">Phone Charges</p>
-            </div>
-            <div class="p-4 rounded-lg bg-ink-800/50">
-              <p class="text-2xl font-bold text-ink-100">{carbon.equivalencies.percent_of_home_month}%</p>
-              <p class="text-sm text-ink-400 mt-1">Of Home/Month</p>
-            </div>
-          </div>
-        </div>
-      {/if}
+      <CarbonImpact carbon={carbon} />
       
       <!-- Zombie Resources Table -->
       {#if zombieCount > 0}
@@ -517,9 +302,9 @@
                         <p class="text-[10px] leading-tight text-ink-300">{vol.explainability_notes || 'Resource detached and accruing idle costs.'}</p>
                         <div class="flex items-center gap-2">
                           <div class="h-1 w-16 bg-ink-700 rounded-full overflow-hidden">
-                            <div class="h-full bg-accent-500" style="width: {(vol.confidence_score || 0.85) * 100}%"></div>
+                            <div class="h-full bg-accent-500" style="width: {vol.confidence_score ? vol.confidence_score * 100 : 0}%"></div>
                           </div>
-                          <span class="text-[10px] font-bold text-accent-400">{Math.round((vol.confidence_score || 0.85) * 100)}% Match</span>
+                          <span class="text-[10px] font-bold text-accent-400">{vol.confidence_score ? Math.round(vol.confidence_score * 100) + '% Match' : 'Pending'}</span>
                         </div>
                       </div>
                     </td>
@@ -544,9 +329,9 @@
                         <p class="text-[10px] leading-tight text-ink-300">{snap.explainability_notes || 'Snapshot age exceeds standard retention policy.'}</p>
                         <div class="flex items-center gap-2">
                           <div class="h-1 w-16 bg-ink-700 rounded-full overflow-hidden">
-                            <div class="h-full bg-accent-500" style="width: {(snap.confidence_score || 0.99) * 100}%"></div>
+                            <div class="h-full bg-accent-500" style="width: {snap.confidence_score ? snap.confidence_score * 100 : 0}%"></div>
                           </div>
-                          <span class="text-[10px] font-bold text-accent-400">{Math.round((snap.confidence_score || 0.99) * 100)}% Match</span>
+                          <span class="text-[10px] font-bold text-accent-400">{snap.confidence_score ? Math.round(snap.confidence_score * 100) + '% Match' : 'Pending'}</span>
                         </div>
                       </div>
                     </td>
@@ -571,9 +356,9 @@
                         <p class="text-[10px] leading-tight text-ink-300">{eip.explainability_notes || 'Unassociated EIP address found.'}</p>
                         <div class="flex items-center gap-2">
                           <div class="h-1 w-16 bg-ink-700 rounded-full overflow-hidden">
-                            <div class="h-full bg-accent-500" style="width: {(eip.confidence_score || 0.98) * 100}%"></div>
+                            <div class="h-full bg-accent-500" style="width: {eip.confidence_score ? eip.confidence_score * 100 : 0}%"></div>
                           </div>
-                          <span class="text-[10px] font-bold text-accent-400">{Math.round((eip.confidence_score || 0.98) * 100)}% Match</span>
+                          <span class="text-[10px] font-bold text-accent-400">{eip.confidence_score ? Math.round(eip.confidence_score * 100) + '% Match' : 'Pending'}</span>
                         </div>
                       </div>
                     </td>
@@ -596,9 +381,9 @@
                         <p class="text-[10px] leading-tight text-ink-300">{ec2.explainability_notes || 'Low CPU and network utilization detected over 7 days.'}</p>
                         <div class="flex items-center gap-2">
                           <div class="h-1 w-16 bg-ink-700 rounded-full overflow-hidden">
-                            <div class="h-full bg-accent-500" style="width: {(ec2.confidence_score || 0.92) * 100}%"></div>
+                            <div class="h-full bg-accent-500" style="width: {ec2.confidence_score ? ec2.confidence_score * 100 : 0}%"></div>
                           </div>
-                          <span class="text-[10px] font-bold text-accent-400">{Math.round((ec2.confidence_score || 0.92) * 100)}% Match</span>
+                          <span class="text-[10px] font-bold text-accent-400">{ec2.confidence_score ? Math.round(ec2.confidence_score * 100) + '% Match' : 'Pending'}</span>
                         </div>
                       </div>
                     </td>
@@ -621,9 +406,9 @@
                         <p class="text-[10px] leading-tight text-ink-300">{lb.explainability_notes || 'Load balancer has no healthy targets associated.'}</p>
                         <div class="flex items-center gap-2">
                           <div class="h-1 w-16 bg-ink-700 rounded-full overflow-hidden">
-                            <div class="h-full bg-accent-500" style="width: {(lb.confidence_score || 0.95) * 100}%"></div>
+                            <div class="h-full bg-accent-500" style="width: {lb.confidence_score ? lb.confidence_score * 100 : 0}%"></div>
                           </div>
-                          <span class="text-[10px] font-bold text-accent-400">{Math.round((lb.confidence_score || 0.95) * 100)}% Match</span>
+                          <span class="text-[10px] font-bold text-accent-400">{lb.confidence_score ? Math.round(lb.confidence_score * 100) + '% Match' : 'Pending'}</span>
                         </div>
                       </div>
                     </td>
@@ -646,9 +431,9 @@
                         <p class="text-[10px] leading-tight text-ink-300">{rds.explainability_notes || 'No connections detected in the last billing cycle.'}</p>
                         <div class="flex items-center gap-2">
                           <div class="h-1 w-16 bg-ink-700 rounded-full overflow-hidden">
-                            <div class="h-full bg-accent-500" style="width: {(rds.confidence_score || 0.88) * 100}%"></div>
+                            <div class="h-full bg-accent-500" style="width: {rds.confidence_score ? rds.confidence_score * 100 : 0}%"></div>
                           </div>
-                          <span class="text-[10px] font-bold text-accent-400">{Math.round((rds.confidence_score || 0.88) * 100)}% Match</span>
+                          <span class="text-[10px] font-bold text-accent-400">{rds.confidence_score ? Math.round(rds.confidence_score * 100) + '% Match' : 'Pending'}</span>
                         </div>
                       </div>
                     </td>
@@ -671,9 +456,9 @@
                         <p class="text-[10px] leading-tight text-ink-300">{nat.explainability_notes || 'Minimal data processing detected compared to runtime cost.'}</p>
                         <div class="flex items-center gap-2">
                           <div class="h-1 w-16 bg-ink-700 rounded-full overflow-hidden">
-                            <div class="h-full bg-accent-500" style="width: {(nat.confidence_score || 0.80) * 100}%"></div>
+                            <div class="h-full bg-accent-500" style="width: {nat.confidence_score ? nat.confidence_score * 100 : 0}%"></div>
                           </div>
-                          <span class="text-[10px] font-bold text-accent-400">{Math.round((nat.confidence_score || 0.80) * 100)}% Match</span>
+                          <span class="text-[10px] font-bold text-accent-400">{nat.confidence_score ? Math.round(nat.confidence_score * 100) + '% Match' : 'Pending'}</span>
                         </div>
                       </div>
                     </td>
@@ -696,9 +481,9 @@
                         <p class="text-[10px] leading-tight text-ink-300">{s3.explainability_notes || 'No GET/PUT requests recorded in the last 30 days.'}</p>
                         <div class="flex items-center gap-2">
                           <div class="h-1 w-16 bg-ink-700 rounded-full overflow-hidden">
-                            <div class="h-full bg-accent-500" style="width: {(s3.confidence_score || 0.90) * 100}%"></div>
+                            <div class="h-full bg-accent-500" style="width: {s3.confidence_score ? s3.confidence_score * 100 : 0}%"></div>
                           </div>
-                          <span class="text-[10px] font-bold text-accent-400">{Math.round((s3.confidence_score || 0.90) * 100)}% Match</span>
+                          <span class="text-[10px] font-bold text-accent-400">{s3.confidence_score ? Math.round(s3.confidence_score * 100) + '% Match' : 'Pending'}</span>
                         </div>
                       </div>
                     </td>
@@ -721,9 +506,9 @@
                         <p class="text-[10px] leading-tight text-ink-300">{ecr.explainability_notes || 'Untagged or superseded by multiple newer versions.'}</p>
                         <div class="flex items-center gap-2">
                           <div class="h-1 w-16 bg-ink-700 rounded-full overflow-hidden">
-                            <div class="h-full bg-accent-500" style="width: {(ecr.confidence_score || 0.99) * 100}%"></div>
+                            <div class="h-full bg-accent-500" style="width: {ecr.confidence_score ? ecr.confidence_score * 100 : 0}%"></div>
                           </div>
-                          <span class="text-[10px] font-bold text-accent-400">{Math.round((ecr.confidence_score || 0.99) * 100)}% Match</span>
+                          <span class="text-[10px] font-bold text-accent-400">{ecr.confidence_score ? Math.round(ecr.confidence_score * 100) + '% Match' : 'Pending'}</span>
                         </div>
                       </div>
                     </td>
@@ -746,9 +531,9 @@
                         <p class="text-[10px] leading-tight text-ink-300">{sm.explainability_notes || 'Endpoint has not processed any inference requests recently.'}</p>
                         <div class="flex items-center gap-2">
                           <div class="h-1 w-16 bg-ink-700 rounded-full overflow-hidden">
-                            <div class="h-full bg-accent-500" style="width: {(sm.confidence_score || 0.95) * 100}%"></div>
+                            <div class="h-full bg-accent-500" style="width: {sm.confidence_score ? sm.confidence_score * 100 : 0}%"></div>
                           </div>
-                          <span class="text-[10px] font-bold text-accent-400">{Math.round((sm.confidence_score || 0.95) * 100)}% Match</span>
+                          <span class="text-[10px] font-bold text-accent-400">{sm.confidence_score ? Math.round(sm.confidence_score * 100) + '% Match' : 'Pending'}</span>
                         </div>
                       </div>
                     </td>
@@ -771,9 +556,9 @@
                         <p class="text-[10px] leading-tight text-ink-300">{rs.explainability_notes || 'Cluster has been in idle state for over 14 days.'}</p>
                         <div class="flex items-center gap-2">
                           <div class="h-1 w-16 bg-ink-700 rounded-full overflow-hidden">
-                            <div class="h-full bg-accent-500" style="width: {(rs.confidence_score || 0.85) * 100}%"></div>
+                            <div class="h-full bg-accent-500" style="width: {rs.confidence_score ? rs.confidence_score * 100 : 0}%"></div>
                           </div>
-                          <span class="text-[10px] font-bold text-accent-400">{Math.round((rs.confidence_score || 0.85) * 100)}% Match</span>
+                          <span class="text-[10px] font-bold text-accent-400">{rs.confidence_score ? Math.round(rs.confidence_score * 100) + '% Match' : 'Pending'}</span>
                         </div>
                       </div>
                     </td>

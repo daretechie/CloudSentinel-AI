@@ -56,7 +56,7 @@ async def test_llm_factory_byok_priority():
 @pytest.mark.asyncio
 async def test_scheduler_concurrency():
     """Verify that Scheduler runs tenants in parallel with semaphore limit."""
-    from app.services.scheduler import SchedulerService
+    from app.services.scheduler.orchestrator import SchedulerService
     
     # Mock DB session and tenants (mock 15 tenants)
     mock_db = MagicMock(spec=AsyncSession)
@@ -77,24 +77,24 @@ async def test_scheduler_concurrency():
     
     scheduler = SchedulerService(session_maker=mock_session_maker)
     
-    with patch('app.services.scheduler.select'):
+    with patch('app.services.scheduler.orchestrator.sa.select'):
         mock_result = MagicMock()
         mock_result.scalars.return_value.all.return_value = mock_tenants
         mock_db.execute.return_value = mock_result
         
-        with patch('app.services.scheduler.ZombieDetector') as mock_detector:
-            detector_instance = mock_detector.return_value
-            detector_instance.scan_all = AsyncMock(side_effect=slow_analysis)
-            
-            # We also need to mock _process_tenant since it does a lot of work
-            with patch.object(scheduler, '_process_tenant', new_callable=AsyncMock) as mock_pt:
+        with patch('app.services.scheduler.orchestrator.set_correlation_id'):
+            with patch('app.services.scheduler.processors.ZombieDetector') as mock_detector:
+                detector_instance = mock_detector.return_value
+                detector_instance.scan_all = AsyncMock(side_effect=slow_analysis)
+                
                 start_time = datetime.now()
+                # daily_analysis_job is now a legacy proxy that enqueues jobs via DB
                 await scheduler.daily_analysis_job()
                 end_time = datetime.now()
                 
                 duration = (end_time - start_time).total_seconds()
                 
-                # Each _process_tenant_wrapper uses the semaphore and calls _process_tenant
-                # Here we just verify the wrapper was called and it was fast
+                # Verify that it completed "instantly" (doesn't wait for actual scans)
                 assert duration < 0.5 
-                assert mock_pt.call_count == 15
+                # Verify BackgroundJobs were added (3 cohorts, multiple jobs per cohort)
+                assert mock_db.add.call_count >= 15

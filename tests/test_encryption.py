@@ -11,6 +11,8 @@ def test_encryption_decryption_utilities():
     # Use a stable key for the test
     with patch('app.core.security.settings') as mock_settings:
         mock_settings.ENCRYPTION_KEY = generate_new_key()
+        mock_settings.KDF_SALT = "test-salt"
+        mock_settings.KDF_ITERATIONS = 1000
         encrypted = encrypt_string(plain_text)
         assert encrypted != plain_text
         
@@ -24,16 +26,22 @@ def test_encryption_with_different_keys():
     k2 = generate_new_key()
     
     # Encrypt with k1
-    with patch('app.core.security.settings') as mock_settings:
-        mock_settings.ENCRYPTION_KEY = k1
+    with patch('app.core.security.get_settings') as mock_get:
+        mock_get.return_value.ENCRYPTION_KEY = k1
+        mock_get.return_value.LEGACY_ENCRYPTION_KEYS = []
+        mock_get.return_value.KDF_SALT = "test-salt"
+        mock_get.return_value.KDF_ITERATIONS = 1000
         enc1 = encrypt_string(plain)
         assert decrypt_string(enc1) == plain
 
     # Try to decrypt with k2
-    with patch('app.core.security.settings') as mock_settings:
-        mock_settings.ENCRYPTION_KEY = k2
-        # Decrypt should fail because of different keys
-        assert decrypt_string(enc1) == ""
+    with patch('app.core.security.get_settings') as mock_get:
+        mock_get.return_value.ENCRYPTION_KEY = k2
+        mock_get.return_value.LEGACY_ENCRYPTION_KEYS = []
+        mock_get.return_value.KDF_SALT = "test-salt"
+        mock_get.return_value.KDF_ITERATIONS = 1000
+        # Decrypt should fail because of different keys and return None
+        assert decrypt_string(enc1) == None
 
 @pytest.mark.asyncio
 async def test_llm_budget_transparent_encryption():
@@ -56,7 +64,7 @@ async def test_llm_budget_transparent_encryption():
     # Verify setter with None
     budget.openai_api_key = None
     assert budget._openai_api_key is None
-    assert budget.openai_api_key == "" # decrypt_string returns "" for None
+    assert budget.openai_api_key == None # decrypt_string returns None for None
 
 def test_generate_new_key():
     """Ensure generate_new_key produces a valid Fernet key."""

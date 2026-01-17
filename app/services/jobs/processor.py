@@ -15,7 +15,6 @@ Usage:
     await processor.process_pending_jobs()
 """
 
-import sys
 import sqlalchemy as sa
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict, Any, Callable, Awaitable
@@ -61,6 +60,7 @@ class JobProcessor:
         self._handlers[JobType.WEBHOOK_RETRY.value] = self._handle_webhook_retry
         self._handlers[JobType.NOTIFICATION.value] = self._handle_notification
         self._handlers[JobType.COST_INGESTION.value] = self._handle_cost_ingestion
+        self._handlers[JobType.RECURRING_BILLING.value] = self._handle_recurring_billing
     
     def register_handler(self, job_type: str, handler: JobHandler) -> None:
         """Register a custom job handler."""
@@ -149,9 +149,12 @@ class JobProcessor:
         job.attempts += 1
         await self.db.commit()
         
+        result = None
+        
         try:
             # Get handler for job type
-            handler = self._handlers.get(job.job_type)
+            job_type_key = job.job_type.value if hasattr(job.job_type, "value") else str(job.job_type)
+            handler = self._handlers.get(job_type_key)
             if not handler:
                 raise ValueError(f"No handler for job type: {job.job_type}")
             
@@ -213,7 +216,7 @@ class JobProcessor:
         from app.services.llm.analyzer import FinOpsAnalyzer
         from app.services.adapters.aws_multitenant import MultiTenantAWSAdapter
         from app.models.aws_connection import AWSConnection
-        from datetime import date, timedelta
+        from datetime import date
         
         tenant_id = job.tenant_id
         if not tenant_id:
@@ -443,10 +446,8 @@ class JobProcessor:
         """Processes high-fidelity cost ingestion for cloud accounts (Multi-Cloud)."""
         from app.services.adapters.factory import AdapterFactory
         from app.services.costs.persistence import CostPersistenceService
-        from app.models.aws_connection import AWSConnection
         from app.models.azure_connection import AzureConnection
         from app.models.gcp_connection import GCPConnection
-        from app.schemas.costs import CloudUsageSummary, CostRecord
         
         tenant_id = job.tenant_id
         if not tenant_id:
@@ -479,22 +480,22 @@ class JobProcessor:
         from sqlalchemy.dialects.postgresql import insert as pg_insert
 
         for conn in connections:
-             stmt = pg_insert(CloudAccount).values(
-                 id=conn.id,
-                 tenant_id=conn.tenant_id,
-                 provider=conn.provider,
-                 name=getattr(conn, "name", f"{conn.provider.upper()} Connection"),
-                 credentials_encrypted="managed_by_connection_table",
-                 is_active=True
-             ).on_conflict_do_update(
-                 index_elements=['id'],
-                 set_={
-                     "provider": conn.provider,
-                     "name": getattr(conn, "name", f"{conn.provider.upper()} Connection"),
-                     "updated_at": datetime.now(timezone.utc)
-                 }
-             )
-             await db.execute(stmt)
+            stmt = pg_insert(CloudAccount).values(
+                id=conn.id,
+                tenant_id=conn.tenant_id,
+                provider=conn.provider,
+                name=getattr(conn, "name", f"{conn.provider.upper()} Connection"),
+                credentials_encrypted="managed_by_connection_table",
+                is_active=True
+            ).on_conflict_do_update(
+                index_elements=['id'],
+                set_={
+                    "provider": conn.provider,
+                    "name": getattr(conn, "name", f"{conn.provider.upper()} Connection"),
+                    "updated_at": datetime.now(timezone.utc)
+                }
+            )
+            await db.execute(stmt)
         await db.commit()
         
         # 2. Process each connection via its appropriate adapter
@@ -506,66 +507,42 @@ class JobProcessor:
                 end_date = datetime.now(timezone.utc)
                 start_date = end_date - timedelta(days=7)
                 
-                # Fetch costs using normalized interface
-                # Returns List[Dict]
-                raw_costs = await adapter.get_cost_and_usage(
+                # Stream costs using normalized interface
+                # Optimized for memory efficiency (Memory Bomb Resolution)
+                cost_stream = adapter.stream_cost_and_usage(
                     start_date=start_date,
                     end_date=end_date,
                     granularity="HOURLY"
                 )
                 
-                if raw_costs:
-                    # Convert to CloudUsageSummary for persistence
-                    # Reconstruct CostRecord objects (Pydantic)
-                    records = []
-                    total_cost = 0.0
-                    by_service = {}
-                    
-                    total_cost = 0.0
-                    by_service = {}
-                    
-                    provider_name = conn.provider
-                    
-                    for row in raw_costs:
-                        amount = Decimal(str(row["cost_usd"]))
-                        records.append(CostRecord(
-                            date=row["timestamp"],
-                            amount=amount,
-                            service=row["service"],
-                            region=row["region"],
-                            usage_type=row["usage_type"],
-                            currency=row["currency"],
-                            amount_raw=row.get("amount_raw")
-                        ))
-                        total_cost += float(amount)
-                        by_service[row["service"]] = by_service.get(row["service"], Decimal("0.0")) + amount
+                # Tracking totals while streaming
+                records_ingested = 0
+                total_cost_acc = 0.0
+                
+                async def tracking_wrapper(stream):
+                    nonlocal records_ingested, total_cost_acc
+                    async for r in stream:
+                        records_ingested += 1
+                        total_cost_acc += float(r.get("cost_usd", 0) or 0)
+                        yield r
 
-                    summary = CloudUsageSummary(
-                        tenant_id=str(conn.tenant_id),
-                        provider=provider_name,
-                        start_date=start_date,
-                        end_date=end_date,
-                        total_cost=total_cost,
-                        records=records,
-                        by_service=by_service,
-                        by_region={} # Optional
-                    )
-                    
-                    # Idempotent persistence
-                    await persistence.save_summary(summary, str(conn.id))
-                    
-                    # Update connection health
-                    conn.last_ingested_at = datetime.now(timezone.utc)
-                    db.add(conn) # Ensure updated timestamp is tracked
-                    
-                    results.append({
-                        "connection_id": str(conn.id),
-                        "provider": provider_name,
-                        "records_ingested": len(records),
-                        "total_cost": total_cost
-                    })
-                else:
-                    results.append({"connection_id": str(conn.id), "status": "no_data_found"})
+                # Idempotent persistence via stream
+                save_result = await persistence.save_records_stream(
+                    records=tracking_wrapper(cost_stream),
+                    tenant_id=str(conn.tenant_id),
+                    account_id=str(conn.id)
+                )
+                
+                # Update connection health
+                conn.last_ingested_at = datetime.now(timezone.utc)
+                db.add(conn) 
+                
+                results.append({
+                    "connection_id": str(conn.id),
+                    "provider": conn.provider,
+                    "records_ingested": save_result.get("records_saved", 0),
+                    "total_cost": total_cost_acc
+                })
                     
             except Exception as e:
                 logger.error("cost_ingestion_connection_failed", connection_id=str(conn.id), error=str(e))
@@ -583,6 +560,47 @@ class JobProcessor:
             "connections_processed": len(connections),
             "details": results
         }
+
+    async def _handle_recurring_billing(
+        self, 
+        job: BackgroundJob, 
+        db: AsyncSession
+    ) -> Dict[str, Any]:
+        """Processes an individual recurring billing charge for a tenant."""
+        from app.services.billing.paystack_billing import BillingService, TenantSubscription
+        
+        payload = job.payload or {}
+        sub_id = payload.get("subscription_id")
+        
+        if not sub_id:
+            raise ValueError("subscription_id required for recurring_billing")
+            
+        # Get subscription
+        result = await db.execute(
+            select(TenantSubscription).where(TenantSubscription.id == UUID(sub_id))
+        )
+        subscription = result.scalar_one_or_none()
+        
+        if not subscription:
+            return {"status": "failed", "reason": "subscription_not_found"}
+            
+        if subscription.status != "active":
+            return {"status": "skipped", "reason": f"subscription_status_is_{subscription.status}"}
+            
+        # Execute charge
+        billing_service = BillingService(db)
+        success = await billing_service.charge_renewal(subscription)
+        
+        if success:
+            # Fetch actual price for result reporting
+            from app.models.pricing import PricingPlan
+            plan_res = await db.execute(select(PricingPlan).where(PricingPlan.id == subscription.tier))
+            plan_obj = plan_res.scalar_one_or_none()
+            price = float(plan_obj.price_usd) if plan_obj else 0.0
+            
+            return {"status": "completed", "amount_billed_usd": price}
+        else:
+            raise Exception("Paystack charge failed or authorization missing")
 
 
 # ==================== Job Creation Helpers ====================

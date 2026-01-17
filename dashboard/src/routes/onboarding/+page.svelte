@@ -53,7 +53,7 @@
     }
     
     try {
-      const res = await fetch(`${API_URL}/onboard`, {
+      const res = await fetch(`${API_URL}/settings/onboard`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -85,9 +85,9 @@
     error = '';
     try {
       const token = await getAccessToken();
-      const endpoint = selectedProvider === 'aws' ? '/connections/aws/setup' : 
-                       selectedProvider === 'azure' ? '/connections/azure/setup' : 
-                       '/connections/gcp/setup';
+      const endpoint = selectedProvider === 'aws' ? '/settings/connections/aws/setup' : 
+                       selectedProvider === 'azure' ? '/settings/connections/azure/setup' : 
+                       '/settings/connections/gcp/setup';
 
       const res = await fetch(`${API_URL}${endpoint}`, {
         method: 'POST',
@@ -166,7 +166,7 @@
       isVerifying = true;
       try {
         const token = await getAccessToken();
-        const res = await fetch(`${API_URL}/connections/azure`, {
+        const res = await fetch(`${API_URL}/settings/connections/azure`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -184,6 +184,20 @@
           const errData = await res.json();
           throw new Error(errData.detail || 'Failed to connect');
         }
+        
+        const connection = await res.json();
+        
+        // Explicit verify step
+        const verifyRes = await fetch(`${API_URL}/settings/connections/azure/${connection.id}/verify`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
+        
+        if (!verifyRes.ok) {
+          const errData = await verifyRes.json();
+          throw new Error(errData.detail || 'Verification failed');
+        }
+
         currentStep = 3; // Done
       } catch (e: any) {
         error = e.message;
@@ -198,7 +212,7 @@
       isVerifying = true;
       try {
         const token = await getAccessToken();
-        const res = await fetch(`${API_URL}/connections/gcp`, {
+        const res = await fetch(`${API_URL}/settings/connections/gcp`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -217,6 +231,20 @@
           const errData = await res.json();
           throw new Error(errData.detail || 'Failed to connect');
         }
+
+        const connection = await res.json();
+        
+        // Explicit verify step
+        const verifyRes = await fetch(`${API_URL}/settings/connections/gcp/${connection.id}/verify`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
+        
+        if (!verifyRes.ok) {
+          const errData = await verifyRes.json();
+          throw new Error(errData.detail || 'Verification failed');
+        }
+
         currentStep = 3; // Done
       } catch (e: any) {
         error = e.message;
@@ -253,7 +281,7 @@
         return;
       }
       
-      const createRes = await fetch(`${API_URL}/connections/aws`, {
+      const createRes = await fetch(`${API_URL}/settings/connections/aws`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -276,7 +304,7 @@
       
       const connection = await createRes.json();
       
-      const verifyRes = await fetch(`${API_URL}/connections/aws/${connection.id}/verify`, {
+      const verifyRes = await fetch(`${API_URL}/settings/connections/aws/${connection.id}/verify`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` },
       });

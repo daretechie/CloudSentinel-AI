@@ -30,7 +30,7 @@ services:
     ports:
       - "3005:3000"
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=sentinel
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-sentinel}
     depends_on:
       - prometheus
 

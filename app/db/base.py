@@ -1,6 +1,6 @@
-from datetime import datetime, timezone
+from datetime import datetime
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from sqlalchemy import MetaData
+from sqlalchemy import MetaData, func
 from sqlalchemy.types import TIMESTAMP
 
 # Recommended naming convention for constraints (required for Alembic with SQLite/Postgres)
@@ -16,13 +16,17 @@ class Base(DeclarativeBase):
     metadata = MetaData(naming_convention=naming_convention)
 
     # Mixin for audit columns
-    # Using lambda for defaults ensures fresh UTC timestamps at creation
+    # Using func.now() ensures consistent DB-side timestamps (Audit Item 15)
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
-        default=lambda: datetime.now(timezone.utc)
+        server_default=func.now(),
+        default=func.now(),
+        index=True
     )
     updated_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc)
+        server_default=func.now(),
+        default=func.now(),
+        onupdate=func.now(),
+        index=True
     )

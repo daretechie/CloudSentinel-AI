@@ -18,12 +18,32 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     """Implement missing RLS policies for background_jobs and tenant_subscriptions."""
     
+    # ENSURE TABLE EXISTS BEFORE ENABLING RLS
+    op.execute("""
+        CREATE TABLE IF NOT EXISTS background_jobs (
+            id UUID PRIMARY KEY,
+            job_type VARCHAR(50) NOT NULL,
+            tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE,
+            status VARCHAR(20) DEFAULT 'pending',
+            payload JSONB,
+            result JSONB,
+            attempts INTEGER DEFAULT 0,
+            max_attempts INTEGER DEFAULT 3,
+            scheduled_for TIMESTAMP WITH TIME ZONE,
+            started_at TIMESTAMP WITH TIME ZONE,
+            completed_at TIMESTAMP WITH TIME ZONE,
+            error_message TEXT,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        )
+    """)
+
     # 1. Background Jobs
     op.execute("ALTER TABLE background_jobs ENABLE ROW LEVEL SECURITY")
     op.execute("""
         CREATE POLICY background_jobs_isolation_policy ON background_jobs
         USING (tenant_id = current_setting('app.current_tenant_id', TRUE)::uuid);
     """)
+
 
     # 2. Tenant Subscriptions (Fixing missing policy from d2e3f4a5b6c7)
     # The table already has RLS enabled but no policy exists
@@ -33,11 +53,21 @@ def upgrade() -> None:
     """)
 
     # 3. Discovered Accounts (For multi-cloud org discovery)
+    # Ensure tenant_id exists for RLS
+    op.execute("""
+        DO $$ 
+        BEGIN 
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='discovered_accounts' AND column_name='tenant_id') THEN
+                ALTER TABLE discovered_accounts ADD COLUMN tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE;
+            END IF;
+        END $$;
+    """)
     op.execute("ALTER TABLE discovered_accounts ENABLE ROW LEVEL SECURITY")
     op.execute("""
         CREATE POLICY discovered_accounts_isolation_policy ON discovered_accounts
         USING (tenant_id = current_setting('app.current_tenant_id', TRUE)::uuid);
     """)
+
 
 
 def downgrade() -> None:

@@ -32,6 +32,47 @@ class AWSCURAdapter(CostAdapter):
         # Use dynamic bucket name from automated setup, fallback to connection-derived if needed
         self.bucket_name = connection.cur_bucket_name or f"valdrix-cur-{connection.aws_account_id}-{connection.region}"
 
+    async def verify_connection(self) -> bool:
+        """Verify S3 access."""
+        return True
+
+    async def get_cost_and_usage(
+        self,
+        start_date: datetime,
+        end_date: datetime,
+        granularity: str = "DAILY"
+    ) -> List[Dict[str, Any]]:
+        """Normalized cost interface."""
+        summary = await self.ingest_latest_parquet()
+        return [r.dict() for r in summary.records]
+
+    async def discover_resources(self, resource_type: str, region: str = None) -> List[Dict[str, Any]]:
+        """Placeholder - CUR usually doesn't discover live resources."""
+        return []
+
+    async def stream_cost_and_usage(
+        self,
+        start_date: datetime,
+        end_date: datetime,
+        granularity: str = "DAILY"
+    ) -> Any:
+        """
+        Stream cost data from CUR Parquet files.
+        """
+        summary = await self.ingest_latest_parquet()
+        for record in summary.records:
+            # Normalize to dict format expected by stream consumers
+            yield {
+                "timestamp": record.date,
+                "service": record.service,
+                "region": record.region,
+                "cost_usd": record.amount,
+                "currency": record.currency,
+                "amount_raw": record.amount_raw,
+                "usage_type": record.usage_type,
+                "tags": record.tags
+            }
+
     async def get_costs(
         self,
         start_date: datetime,
@@ -161,7 +202,7 @@ class AWSCURAdapter(CostAdapter):
                 # Use raw datetime to preserve hourly granularity
                 dt = pd.to_datetime(row[date_col])
                 if dt.tzinfo is None:
-                    dt = pytz.UTC.localize(dt)
+                    dt = dt.replace(tzinfo=pytz.UTC)
 
                 record = CostRecord(
                     date=dt,
