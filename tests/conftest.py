@@ -68,7 +68,7 @@ def mock_settings():
     from app.core.config import get_settings, Settings
     from cryptography.fernet import Fernet
     test_key = Fernet.generate_key().decode()
-    test_db_url = "postgresql+asyncpg://agentkern:agentkern_secret@localhost:5432/agentkern_identity"
+    test_db_url = "postgresql+asyncpg://agentkern:agentkern_secret@localhost:5433/agentkern_identity"
     start_settings = Settings(
         DATABASE_URL=test_db_url,
         TESTING=True,

@@ -4,7 +4,7 @@ BE-FIN-ATTR-1: Implements the missing allocation engine identified in the Princi
 """
 from typing import List, Dict, Any, Optional
 from decimal import Decimal
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
 import uuid
 import structlog
 
@@ -101,7 +101,7 @@ class AttributionEngine:
                     recorded_at=cost_record.recorded_at,
                     rule_id=rule.id,
                     allocated_to=bucket,
-                    amount=cost_record.amount,
+                    amount=cost_record.cost_usd,
                     percentage=Decimal("100.00"),
                     timestamp=datetime.now(timezone.utc)
                 )
@@ -119,7 +119,7 @@ class AttributionEngine:
                     pct = Decimal(str(split.get("percentage", 0)))
                     total_percentage += pct
 
-                    split_amount = (cost_record.amount * pct) / Decimal("100")
+                    split_amount = (cost_record.cost_usd * pct) / Decimal("100")
                     allocation = CostAllocation(
                         cost_record_id=cost_record.id,
                         recorded_at=cost_record.recorded_at,
@@ -163,7 +163,7 @@ class AttributionEngine:
                     allocations.append(allocation)
 
                 # Remaining goes to "Unallocated"
-                remaining = cost_record.amount - allocated_total
+                remaining = cost_record.cost_usd - allocated_total
                 if remaining > Decimal("0"):
                     allocation = CostAllocation(
                         cost_record_id=cost_record.id,
@@ -187,7 +187,7 @@ class AttributionEngine:
                     recorded_at=cost_record.recorded_at,
                     rule_id=None,
                     allocated_to="Unallocated",
-                    amount=cost_record.amount,
+                    amount=cost_record.cost_usd,
                     percentage=Decimal("100.00"),
                     timestamp=datetime.now(timezone.utc)
                 )
@@ -219,6 +219,52 @@ class AttributionEngine:
         )
 
         return allocations
+
+    async def apply_rules_to_tenant(
+        self,
+        tenant_id: uuid.UUID,
+        start_date: date,
+        end_date: date
+    ) -> None:
+        """
+        Batch apply attribution rules to all cost records for a tenant within a date range.
+        Used for recalculation or historical reconciliation.
+        """
+        # 1. Fetch all cost records in range
+        query = (
+            select(CostRecord)
+            .where(CostRecord.tenant_id == tenant_id)
+            .where(CostRecord.recorded_at >= start_date)
+            .where(CostRecord.recorded_at <= end_date)
+        )
+        result = await self.db.execute(query)
+        records = result.scalars().all()
+
+        if not records:
+            logger.info("no_cost_records_found_for_attribution", tenant_id=str(tenant_id))
+            return
+
+        # 2. Get active rules
+        rules = await self.get_active_rules(tenant_id)
+
+        # 3. Process each record
+        for record in records:
+            # Delete existing allocations for this record to avoid duplicates
+            from sqlalchemy import delete
+            await self.db.execute(
+                delete(CostAllocation).where(CostAllocation.cost_record_id == record.id)
+            )
+
+            allocations = await self.apply_rules(record, rules)
+            for allocation in allocations:
+                self.db.add(allocation)
+
+        await self.db.commit()
+        logger.info(
+            "batch_attribution_complete",
+            tenant_id=str(tenant_id),
+            records_processed=len(records)
+        )
 
     async def get_allocation_summary(
         self,

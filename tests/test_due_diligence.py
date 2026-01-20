@@ -103,20 +103,23 @@ async def test_anomaly_marker_schema_exists():
     """
     Due Diligence Test: Anomaly markers can be created.
     
-    Verifies that the AnomalyMarker schema exists and works.
+    Verifies that the AnomalyMarker model exists and works.
     """
-    from app.schemas.forecasting import AnomalyMarker, AnomalyType
+    from app.models.anomaly_marker import AnomalyMarker
+    from datetime import date
     
     # Create an anomaly marker
     marker = AnomalyMarker(
-        date="2026-01-20",
-        anomaly_type=AnomalyType.BATCH_JOB,
-        description="Monthly batch processing",
+        start_date=date(2026, 1, 20),
+        end_date=date(2026, 1, 21),
+        marker_type="BATCH_JOB",
+        label="Monthly batch processing",
+        description="Heavy processing day",
     )
     
-    assert marker.date == "2026-01-20"
-    assert marker.anomaly_type == AnomalyType.BATCH_JOB
-    assert marker.description == "Monthly batch processing"
+    assert marker.label == "Monthly batch processing"
+    assert marker.marker_type == "BATCH_JOB"
+    assert marker.description == "Heavy processing day"
 
 
 @pytest.mark.asyncio
@@ -134,8 +137,8 @@ async def test_attribution_rule_model_supports_percentage_split():
         name="S3 Split Rule",
         priority=1,
         conditions={"service": "AmazonS3"},
-        allocation_type="percentage",
-        allocation_targets=[
+        rule_type="PERCENTAGE",
+        allocation=[
             {"bucket": "Team A", "percentage": 60},
             {"bucket": "Team B", "percentage": 40},
         ],
@@ -143,10 +146,10 @@ async def test_attribution_rule_model_supports_percentage_split():
     )
     
     assert rule.name == "S3 Split Rule"
-    assert rule.allocation_type == "percentage"
-    assert len(rule.allocation_targets) == 2
-    assert rule.allocation_targets[0]["percentage"] == 60
-    assert rule.allocation_targets[1]["percentage"] == 40
+    assert rule.rule_type == "PERCENTAGE"
+    assert len(rule.allocation) == 2
+    assert rule.allocation[0]["percentage"] == 60
+    assert rule.allocation[1]["percentage"] == 40
 
 
 @pytest.mark.asyncio
@@ -156,14 +159,13 @@ async def test_attribution_engine_exists():
     
     Verifies the AttributionEngine class exists and has required methods.
     """
-    from app.services.attribution import AttributionEngine
+    from app.services.costs.attribution_engine import AttributionEngine
     
     # Verify class exists
     assert AttributionEngine is not None
     
     # Verify required methods exist
-    assert hasattr(AttributionEngine, 'apply_rules_to_tenant') or \
-           hasattr(AttributionEngine, 'apply_rules')
+    assert hasattr(AttributionEngine, 'apply_rules_to_tenant')
     
 
 @pytest.mark.asyncio
@@ -261,9 +263,9 @@ async def test_attribution_rule_s3_split_60_40(db):
     
     Verifies that attribution rules correctly split costs between teams.
     """
-    from app.services.attribution import AttributionEngine
+    from app.services.costs.attribution_engine import AttributionEngine
     from app.models.tenant import Tenant
-    from app.models.cloud import CostRecord
+    from app.models.cloud import CostRecord, CloudAccount
     from app.models.attribution import AttributionRule, CostAllocation
     from datetime import timedelta
     
@@ -273,6 +275,16 @@ async def test_attribution_rule_s3_split_60_40(db):
     # Create tenant
     tenant = Tenant(id=tenant_id, name="Test Corp", plan="enterprise")
     db.add(tenant)
+    
+    # Create cloud account (REQUIRED for foreign key in cost_records)
+    account = CloudAccount(
+        id=account_id,
+        tenant_id=tenant_id,
+        provider="aws",
+        name="Test Account",
+        credentials_encrypted="test-creds"
+    )
+    db.add(account)
     
     # Create an S3 cost record
     cost = CostRecord(
@@ -296,8 +308,8 @@ async def test_attribution_rule_s3_split_60_40(db):
         name="S3 Split Rule",
         priority=1,
         conditions={"service": "AmazonS3"},
-        allocation_type="percentage",
-        allocation_targets=[
+        rule_type="PERCENTAGE",
+        allocation=[
             {"bucket": "Team A", "percentage": 60},
             {"bucket": "Team B", "percentage": 40},
         ],
