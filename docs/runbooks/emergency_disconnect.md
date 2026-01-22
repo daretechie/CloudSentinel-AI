@@ -27,7 +27,7 @@ This runbook provides instructions for immediate disconnection of a cloud provid
 If the Valdrix app is unavailable or the situation is urgent:
 1. Login to the **AWS Management Console** of the connected account.
 2. Navigate to **IAM > Roles**.
-3. Search for the role assumed by Valdrix (e.g., `CloudSentinel-AI-Role` or `Valdrix-Role`).
+3. Search for the role assumed by Valdrix (e.g., `Valdrix-AI-Role` or `Valdrix-Role`).
 4. **Delete the role** OR **Remove the Trust Relationship** of the role.
    - Removing the trust relationship is less destructive and prevents Valdrix from assuming the role without deleting the role itself.
 5. Search for the **IAM Policy** associated with the role and delete it.

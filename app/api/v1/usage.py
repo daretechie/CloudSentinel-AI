@@ -118,7 +118,7 @@ async def _get_llm_usage(
     
     result = await db.execute(
         select(
-            func.coalesce(func.sum(LLMUsage.tokens_used), 0),
+            func.coalesce(func.sum(LLMUsage.total_tokens), 0),
             func.count(LLMUsage.id),
             func.coalesce(func.sum(LLMUsage.cost_usd), 0)
         )
@@ -133,7 +133,8 @@ async def _get_llm_usage(
     requests_count = int(row[1])
     cost_usd = float(row[2])
     
-    tokens_limit = budget.monthly_token_limit if budget else 100000
+    # If no token limit set, we use an approximate one based on USD limit ($1 = ~100k tokens at avg price)
+    tokens_limit = int(budget.monthly_limit_usd * 100000) if budget else 100000
     utilization = (tokens_used / tokens_limit * 100) if tokens_limit > 0 else 0
     
     return LLMUsageMetrics(

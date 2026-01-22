@@ -147,3 +147,195 @@ class EmailService:
 </body>
 </html>
 """
+
+    async def send_dunning_notification(
+        self,
+        to_email: str,
+        attempt: int,
+        max_attempts: int,
+        next_retry_date: "datetime",
+        tier: str,
+    ) -> bool:
+        """
+        Send payment failed notification for dunning workflow.
+        """
+        from datetime import datetime
+        
+        try:
+            subject = f"⚠️ Valdrix: Payment Failed ({attempt}/{max_attempts})"
+            
+            html_body = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }}
+        .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+        .header {{ background: #dc2626; color: white; padding: 20px; border-radius: 8px 8px 0 0; }}
+        .content {{ background: #f8fafc; padding: 20px; border-radius: 0 0 8px 8px; }}
+        .warning {{ color: #dc2626; font-weight: bold; }}
+        .cta {{ background: #2563eb; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; display: inline-block; margin: 15px 0; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>💳 Payment Failed</h1>
+        </div>
+        <div class="content">
+            <p>We were unable to process your subscription payment for the <strong>{escape_html(tier)}</strong> plan.</p>
+            
+            <p class="warning">Attempt {attempt} of {max_attempts}</p>
+            
+            <p>We will automatically retry your payment on <strong>{next_retry_date.strftime('%B %d, %Y')}</strong>.</p>
+            
+            <p>To avoid service interruption, please ensure your payment method is updated:</p>
+            
+            <a href="https://app.valdrix.io/settings/billing" class="cta">Update Payment Method</a>
+            
+            <p>If you have any questions, contact our support team.</p>
+            
+            <p style="color: #64748b; font-size: 12px;">
+                Sent by Valdrix Billing
+            </p>
+        </div>
+    </div>
+</body>
+</html>
+"""
+
+            msg = MIMEMultipart("alternative")
+            msg["Subject"] = subject
+            msg["From"] = self.from_email
+            msg["To"] = to_email
+
+            msg.attach(MIMEText(html_body, "html"))
+
+            with smtplib.SMTP(self.smtp_host, self.smtp_port) as server:
+                server.starttls()
+                server.login(self.smtp_user, self.smtp_password)
+                server.sendmail(self.from_email, [to_email], msg.as_string())
+
+            logger.info("dunning_email_sent", to_email=to_email, attempt=attempt)
+            return True
+
+        except Exception as e:
+            logger.error("dunning_email_failed", error=str(e))
+            return False
+
+    async def send_payment_recovered_notification(self, to_email: str) -> bool:
+        """Send payment recovered confirmation."""
+        try:
+            subject = "✅ Valdrix: Payment Successful - Account Reactivated"
+            
+            html_body = """
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: #16a34a; color: white; padding: 20px; border-radius: 8px 8px 0 0; }
+        .content { background: #f8fafc; padding: 20px; border-radius: 0 0 8px 8px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>✅ Payment Successful</h1>
+        </div>
+        <div class="content">
+            <p>Great news! Your payment has been processed successfully.</p>
+            
+            <p>Your Valdrix subscription is now active and you have full access to all features.</p>
+            
+            <p>Thank you for your continued trust in Valdrix.</p>
+            
+            <p style="color: #64748b; font-size: 12px;">
+                Sent by Valdrix Billing
+            </p>
+        </div>
+    </div>
+</body>
+</html>
+"""
+
+            msg = MIMEMultipart("alternative")
+            msg["Subject"] = subject
+            msg["From"] = self.from_email
+            msg["To"] = to_email
+
+            msg.attach(MIMEText(html_body, "html"))
+
+            with smtplib.SMTP(self.smtp_host, self.smtp_port) as server:
+                server.starttls()
+                server.login(self.smtp_user, self.smtp_password)
+                server.sendmail(self.from_email, [to_email], msg.as_string())
+
+            logger.info("payment_recovered_email_sent", to_email=to_email)
+            return True
+
+        except Exception as e:
+            logger.error("payment_recovered_email_failed", error=str(e))
+            return False
+
+    async def send_account_downgraded_notification(self, to_email: str) -> bool:
+        """Send account downgraded notice."""
+        try:
+            subject = "🔻 Valdrix: Account Downgraded to Free Tier"
+            
+            html_body = """
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: #f59e0b; color: white; padding: 20px; border-radius: 8px 8px 0 0; }
+        .content { background: #f8fafc; padding: 20px; border-radius: 0 0 8px 8px; }
+        .cta { background: #2563eb; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; display: inline-block; margin: 15px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔻 Account Downgraded</h1>
+        </div>
+        <div class="content">
+            <p>We were unable to process your payment after multiple attempts.</p>
+            
+            <p>Your account has been downgraded to the <strong>Free Tier</strong>.</p>
+            
+            <p>You can resubscribe at any time to regain full access to premium features:</p>
+            
+            <a href="https://app.valdrix.io/settings/billing" class="cta">Resubscribe Now</a>
+            
+            <p>Your data is safe and will remain accessible on the Free Tier.</p>
+            
+            <p style="color: #64748b; font-size: 12px;">
+                Sent by Valdrix Billing
+            </p>
+        </div>
+    </div>
+</body>
+</html>
+"""
+
+            msg = MIMEMultipart("alternative")
+            msg["Subject"] = subject
+            msg["From"] = self.from_email
+            msg["To"] = to_email
+
+            msg.attach(MIMEText(html_body, "html"))
+
+            with smtplib.SMTP(self.smtp_host, self.smtp_port) as server:
+                server.starttls()
+                server.login(self.smtp_user, self.smtp_password)
+                server.sendmail(self.from_email, [to_email], msg.as_string())
+
+            logger.info("account_downgraded_email_sent", to_email=to_email)
+            return True
+
+        except Exception as e:
+            logger.error("account_downgraded_email_failed", error=str(e))
+            return False

@@ -5,7 +5,7 @@ from sqlalchemy.engine import Engine
 from app.core.config import get_settings
 import structlog
 import sys
-import os
+import time
 
 logger = structlog.get_logger()
 settings = get_settings()
@@ -84,19 +84,15 @@ engine = create_async_engine(
     **pool_args
 )
 
-# R5: Slow Query Logging - Log queries taking over 1 second
-import time
-from sqlalchemy import event
-
 SLOW_QUERY_THRESHOLD_SECONDS = 0.2
 
 @event.listens_for(engine.sync_engine, "before_cursor_execute")
-def before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+def before_cursor_execute(conn, _cursor, _statement, _parameters, _context, _executemany):
     """Record query start time."""
     conn.info.setdefault("query_start_time", []).append(time.perf_counter())
 
 @event.listens_for(engine.sync_engine, "after_cursor_execute")
-def after_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+def after_cursor_execute(conn, _cursor, statement, parameters, _context, _executemany):
     """Log slow queries."""
     total = time.perf_counter() - conn.info["query_start_time"].pop(-1)
     if total > SLOW_QUERY_THRESHOLD_SECONDS:
@@ -107,22 +103,6 @@ def after_cursor_execute(conn, cursor, statement, parameters, context, executema
             parameters=str(parameters)[:100] if parameters else None
         )
 
-# SEC-RLS-01: Runtime Assertion for Multi-Tenant Isolation
-@event.listens_for(engine.sync_engine, "before_cursor_execute")
-def verify_rls_context(conn, cursor, statement, parameters, context, executemany):
-    """
-    Ensures that app.current_tenant_id is set before executing queries in a request context.
-    Prevents accidental cross-tenant data leaks due to missing context.
-    """
-    # Skip internal/system queries or migrations
-    if "ix_skipped_table" in statement or "alembic" in statement.lower():
-        return
-
-    # In a request context, checking for 'app.current_tenant_id'
-    # We emit a warning if it's missing to avoid breaking legacy background jobs
-    # but strictly for API requests, this should be set by get_db or middleware.
-    pass # Listener body implemented in target below
-
 # Session Factory: Creates new database sessions
 # - expire_on_commit=False: Prevents lazy loading issues in async code
 #   (objects remain accessible after commit without re-querying)
@@ -132,15 +112,15 @@ async_session_maker = async_sessionmaker(
     expire_on_commit=False,
 )
 
-
 from fastapi import Request
-from sqlalchemy import text
 
 async def get_db(request: Request = None) -> AsyncSession:
     """
     FastAPI dependency that provides a database session with RLS context.
     """
     async with async_session_maker() as session:
+        rls_context_set = False
+        
         if request is not None:
             tenant_id = getattr(request.state, "tenant_id", None)
             if tenant_id:
@@ -149,27 +129,21 @@ async def get_db(request: Request = None) -> AsyncSession:
                         text("SELECT set_config('app.current_tenant_id', :tid, true)"),
                         {"tid": str(tenant_id)}
                     )
-                    session.info["rls_context_set"] = True
+                    rls_context_set = True
                 except Exception as e:
                     logger.warning("rls_context_set_failed", error=str(e))
-                    session.info["rls_context_set"] = False
-            else:
-                session.info["rls_context_set"] = False
         else:
-            session.info["rls_context_set"] = True
+            # For system tasks or background jobs not triggered by a request,
+            # we assume the handler will set its own context if needed,
+            # or it's a system-level operation.
+            rls_context_set = True
         
-        # Propagate via execution_options to ensure it reaches the listener even with NullPool
-        session.extra_tid = session.info["rls_context_set"]
-        # Unfortunately session.execution_options is a method, not a dict. 
-        # But we can use connection-level options or just keep it simple.
-        # Let's use the listener to check the session if possible.
-        # Actually, let's just use context.execution_options in the listener.
-        # To do that, we need to pass it in EVERY execute call or set it on the connection.
+        # PROPAGATION: Ensure the listener can see the RLS status on the connection
+        # and satisfy session-level checks in existing tests.
+        session.info["rls_context_set"] = rls_context_set
         
-        # Best way: Set it on the connection's execution_options during checkout
-        # but that's complex. Let's just use the connection info but ensure 
-        # we check it out ONCE in get_db for the life of the session if possible.
-        # Actually, using a transaction (session.begin()) holds the connection.
+        conn = await session.connection()
+        conn.info["rls_context_set"] = rls_context_set
         
         try:
             yield session
@@ -177,17 +151,31 @@ async def get_db(request: Request = None) -> AsyncSession:
             await session.close()
 
 
-@event.listens_for(Engine, "before_cursor_execute")
-def check_rls_policy(conn, cursor, statement, parameters, context, executemany):
+@event.listens_for(Engine, "before_cursor_execute", retval=True)
+def check_rls_policy(conn, _cursor, statement, parameters, _context, _executemany):
     """
-    Hardened Multi-Tenancy: Emits a CRITICAL alert if a query runs in a request 
-    context without a tenant ID being set in the DB session.
+    PRODUCTION: Hardened Multi-Tenancy RLS Enforcement
+    
+    This listener ENFORCES Row-Level Security by raising an exception if a query runs 
+    without proper tenant context. This prevents accidental data leaks across tenants.
     """
-    # Identify the state from the session info or execution options
-    rls_status = conn.info.get("rls_context_set")
-    if rls_status is None and context:
-        rls_status = context.execution_options.get("rls_context_set")
+    # Skip internal/system queries or migrations
+    stmt_lower = statement.lower()
+    if (
+        "ix_skipped_table" in stmt_lower or 
+        "alembic" in stmt_lower or
+        "select 1" in stmt_lower or
+        "select version()" in stmt_lower or
+        "select pg_is_in_recovery()" in stmt_lower
+    ):
+        return statement, parameters
 
+    # Identify the state from the connection info
+    rls_status = conn.info.get("rls_context_set")
+
+    # PRODUCTION: Raise exception on RLS context missing (False)
+    # Note: None is allowed for system/internal connections that don't go through get_db
+    # but for all request-bound sessions, it will be True or False.
     if rls_status is False:
         try:
             from app.core.ops_metrics import RLS_CONTEXT_MISSING
@@ -197,9 +185,22 @@ def check_rls_policy(conn, cursor, statement, parameters, context, executemany):
             pass
         
         logger.critical(
-            "rls_enforcement_bypass_attempt",
+            "rls_enforcement_violation_detected",
             statement=statement[:200],
-            msg="Query executed in request context WITHOUT tenant insulation set. Potential RLS bypass!"
+            error="Query executed WITHOUT tenant insulation set. RLS policy violated!"
         )
-        # In strict mode, we could raise an exception here:
-        # raise ValdrixSecurityError("RLS Context Missing")
+        
+        # PRODUCTION: Hard exception - no execution allowed
+        from app.core.exceptions import ValdrixException
+        raise ValdrixException(
+            message="RLS context missing - query execution aborted",
+            code="rls_enforcement_failed",
+            status_code=500,
+            details={
+                "reason": "Multi-tenant isolation enforcement failed",
+                "action": "This is a critical security error. Check that all DB sessions are initialized with tenant context."
+            }
+        )
+    
+    return statement, parameters
+

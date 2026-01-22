@@ -103,7 +103,8 @@ class AzureAdapter(BaseAdapter):
                     },
                     grouping=[
                         QueryGrouping(type="Dimension", name="ServiceName"),
-                        QueryGrouping(type="Dimension", name="ResourceLocation")
+                        QueryGrouping(type="Dimension", name="ResourceLocation"),
+                        QueryGrouping(type="Dimension", name="ChargeType")
                     ]
                 )
             )
@@ -125,7 +126,7 @@ class AzureAdapter(BaseAdapter):
                         "cost_usd": float(row[0]),
                         "currency": "USD",
                         "amount_raw": float(row[0]),
-                        "usage_type": "Usage",
+                        "usage_type": row[4], # ChargeType (Usage, Purchase, Tax, etc)
                         "cost_type": cost_type,
                         "is_finalized": is_finalized
                     })

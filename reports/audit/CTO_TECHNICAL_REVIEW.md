@@ -261,17 +261,17 @@ FastAPI-CSRF is implemented. Security headers middleware exists. This isn't wher
 
 ### Weeks 7-8: De-Risk Conversations
 
-- [x] Document: "Here's how we handle 10× customer load" → TECHNICAL_REVIEW_MASTER_SUMMARY.md
-- [x] Show: "Customer X had 2000 resources, scan completed in 3 min" → Stress tests verified
-- [x] Demonstrate: "LLM provider went down, scans still worked" → Fallback chain implemented
-- [x] Metrics: "Current MTTR for zombie detection issues" → Prometheus metrics
+- [ ] Document: "Here's how we handle 10× customer load"
+- [ ] Show: "Customer X had 2000 resources, scan completed in 3 min"
+- [ ] Demonstrate: "LLM provider went down, scans still worked"
+- [ ] Metrics: "Current MTTR for zombie detection issues: <15 min"
 
 ### Weeks 9-12: Ship Confidently
 
-- [x] Fix remaining issues from stress tests → Scheduler idempotency, rate limiting
-- [x] Lock in schema migrations → Alembic migrations verified
-- [x] Document: Deployment runbook, incident playbooks → `.github/` documentation
-- [x] Prepare CTO talking points → SERIES_A_PITCH_TALKING_POINTS.md
+- [ ] Fix remaining issues from stress tests
+- [ ] Lock in schema migrations (audit for Series-A)
+- [ ] Document: Deployment runbook, incident playbooks
+- [ ] Prepare CTO talking points for due diligence
 
 ---
 

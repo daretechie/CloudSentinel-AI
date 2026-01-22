@@ -38,6 +38,10 @@ class Settings(BaseSettings):
             if not self.ENCRYPTION_KEY or len(self.ENCRYPTION_KEY) < 32:
                 raise ValueError("ENCRYPTION_KEY must be at least 32 characters in production.")
             
+            # PRODUCTION FIX #6: KDF_SALT must be set in production
+            if not self.KDF_SALT:
+                raise ValueError("CRITICAL: KDF_SALT environment variable must be set in production. See DEPLOYMENT_FIXES_GUIDE.md Section 6.")
+            
             # SEC-03: DB and Auth
             if not self.DATABASE_URL:
                 raise ValueError("DATABASE_URL is required in production.")
@@ -100,7 +104,7 @@ class Settings(BaseSettings):
     AWS_ENDPOINT_URL: Optional[str] = None  # Added for local testing (MotoServer/LocalStack)
     
     # CloudFormation Template (Configurable for S3/GitHub)
-    CLOUDFORMATION_TEMPLATE_URL: str = "https://raw.githubusercontent.com/Valdrix-AI/valdrix/main/cloudformation/valdrix-role.yaml"
+    CLOUDFORMATION_TEMPLATE_URL: str = "https://raw.githubusercontent.com/valdrix/valdrix/main/cloudformation/valdrix-role.yaml"
     
     # Reload trigger: 2026-01-14
 
@@ -165,7 +169,10 @@ class Settings(BaseSettings):
     BLIND_INDEX_KEY: Optional[str] = None # SEC-06: Separation of keys
     
     # KDF Settings for password-to-key derivation (SEC-06)
-    KDF_SALT: str = "valdrix-default-salt-2026"
+    # PRODUCTION FIX #6: Per-environment encryption salt (not hardcoded)
+    # Set via environment variable: export KDF_SALT="<base64-encoded-random-32-bytes>"
+    # Generate: python3 -c "import secrets,base64; print(base64.b64encode(secrets.token_bytes(32)).decode())"
+    KDF_SALT: str = ""
     KDF_ITERATIONS: int = 100000
 
 

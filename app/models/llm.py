@@ -12,7 +12,7 @@ Why this matters:
 """
 
 from uuid import uuid4
-from sqlalchemy import Column, String, Integer, Numeric, ForeignKey, Boolean, DateTime
+from sqlalchemy import Column, String, Integer, Numeric, ForeignKey, Boolean, DateTime, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.hybrid import hybrid_property
@@ -86,8 +86,13 @@ class LLMUsage(Base):
     # Important for billing: Platform fees vs Token costs
     is_byok = Column(Boolean, nullable=False, default=False)
 
-    # created_at is inherited from Base (automatic timestamp)
-    # updated_at is inherited from Base (automatic on update)
+    # Timestamp when this usage record was created
+    created_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        index=True
+    )
 
     # Relationship: Access the tenant object
     # Use: usage.tenant.name

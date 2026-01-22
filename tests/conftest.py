@@ -2,6 +2,8 @@ import os
 # Item 1: Disable DB SSL and Rate Limiting for all tests BEFORE any app imports
 os.environ["DB_SSL_MODE"] = "disable"
 os.environ["RATELIMIT_ENABLED"] = "False"
+os.environ["ENVIRONMENT"] = "development"
+os.environ["KDF_SALT"] = "test-salt-123456789012345678901234"
 
 import pytest
 import asyncio

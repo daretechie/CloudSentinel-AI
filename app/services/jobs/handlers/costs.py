@@ -231,3 +231,38 @@ class CostExportHandler(BaseJobHandler):
             "total_cost_usd": export_data["total_cost"],
             "download_url": None  # In production: S3 presigned URL
         }
+class CostAggregationHandler(BaseJobHandler):
+    """Handle large cost data aggregations asynchronously."""
+    
+    async def execute(self, job: BackgroundJob, db: AsyncSession) -> Dict[str, Any]:
+        from app.services.costs.aggregator import CostAggregator
+        
+        payload = job.payload or {}
+        tenant_id = job.tenant_id
+        start_date = date.fromisoformat(payload.get("start_date"))
+        end_date = date.fromisoformat(payload.get("end_date"))
+        provider = payload.get("provider")
+        
+        logger.info("cost_aggregation_job_started", 
+                    tenant_id=str(tenant_id),
+                    start_date=str(start_date),
+                    end_date=str(end_date))
+        
+        # 1. Run the intensive aggregation (which is now protected by timeout/limits)
+        # In a background job, we might relax the timeout slightly if needed, 
+        # but here we follow the same production rules.
+        result = await CostAggregator.get_summary(
+            db, tenant_id, start_date, end_date, provider
+        )
+        
+        # 2. Store the result in the job's result field (serialized)
+        # Note: Summary includes a list of potentially many records.
+        # For very large results, we'd normally store in S3/Redis.
+        # But for this implementation, we store a summary.
+        
+        return {
+            "status": "completed",
+            "total_cost_usd": float(result.total_cost),
+            "record_count": len(result.records),
+            "by_service": {k: float(v) for k, v in result.by_service.items()}
+        }

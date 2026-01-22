@@ -4,7 +4,7 @@ from datetime import date, timedelta, datetime, timezone
 import asyncio
 import time
 import structlog
-from prometheus_client import Counter, Histogram
+from app.services.scheduler.metrics import SCHEDULER_JOB_RUNS, SCHEDULER_JOB_DURATION
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncSession
 from app.models.tenant import Tenant
@@ -21,19 +21,7 @@ logger = structlog.get_logger()
 SCHEDULER_LOCK_BASE_ID = 48293021
 
 
-# Prometheus Metrics
-SCHEDULER_JOB_RUNS = Counter(
-    "valdrix_scheduler_job_runs_total",
-    "Total number of scheduled job runs",
-    ["job_name", "status"]
-)
-
-SCHEDULER_JOB_DURATION = Histogram(
-    "valdrix_scheduler_job_duration_seconds",
-    "Duration of scheduled jobs in seconds",
-    ["job_name"],
-    buckets=[1, 5, 10, 30, 60, 120, 300, 600]
-)
+# Metrics are now imported from app.services.scheduler.metrics
 
 class SchedulerOrchestrator:
     """Manages APScheduler and job distribution."""
@@ -47,193 +35,273 @@ class SchedulerOrchestrator:
         self._last_run_time: str | None = None
 
     async def cohort_analysis_job(self, target_cohort: TenantCohort):
-        """Enqueues analysis jobs for all tenants in a specific cohort."""
+        """
+        PRODUCTION: Atomically enqueue jobs for all tenants in a cohort.
+        Uses SKIP LOCKED and exponential backoff for deadlock resilience.
+        """
         import uuid
+        from app.models.background_job import BackgroundJob, JobStatus, JobType
+        from sqlalchemy.dialects.postgresql import insert
+        from app.services.scheduler.metrics import (
+            SCHEDULER_DEADLOCK_DETECTED,
+            BACKGROUND_JOBS_ENQUEUED_SCHEDULER as BACKGROUND_JOBS_ENQUEUED
+        )
+        
         job_id = str(uuid.uuid4())
         set_correlation_id(job_id)
-        structlog.contextvars.bind_contextvars(correlation_id=job_id, job_type="scheduling", cohort=target_cohort.value)
+        structlog.contextvars.bind_contextvars(
+            correlation_id=job_id, 
+            job_type="scheduler_cohort", 
+            cohort=target_cohort.value
+        )
         
-        job_name = f"cohort_{target_cohort.value}_enqueue"
+        job_name = f"cohort_{target_cohort.value.lower()}_enqueue"
         start_time = time.time()
+        max_retries = 3
+        retry_count = 0
 
-        try:
-            async with self.session_maker() as db:
-                async with db.begin():
-                    # SQL-level Cohort Filtering with Row-level Locking (BE-SCHED-1)
-                    # Use SELECT FOR UPDATE SKIP LOCKED to prevent duplicate enqueuing across nodes
-                    query = sa.select(Tenant).with_for_update(skip_locked=True)
-                    
-                    if target_cohort == TenantCohort.HIGH_VALUE:
-                        query = query.where(Tenant.plan.in_(["enterprise", "pro"]))
-                    elif target_cohort == TenantCohort.ACTIVE:
-                        query = query.where(Tenant.plan == "growth")
-                    else: # DORMANT
-                        query = query.where(Tenant.plan.in_(["starter", "trial"]))
-
-                    result = await db.execute(query)
-                    cohort_tenants = result.scalars().all()
-
-                    if not cohort_tenants:
-                        logger.info("scheduler_cohort_empty", cohort=target_cohort.value)
-                        return
-
-            # BE-SCHED-1: Move insertions outside the main transaction to prevent deadlocks
-            # BE-SCHED-6: Generate deterministic deduplication keys (tenant_id:job_type:bucket)
-            # Use 6-hour buckets for cohort scans
-            now = datetime.now(timezone.utc)
-            bucket = now.replace(minute=0, second=0, microsecond=0)
-            if target_cohort == TenantCohort.HIGH_VALUE:
-                # Bucket every 6 hours
-                hour = (now.hour // 6) * 6
-                bucket = bucket.replace(hour=hour)
-            
-            bucket_str = bucket.isoformat()
-            
-            async with self.session_maker() as db:
-                from app.models.background_job import BackgroundJob, JobStatus, JobType
-                from sqlalchemy.dialects.postgresql import insert
-                
-                for tenant in cohort_tenants:
-                    for jtype in [JobType.FINOPS_ANALYSIS, JobType.ZOMBIE_SCAN, JobType.COST_INGESTION]:
-                        dedup_key = f"{tenant.id}:{jtype.value}:{bucket_str}"
-                        stmt = insert(BackgroundJob).values(
-                            job_type=jtype.value,
-                            tenant_id=tenant.id,
-                            status=JobStatus.PENDING,
-                            scheduled_for=now,
-                            created_at=now,
-                            deduplication_key=dedup_key
-                        ).on_conflict_do_nothing(index_elements=["deduplication_key"])
-                        await db.execute(stmt)
+        while retry_count < max_retries:
+            try:
+                async with self.session_maker() as db:
+                    async with db.begin():
+                        # 1. Fetch tenants with row-level lock (SKIP LOCKED prevents deadlocks)
+                        query = sa.select(Tenant).with_for_update(skip_locked=True)
                         
-                        # Track in Prometheus (Phase 2)
-                        BACKGROUND_JOBS_ENQUEUED.labels(job_type=jtype.value, priority=0).inc()
-                    
-                await db.commit()
-                logger.info("cohort_scan_enqueued", cohort=target_cohort.value, tenants=len(cohort_tenants))
+                        if target_cohort == TenantCohort.HIGH_VALUE:
+                            query = query.where(Tenant.plan.in_(["enterprise", "pro"]))
+                        elif target_cohort == TenantCohort.ACTIVE:
+                            query = query.where(Tenant.plan == "growth")
+                        else: # DORMANT
+                            query = query.where(Tenant.plan.in_(["starter", "trial"]))
 
-            SCHEDULER_JOB_RUNS.labels(job_name=job_name, status="success").inc()
-            self._last_run_success = True
-            self._last_run_time = datetime.now(timezone.utc).isoformat()
+                        result = await db.execute(query)
+                        cohort_tenants = result.scalars().all()
 
-        except Exception as e:
-            logger.error("scheduler_cohort_enqueue_failed", job=job_name, error=str(e))
-            SCHEDULER_JOB_RUNS.labels(job_name=job_name, status="failure").inc()
-            self._last_run_success = False
-            self._last_run_time = datetime.now(timezone.utc).isoformat()
-        finally:
-            duration = time.time() - start_time
-            SCHEDULER_JOB_DURATION.labels(job_name=job_name).observe(duration)
+                        if not cohort_tenants:
+                            logger.info("scheduler_cohort_empty", cohort=target_cohort.value)
+                            self._last_run_success = True
+                            self._last_run_time = datetime.now(timezone.utc).isoformat()
+                            return
+
+                        # 2. Generate deterministic dedup keys
+                        now = datetime.now(timezone.utc)
+                        bucket = now.replace(minute=0, second=0, microsecond=0)
+                        if target_cohort == TenantCohort.HIGH_VALUE:
+                            # 6-hourly buckets for high-value
+                            hour = (now.hour // 6) * 6
+                            bucket = bucket.replace(hour=hour)
+                        elif target_cohort == TenantCohort.ACTIVE:
+                            # 3-hourly buckets for active
+                            hour = (now.hour // 3) * 3
+                            bucket = bucket.replace(hour=hour)
+                        
+                        bucket_str = bucket.isoformat()
+                        jobs_enqueued = 0
+
+                        # 3. Insert and Track
+                        for tenant in cohort_tenants:
+                            for jtype in [JobType.FINOPS_ANALYSIS, JobType.ZOMBIE_SCAN, JobType.COST_INGESTION]:
+                                dedup_key = f"{tenant.id}:{jtype.value}:{bucket_str}"
+                                stmt = insert(BackgroundJob).values(
+                                    job_type=jtype.value,
+                                    tenant_id=tenant.id,
+                                    status=JobStatus.PENDING,
+                                    scheduled_for=now,
+                                    created_at=now,
+                                    deduplication_key=dedup_key
+                                ).on_conflict_do_nothing(index_elements=["deduplication_key"])
+                                
+                                result_proxy = await db.execute(stmt)
+                                if result_proxy.rowcount > 0:
+                                    jobs_enqueued += 1
+                                    BACKGROUND_JOBS_ENQUEUED.labels(
+                                        job_type=jtype.value, 
+                                        cohort=target_cohort.value
+                                    ).inc()
+                        
+                        logger.info("cohort_scan_enqueued", 
+                                   cohort=target_cohort.value, 
+                                   tenants=len(cohort_tenants),
+                                   jobs_enqueued=jobs_enqueued)
+                        
+                SCHEDULER_JOB_RUNS.labels(job_name=job_name, status="success").inc()
+                self._last_run_success = True
+                self._last_run_time = datetime.now(timezone.utc).isoformat()
+                break # Success exit
+
+            except Exception as e:
+                retry_count += 1
+                if "deadlock" in str(e).lower() or "concurrent" in str(e).lower():
+                    SCHEDULER_DEADLOCK_DETECTED.labels(cohort=target_cohort.value).inc()
+                    if retry_count < max_retries:
+                        backoff = 2 ** (retry_count - 1)
+                        logger.warning("scheduler_deadlock_retry", cohort=target_cohort.value, attempt=retry_count, backoff=backoff)
+                        await asyncio.sleep(backoff)
+                        continue
+                
+                logger.error("scheduler_cohort_enqueue_failed", job=job_name, error=str(e), attempt=retry_count)
+                SCHEDULER_JOB_RUNS.labels(job_name=job_name, status="failure").inc()
+                self._last_run_success = False
+                self._last_run_time = datetime.now(timezone.utc).isoformat()
+                break
+        
+        duration = time.time() - start_time
+        SCHEDULER_JOB_DURATION.labels(job_name=job_name).observe(duration)
 
     async def _is_low_carbon_window(self, region: str) -> bool:
         """
         Determines if current time is a 'Green Window' for this region.
         In production, this would call an API like Electricity Maps.
-        For now, we use a deterministic mock based on hour of day (assuming 
-        solar/wind peaks or night-time low demand).
         """
         now = datetime.now(timezone.utc)
-        # Mock: 10AM - 4PM UTC is high solar, thus "Green"
-        # 12AM - 5AM UTC is low demand, also "Green"
         hour = now.hour
         is_green = (10 <= hour <= 16) or (0 <= hour <= 5)
-        
         logger.info("carbon_window_check", region=region, hour=hour, is_green=is_green)
         return is_green
 
     async def auto_remediation_job(self):
-        """Weekly autonomous remediation sweep (Enqueues jobs)."""
+        """Weekly autonomous remediation sweep using hardened retry logic."""
         import uuid
+        from app.models.background_job import BackgroundJob, JobType, JobStatus
+        from sqlalchemy.dialects.postgresql import insert
+        from app.services.scheduler.metrics import (
+            SCHEDULER_DEADLOCK_DETECTED,
+            BACKGROUND_JOBS_ENQUEUED_SCHEDULER as BACKGROUND_JOBS_ENQUEUED
+        )
+        
         job_id = str(uuid.uuid4())
         set_correlation_id(job_id)
+        job_name = "weekly_remediation_sweep"
+        start_time = time.time()
+        max_retries = 3
+        retry_count = 0
+
+        while retry_count < max_retries:
+            try:
+                async with self.session_maker() as db:
+                    async with db.begin():
+                        result = await db.execute(
+                            sa.select(AWSConnection).with_for_update(skip_locked=True)
+                        )
+                        connections = result.scalars().all()
+                        
+                        now = datetime.now(timezone.utc)
+                        bucket_str = now.strftime("%Y-W%U")
+                        jobs_enqueued = 0
+
+                        for conn in connections:
+                            is_green = await self._is_low_carbon_window(conn.region)
+                            scheduled_time = now
+                            if not is_green:
+                                scheduled_time += timedelta(hours=4)
+
+                            dedup_key = f"{conn.tenant_id}:{JobType.REMEDIATION.value}:{bucket_str}"
+                            stmt = insert(BackgroundJob).values(
+                                job_type=JobType.REMEDIATION.value,
+                                tenant_id=conn.tenant_id,
+                                payload={"connection_id": str(conn.id), "region": conn.region},
+                                status=JobStatus.PENDING,
+                                scheduled_for=scheduled_time,
+                                created_at=now,
+                                deduplication_key=dedup_key
+                            ).on_conflict_do_nothing(index_elements=["deduplication_key"])
+                            
+                            result_proxy = await db.execute(stmt)
+                            if result_proxy.rowcount > 0:
+                                jobs_enqueued += 1
+                                BACKGROUND_JOBS_ENQUEUED.labels(
+                                    job_type=JobType.REMEDIATION.value, 
+                                    cohort="REMEDIATION"
+                                ).inc()
+                        
+                        logger.info("auto_remediation_sweep_completed", count=len(connections), jobs_enqueued=jobs_enqueued)
+                
+                SCHEDULER_JOB_RUNS.labels(job_name=job_name, status="success").inc()
+                break
+            except Exception as e:
+                retry_count += 1
+                if "deadlock" in str(e).lower() or "concurrent" in str(e).lower():
+                    SCHEDULER_DEADLOCK_DETECTED.labels(cohort="REMEDIATION").inc()
+                    if retry_count < max_retries:
+                        await asyncio.sleep(2 ** (retry_count - 1))
+                        continue
+                logger.error("auto_remediation_sweep_failed", error=str(e), attempt=retry_count)
+                SCHEDULER_JOB_RUNS.labels(job_name=job_name, status="failure").inc()
+                break
         
-        async with self.session_maker() as db:
-            async with db.begin():
-                # Advisory locks are fragile; use row-level locking for atomic job creation (BE-SCHED-1)
-                result = await db.execute(
-                    sa.select(AWSConnection)
-                    .with_for_update(skip_locked=True)
-                )
-                connections = result.scalars().all()
-
-                from app.models.background_job import BackgroundJob, JobType, JobStatus
-                from sqlalchemy.dialects.postgresql import insert
-                from app.core.ops_metrics import BACKGROUND_JOBS_ENQUEUED
-                
-                now = datetime.now(timezone.utc)
-                # Week-based bucket for remediation
-                bucket_str = now.strftime("%Y-W%U")
-
-                for conn in connections:
-                    # GreenOps 2.0: Check if we should delay for carbon efficiency
-                    is_green = await self._is_low_carbon_window(conn.region)
-                    scheduled_time = now
-                    
-                    if not is_green:
-                        # Delay to next green window (e.g., 4 hours later)
-                        scheduled_time += timedelta(hours=4)
-
-                    dedup_key = f"{conn.tenant_id}:{JobType.REMEDIATION.value}:{bucket_str}"
-                    stmt = insert(BackgroundJob).values(
-                        job_type=JobType.REMEDIATION.value,
-                        tenant_id=conn.tenant_id,
-                        payload={"connection_id": str(conn.id), "region": conn.region},
-                        status=JobStatus.PENDING,
-                        scheduled_for=scheduled_time,
-                        created_at=now,
-                        deduplication_key=dedup_key
-                    ).on_conflict_do_nothing(index_elements=["deduplication_key"])
-                    await db.execute(stmt)
-                    
-                    # Track in Prometheus (Phase 2)
-                    BACKGROUND_JOBS_ENQUEUED.labels(job_type=JobType.REMEDIATION.value, priority=1).inc()
-                
-                await db.commit()
-                logger.info("auto_remediation_sweep_completed", connections=len(connections))
+        duration = time.time() - start_time
+        SCHEDULER_JOB_DURATION.labels(job_name=job_name).observe(duration)
 
     async def billing_sweep_job(self):
-        """Daily sweep to find subscriptions due for renewal."""
+        """Daily sweep to find subscriptions due renewal with hardened retry logic."""
         from app.services.billing.paystack_billing import TenantSubscription, SubscriptionStatus
         from app.models.background_job import BackgroundJob, JobType, JobStatus
+        from sqlalchemy.dialects.postgresql import insert
+        from app.services.scheduler.metrics import (
+            SCHEDULER_DEADLOCK_DETECTED,
+            BACKGROUND_JOBS_ENQUEUED_SCHEDULER as BACKGROUND_JOBS_ENQUEUED
+        )
         
-        async with self.session_maker() as db:
-            async with db.begin():
-                # Find active subscriptions where next_payment_date is in the past
-                # SEC: Use SKIP LOCKED to avoid double-billing (BE-SCHED-1)
-                query = sa.select(TenantSubscription).where(
-                    TenantSubscription.status == SubscriptionStatus.ACTIVE.value,
-                    TenantSubscription.next_payment_date <= datetime.now(timezone.utc),
-                    TenantSubscription.paystack_auth_code.isnot(None)
-                ).with_for_update(skip_locked=True)
-                
-                result = await db.execute(query)
-                due_subscriptions = result.scalars().all()
+        job_name = "daily_billing_sweep"
+        start_time = time.time()
+        max_retries = 3
+        retry_count = 0
 
-                from sqlalchemy.dialects.postgresql import insert
-                now = datetime.now(timezone.utc)
-                bucket_str = now.strftime("%Y-%m-%d")
+        while retry_count < max_retries:
+            try:
+                async with self.session_maker() as db:
+                    async with db.begin():
+                        query = sa.select(TenantSubscription).where(
+                            TenantSubscription.status == SubscriptionStatus.ACTIVE.value,
+                            TenantSubscription.next_payment_date <= datetime.now(timezone.utc),
+                            TenantSubscription.paystack_auth_code.isnot(None)
+                        ).with_for_update(skip_locked=True)
+                        
+                        result = await db.execute(query)
+                        due_subscriptions = result.scalars().all()
 
-                for sub in due_subscriptions:
-                    # Enqueue individual renewal job
-                    dedup_key = f"{sub.tenant_id}:{JobType.RECURRING_BILLING.value}:{bucket_str}"
-                    stmt = insert(BackgroundJob).values(
-                        job_type=JobType.RECURRING_BILLING.value,
-                        tenant_id=sub.tenant_id,
-                        payload={"subscription_id": str(sub.id)},
-                        status=JobStatus.PENDING,
-                        scheduled_for=now,
-                        created_at=now,
-                        deduplication_key=dedup_key
-                    ).on_conflict_do_nothing(index_elements=["deduplication_key"])
-                    await db.execute(stmt)
-                    
-                    # Track in Prometheus (Phase 2)
-                    from app.core.ops_metrics import BACKGROUND_JOBS_ENQUEUED
-                    BACKGROUND_JOBS_ENQUEUED.labels(job_type=JobType.RECURRING_BILLING.value, priority=2).inc()
+                        now = datetime.now(timezone.utc)
+                        bucket_str = now.strftime("%Y-%m-%d")
+                        jobs_enqueued = 0
+
+                        for sub in due_subscriptions:
+                            dedup_key = f"{sub.tenant_id}:{JobType.RECURRING_BILLING.value}:{bucket_str}"
+                            stmt = insert(BackgroundJob).values(
+                                job_type=JobType.RECURRING_BILLING.value,
+                                tenant_id=sub.tenant_id,
+                                payload={"subscription_id": str(sub.id)},
+                                status=JobStatus.PENDING,
+                                scheduled_for=now,
+                                created_at=now,
+                                deduplication_key=dedup_key
+                            ).on_conflict_do_nothing(index_elements=["deduplication_key"])
+                            
+                            result_proxy = await db.execute(stmt)
+                            if result_proxy.rowcount > 0:
+                                jobs_enqueued += 1
+                                BACKGROUND_JOBS_ENQUEUED.labels(
+                                    job_type=JobType.RECURRING_BILLING.value, 
+                                    cohort="BILLING"
+                                ).inc()
+                        
+                        logger.info("billing_sweep_completed", due_count=len(due_subscriptions), jobs_enqueued=jobs_enqueued)
                 
-                await db.commit()
-                
-                logger.info("billing_sweep_completed", due_count=len(due_subscriptions))
+                SCHEDULER_JOB_RUNS.labels(job_name=job_name, status="success").inc()
+                break
+            except Exception as e:
+                retry_count += 1
+                if "deadlock" in str(e).lower() or "concurrent" in str(e).lower():
+                    SCHEDULER_DEADLOCK_DETECTED.labels(cohort="BILLING").inc()
+                    if retry_count < max_retries:
+                        await asyncio.sleep(2 ** (retry_count - 1))
+                        continue
+                logger.error("billing_sweep_failed", error=str(e), attempt=retry_count)
+                SCHEDULER_JOB_RUNS.labels(job_name=job_name, status="failure").inc()
+                break
+        
+        duration = time.time() - start_time
+        SCHEDULER_JOB_DURATION.labels(job_name=job_name).observe(duration)
+
 
     async def detect_stuck_jobs(self):
         """

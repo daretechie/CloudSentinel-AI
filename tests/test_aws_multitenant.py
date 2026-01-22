@@ -10,7 +10,7 @@ from botocore.exceptions import ClientError
 MOCK_CX = AWSConnection(
     tenant_id="test-tenant",
     aws_account_id="123456789012",
-    role_arn="arn:aws:iam::123456789012:role/CloudSentinelRole",
+    role_arn="arn:aws:iam::123456789012:role/ValdrixRole",
     external_id="test-external-id", 
     region="us-east-1"
 )

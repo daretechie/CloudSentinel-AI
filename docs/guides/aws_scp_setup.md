@@ -23,7 +23,7 @@ This SCP prevents any user (including the root user) from deleting or modifying 
         "iam:UpdateRoleDescription"
       ],
       "Resource": [
-        "arn:aws:iam::*:role/CloudSentinel-AI-Role"
+        "arn:aws:iam::*:role/Valdrix-AI-Role"
       ]
     }
   ]

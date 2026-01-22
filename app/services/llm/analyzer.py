@@ -27,7 +27,9 @@ from tenacity import (
     wait_exponential,
     retry_if_exception_type,
 )
-from app.core.exceptions import AIAnalysisError
+from app.core.exceptions import AIAnalysisError, BudgetExceededError
+from app.services.llm.budget_manager import LLMBudgetManager
+import asyncio
 
 # System prompts are now managed in prompts.yaml
 
@@ -95,80 +97,120 @@ class FinOpsAnalyzer:
         force_refresh: bool = False,
     ) -> Dict[str, Any]:
         """
-        Takes normalized cloud usage data and returns AI-generated insights.
+        PRODUCTION: Analyzes cloud costs with mandatory budget pre-authorization.
         
-        This method handles:
-        1. Cache and Delta Analysis checks.
-        2. LLM client setup and budget verification.
-        3. LangChain orchestration (Prompt -> LLM -> Output).
-        4. Usage tracking and result processing.
-        
-        Args:
-            usage_summary: The aggregated cost data to analyze.
-            tenant_id: Tenant UUID for usage tracking and budget checks.
-            db: Database session for persistence.
-            provider: Optional provider override.
-            model: Optional model override.
-            force_refresh: bypass cache if True.
-            
-        Returns:
-            A dictionary containing AI insights, recommendations, and anomalies.
-            
-        Raises:
-            AIAnalysisError: If the LLM invocation or result processing fails.
-            BudgetExceededError: If the tenant's LLM budget is exceeded.
+        Flow:
+        1. Check cache (return if hit)
+        2. Pre-authorize LLM budget (HARD BLOCK if exceeded)
+        3. Call LLM with authorized reservation
+        4. Record actual usage on success
+        5. Release reservation on failure (optional, handled by lack of record_usage)
         """
-        from app.schemas.costs import CloudUsageSummary
-        from app.core.exceptions import AIAnalysisError
-
+        import uuid
+        
+        operation_id = str(uuid.uuid4())
+        effective_db = db or self.db
+        
         with tracer.start_as_current_span("analyze_costs") as span:
             span.set_attribute("tenant_id", str(tenant_id) if tenant_id else "anonymous")
+            span.set_attribute("operation_id", operation_id)
             
             # 1. Cache & Delta Logic
             cached_analysis, is_delta = await self._check_cache_and_delta(
                 tenant_id, force_refresh, usage_summary
             )
             if cached_analysis and not is_delta:
+                logger.info("analysis_cache_hit", tenant_id=str(tenant_id), operation_id=operation_id)
                 return cached_analysis
 
             logger.info("starting_analysis", 
                         tenant_id=str(tenant_id), 
                         data_points=len(usage_summary.records),
                         mode="delta" if is_delta else "full",
-                        cache_miss=not cached_analysis)
+                        operation_id=operation_id)
 
-            # 2. Prepare Data & Pre-Authorize
-            sanitized_data = await LLMGuardrails.sanitize_input(usage_summary.model_dump())
-            # Add symbolic forecast to input for analysis
-            from app.services.analysis.forecaster import SymbolicForecaster
-            # 1.5 Get Symbolic Forecast (Grounding logic)
-            # Use passed db, fallback to self.db
-            effective_db = db or self.db
-            sanitized_data["symbolic_forecast"] = await SymbolicForecaster.forecast(
-                usage_summary.records,
-                db=effective_db,
-                tenant_id=tenant_id
-            )
-            formatted_data = json.dumps(sanitized_data, default=str)
+            # 2. PRODUCTION: PRE-AUTHORIZE LLM BUDGET (HARD BLOCK)
+            reserved_amount = None
+            
+            # Safely get model name from LLM object, handling mocks in tests
+            llm_model = getattr(self.llm, "model_name", getattr(self.llm, "model", "llama-3.3-70b-versatile"))
+            effective_model = model or llm_model
+            
+            try:
+                if tenant_id and effective_db:
+                    # Estimate tokens: 1 record ≈ 20 tokens, min 500
+                    prompt_tokens = max(500, len(usage_summary.records) * 20)
+                    completion_tokens = 500
+                    
+                    reserved_amount = await LLMBudgetManager.check_and_reserve(
+                        tenant_id=tenant_id,
+                        db=effective_db,
+                        model=effective_model,
+                        prompt_tokens=prompt_tokens,
+                        completion_tokens=completion_tokens,
+                        operation_id=operation_id
+                    )
+                    
+                    logger.info("llm_budget_authorized", 
+                                tenant_id=str(tenant_id), 
+                                reserved_amount=float(reserved_amount),
+                                operation_id=operation_id)
+            except BudgetExceededError:
+                raise
+            except Exception as e:
+                logger.error("budget_check_failed_unexpected", error=str(e), operation_id=operation_id)
+                # Fail open or closed? PRODUCTION: Fail closed if it's a known tenant
+                if tenant_id:
+                    raise AIAnalysisError(f"Budget verification failed: {str(e)}") from e
 
-            usage_tracker, effective_provider, effective_model, byok_key = \
-                await self._setup_client_and_usage(tenant_id, db, provider, model, input_text=formatted_data)
+            # 3. Prepare Data
+            try:
+                sanitized_data = await LLMGuardrails.sanitize_input(usage_summary.model_dump())
+                from app.services.analysis.forecaster import SymbolicForecaster
+                sanitized_data["symbolic_forecast"] = await SymbolicForecaster.forecast(
+                    usage_summary.records,
+                    db=effective_db,
+                    tenant_id=tenant_id
+                )
+                formatted_data = json.dumps(sanitized_data, default=str)
+            except Exception as e:
+                logger.error("data_preparation_failed", error=str(e), operation_id=operation_id)
+                raise AIAnalysisError(f"Failed to prepare data: {str(e)}")
 
-            # 3. Invoke LLM
-            response_content, response_metadata = await self._invoke_llm(
-                formatted_data, effective_provider, effective_model, byok_key
-            )
+            # 4. Invoke LLM
+            try:
+                # Note: _setup_client_and_usage might still be needed for BYOK keys
+                usage_tracker, effective_provider, final_model, byok_key = \
+                    await self._setup_client_and_usage(tenant_id, effective_db, provider, effective_model, input_text=formatted_data)
+                
+                response_content, response_metadata = await self._invoke_llm(
+                    formatted_data, effective_provider, final_model, byok_key
+                )
+            except Exception as e:
+                logger.error("llm_invocation_failed", error=str(e), operation_id=operation_id)
+                raise
 
-            # 4. Track Usage
-            await self._track_usage(
-                usage_tracker, tenant_id, effective_provider, effective_model, 
-                response_metadata, byok_key
-            )
+            # 5. PRODUCTION: Record Usage
+            if reserved_amount and effective_db:
+                try:
+                    # In production, we'd parse actual tokens from response_metadata
+                    token_usage = response_metadata.get("token_usage", {})
+                    await LLMBudgetManager.record_usage(
+                        tenant_id=tenant_id,
+                        db=effective_db,
+                        model=final_model,
+                        prompt_tokens=token_usage.get("prompt_tokens", 500),
+                        completion_tokens=token_usage.get("completion_tokens", 500),
+                        operation_id=operation_id
+                    )
+                except Exception as e:
+                    logger.warning("usage_recording_failed", error=str(e), operation_id=operation_id)
 
-            # 5. Post-Process & Alert
+            # 6. Post-Process
             return await self._process_analysis_results(
                 response_content, tenant_id, usage_summary
             )
+
 
     async def _check_cache_and_delta(
         self, tenant_id: Optional[UUID], force_refresh: bool, usage_summary: Any
@@ -244,7 +286,7 @@ class FinOpsAnalyzer:
                 }
                 byok_key = keys.get(provider or budget.preferred_provider)
 
-        # BE-LLM-2: Provider & Model Validation (SEC-LLM)
+        # Provider & Model Validation
         VALID_MODELS = {
             "openai": ["gpt-4", "gpt-4-turbo", "gpt-4o", "gpt-4o-mini", "gpt-3.5-turbo"],
             "anthropic": ["claude-3-opus", "claude-3-sonnet", "claude-3-5-sonnet", "claude-3-5-haiku"],
@@ -255,17 +297,6 @@ class FinOpsAnalyzer:
 
         effective_provider = provider or (budget.preferred_provider if budget else get_settings().LLM_PROVIDER)
         effective_model = model or (budget.preferred_model if budget else "llama-3.3-70b-versatile")
-
-        # BE-LLM-11: Hard Pre-Authorization (SEC-LLM)
-        if tenant_id and usage_tracker and input_text:
-            # We use max_output_tokens=2000 as a safe upper bound for analysis
-            await usage_tracker.authorize_request(
-                tenant_id=tenant_id,
-                provider=effective_provider,
-                model=effective_model,
-                input_text=input_text,
-                max_output_tokens=2000
-            )
 
         # Handle Graceful Degradation (Soft Limit)
         if tenant_id and db and budget_status == BudgetStatus.SOFT_LIMIT:
@@ -364,19 +395,10 @@ class FinOpsAnalyzer:
         if not (tenant_id and usage_tracker):
             return
 
-        try:
-            token_usage = metadata.get("token_usage", {})
-            await usage_tracker.record(
-                tenant_id=tenant_id,
-                provider=provider,
-                model=model,
-                input_tokens=token_usage.get("prompt_tokens", 0),
-                output_tokens=token_usage.get("completion_tokens", 0),
-                is_byok=byok_key is not None,
-                request_type="cost_analysis",
-            )
-        except Exception as e:
-            logger.warning("llm_usage_tracking_failed", error=str(e))
+        # Usage is now tracked via LLMBudgetManager in the main analyze() loop.
+        # This legacy tracker can be maintained for detailed internal metrics if needed,
+        # but budget enforcement is now centralized.
+        pass
 
     async def _process_analysis_results(
         self, content: str, tenant_id: Optional[UUID], usage_summary: Any

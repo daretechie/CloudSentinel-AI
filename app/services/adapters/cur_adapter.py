@@ -81,8 +81,10 @@ class CURAdapter(CostAdapter):
                              end=end_date.isoformat())
                 return []
 
-            # Step 2: Parse and aggregate (scaffold)
-            # TODO: Implement full Parquet parsing with pyarrow
+            # Step 2: Parse and aggregate
+            # NOTE: Full Parquet parsing requires pyarrow dependency (see ROADMAP.md)
+            # Current: Returns empty list, CUR file discovery works
+            # Future: Add pyarrow to parse CUR Parquet files for sub-penny cost accuracy
             logger.info("cur_files_found",
                        count=len(cur_files),
                        bucket=self.bucket_name)
@@ -162,33 +164,75 @@ class CURAdapter(CostAdapter):
     ) -> List[Dict[str, Any]]:
         """
         Parse CUR Parquet files and aggregate costs.
-
-        This is a scaffold - full implementation requires pyarrow.
-
-        CUR Parquet schema includes columns like:
-        - line_item_usage_start_date
-        - line_item_blended_cost
-        - line_item_product_code (service name)
-        - line_item_resource_id
         """
-        # TODO: Implement with pyarrow
-        # Example pseudocode:
-        # import pyarrow.parquet as pq
-        #
-        # for file_key in files:
-        #     # Download file from S3
-        #     # Read with pyarrow
-        #     table = pq.read_table(file_bytes)
-        #
-        #     # Filter by date range
-        #     # Group by date and optionally service
-        #     # Aggregate costs
+        all_dfs = []
+        
+        try:
+            import pandas as pd
+        except ImportError:
+            logger.error("cur_parsing_missing_dependency", msg="pandas/pyarrow not installed")
+            return []
 
-        logger.info("cur_parsing_not_implemented",
-                   msg="CUR parsing requires pyarrow - returning empty",
-                   files=len(files))
-
-        return []
+        async with self.session.client(
+            "s3",
+            region_name=self.region,
+            aws_access_key_id=self.credentials.get("AccessKeyId"),
+            aws_secret_access_key=self.credentials.get("SecretAccessKey"),
+            aws_session_token=self.credentials.get("SessionToken"),
+        ) as s3:
+            for file_key in files:
+                try:
+                    # Stream file from S3 into memory
+                    response = await s3.get_object(Bucket=self.bucket_name, Key=file_key)
+                    
+                    async with response["Body"] as stream:
+                        content = await stream.read()
+                        
+                        # Read parquet from bytes
+                        from io import BytesIO
+                        df = pd.read_parquet(BytesIO(content))
+                        
+                        # Basic filters
+                        if "line_item_usage_start_date" in df.columns:
+                            df["date"] = pd.to_datetime(df["line_item_usage_start_date"]).dt.date
+                            df = df[
+                                (df["date"] >= start_date) & 
+                                (df["date"] <= end_date)
+                            ]
+                        
+                        all_dfs.append(df)
+                        
+                except Exception as e:
+                    logger.error("cur_file_parse_error", file=file_key, error=str(e))
+                    continue
+                
+        if not all_dfs:
+            return []
+            
+        # Merge and Aggregate
+        combined = pd.concat(all_dfs, ignore_index=True)
+        
+        if group_by_service and "line_item_product_code" in combined.columns:
+            # Group by Service
+            grouped = combined.groupby(["date", "line_item_product_code"])["line_item_blended_cost"].sum().reset_index()
+            results = []
+            for _, row in grouped.iterrows():
+                results.append({
+                    "date": row["date"].isoformat(),
+                    "service": row["line_item_product_code"],
+                    "cost": float(row["line_item_blended_cost"])
+                })
+            return results
+        else:
+            # Group by Date only
+            grouped = combined.groupby("date")["line_item_blended_cost"].sum().reset_index()
+            results = []
+            for _, row in grouped.iterrows():
+                results.append({
+                    "date": row["date"].isoformat(),
+                    "cost": float(row["line_item_blended_cost"])
+                })
+            return results
 
     async def get_gross_usage(
         self,
@@ -247,7 +291,19 @@ class CURAdapter(CostAdapter):
 
     async def verify_connection(self) -> bool:
         """Verify S3 accessibility."""
-        return True
+        async with self.session.client(
+            "s3",
+            region_name=self.region,
+            aws_access_key_id=self.credentials.get("AccessKeyId"),
+            aws_secret_access_key=self.credentials.get("SecretAccessKey"),
+            aws_session_token=self.credentials.get("SessionToken"),
+        ) as s3:
+            try:
+                await s3.head_bucket(Bucket=self.bucket_name)
+                return True
+            except ClientError as e:
+                logger.error("cur_bucket_verify_failed", bucket=self.bucket_name, error=str(e))
+                return False
 
 
 class CURConfig:

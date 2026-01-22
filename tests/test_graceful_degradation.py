@@ -54,13 +54,14 @@ async def test_graceful_degradation_soft_limit():
             )
             
             # Analyze
-            await analyzer.analyze(
-                usage_summary=summary,
-                tenant_id=tenant_id,
-                db=mock_db,
-                provider="openai",
-                model="gpt-4"
-            )
+            with patch("app.services.llm.analyzer.LLMBudgetManager.check_and_reserve", AsyncMock(return_value=Decimal("0.01"))):
+                await analyzer.analyze(
+                    usage_summary=summary,
+                    tenant_id=tenant_id,
+                    db=mock_db,
+                    provider="openai",
+                    model="gpt-4"
+                )
             
             # Verify factory was called with cheaper model (gpt-4o-mini for openai)
             mock_factory.assert_called()
@@ -91,6 +92,7 @@ async def test_hard_limit_blocking():
         )
         
         with pytest.raises(BudgetExceededError) as excinfo:
-            await analyzer.analyze(summary, tenant_id=tenant_id, db=mock_db)
+            with patch("app.services.llm.analyzer.LLMBudgetManager.check_and_reserve", side_effect=BudgetExceededError("Hard Limit reached")):
+                await analyzer.analyze(summary, tenant_id=tenant_id, db=mock_db)
         
         assert "Hard Limit" in str(excinfo.value)

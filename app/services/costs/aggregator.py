@@ -111,6 +111,11 @@ class CostAggregator:
         provider: Optional[str] = None
     ) -> CloudUsageSummary:
         """Fetches and aggregates cost records for a tenant."""
+        from sqlalchemy import text
+        
+        # Phase 4.1: Enforce statement timeout
+        await db.execute(text(f"SET LOCAL statement_timeout TO {STATEMENT_TIMEOUT_MS}"))
+        
         stmt = (
             select(CostRecord)
             .where(
@@ -125,10 +130,6 @@ class CostAggregator:
         
         # Limit rows (Phase 4 safety gate)
         stmt = stmt.limit(MAX_DETAIL_ROWS)
-            
-        # Set statement timeout for this execution
-        from sqlalchemy import text
-        await db.execute(text(f"SET statement_timeout TO {STATEMENT_TIMEOUT_MS}"))
         
         result = await db.execute(stmt)
         records = result.scalars().all()
@@ -174,6 +175,9 @@ class CostAggregator:
         """
         Retrieves top-level summary for the dashboard.
         """
+        from sqlalchemy import text
+        await db.execute(text(f"SET LOCAL statement_timeout TO {STATEMENT_TIMEOUT_MS}"))
+
         stmt = (
             select(
                 func.sum(CostRecord.cost_usd).label("total_cost"),
@@ -237,7 +241,7 @@ class CostAggregator:
         
         # Set statement timeout
         from sqlalchemy import text
-        await db.execute(text(f"SET statement_timeout TO {STATEMENT_TIMEOUT_MS}"))
+        await db.execute(text(f"SET LOCAL statement_timeout TO {STATEMENT_TIMEOUT_MS}"))
             
         result = await db.execute(stmt)
         rows = result.all()
@@ -314,12 +318,19 @@ class CostAggregator:
         untagged_cost = row.total_untagged_cost or Decimal(0)
         untagged_percent = (untagged_cost / total_cost) * 100
         
+        # Phase 5: Get top unallocated service insights
+        from app.services.costs.attribution_engine import AttributionEngine
+        engine = AttributionEngine(db)
+        insights = await engine.get_unallocated_analysis(tenant_id, start_date, end_date)
+        
         return {
             "total_cost": float(total_cost),
             "unallocated_cost": float(untagged_cost),
             "unallocated_percentage": round(float(untagged_percent), 2),
             "resource_count": row.untagged_count,
+            "insights": insights,
             "status": "warning" if untagged_percent > 10 else "healthy",
+            "message": "High unallocated spend detected (>10%)." if untagged_percent > 10 else "Cost attribution is within healthy bounds.",
             "recommendation": "High unallocated spend detected. Implement attribution rules to improve visibility." if untagged_percent > 10 else None
         }
 

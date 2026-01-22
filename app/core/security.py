@@ -5,6 +5,12 @@ from cryptography.fernet import Fernet, MultiFernet
 from typing import Optional, List
 
 from app.core.config import get_settings
+# PRODUCTION FIX #6: Import from new security_production module
+from app.core.security_production import (
+    encrypt_string as prod_encrypt,
+    decrypt_string as prod_decrypt,
+    EncryptionKeyManager,
+)
 
 settings = get_settings()
 
@@ -65,40 +71,57 @@ def _get_pii_fernet() -> MultiFernet:
     )
 
 def encrypt_string(value: str, context: str = "generic") -> str:
-    """Symmetrically encrypt a string with rotation support."""
+    """
+    PRODUCTION: Symmetrically encrypt a string with hardened salt management.
+    Delegates to security_production for key derivation and encryption.
+    """
     if not value:
         return None
     
+    settings = get_settings()
+    # SEC-06: Choose context-specific key material
     if context == "api_key":
-        f = _get_api_key_fernet()
+        primary_key = settings.API_KEY_ENCRYPTION_KEY or settings.ENCRYPTION_KEY
     elif context == "pii":
-        f = _get_pii_fernet()
+        primary_key = settings.PII_ENCRYPTION_KEY or settings.ENCRYPTION_KEY
     else:
-        settings = get_settings()
-        f = _get_multi_fernet(settings.ENCRYPTION_KEY, settings.LEGACY_ENCRYPTION_KEYS)
+        primary_key = settings.ENCRYPTION_KEY
         
-    return f.encrypt(value.encode()).decode()
+    fernet = EncryptionKeyManager.create_multi_fernet(
+        primary_key=primary_key,
+        legacy_keys=settings.LEGACY_ENCRYPTION_KEYS
+    )
+    
+    return fernet.encrypt(value.encode()).decode()
 
 def decrypt_string(value: str, context: str = "generic") -> str:
-    """Symmetrically decrypt a string with rotation support."""
+    """
+    PRODUCTION: Symmetrically decrypt a string with hardened salt management.
+    Delegates to security_production for key derivation and decryption.
+    """
     if not value:
         return None
         
     try:
+        settings = get_settings()
+        # SEC-06: Choose context-specific key material
         if context == "api_key":
-            f = _get_api_key_fernet()
+            primary_key = settings.API_KEY_ENCRYPTION_KEY or settings.ENCRYPTION_KEY
         elif context == "pii":
-            f = _get_pii_fernet()
+            primary_key = settings.PII_ENCRYPTION_KEY or settings.ENCRYPTION_KEY
         else:
-            settings = get_settings()
-            f = _get_multi_fernet(settings.ENCRYPTION_KEY, settings.LEGACY_ENCRYPTION_KEYS)
+            primary_key = settings.ENCRYPTION_KEY
             
-        return f.decrypt(value.encode()).decode()
+        fernet = EncryptionKeyManager.create_multi_fernet(
+            primary_key=primary_key,
+            legacy_keys=settings.LEGACY_ENCRYPTION_KEYS
+        )
+            
+        return fernet.decrypt(value.encode()).decode()
     except Exception as e:
         import structlog
         logger = structlog.get_logger()
         logger.error("decryption_failed", context=context, error=str(e))
-        # Return None instead of "" to distinguish from an empty but valid field
         return None
 
 

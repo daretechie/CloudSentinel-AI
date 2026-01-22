@@ -315,3 +315,43 @@ class AttributionEngine:
         }
 
         return summary
+    async def get_unallocated_analysis(
+        self,
+        tenant_id: uuid.UUID,
+        start_date: date,
+        end_date: date
+    ) -> List[Dict[str, Any]]:
+        """
+        Identify top services contributing to unallocated spend.
+        Provides recommendations for attribution rules.
+        """
+        from sqlalchemy import func
+        
+        query = (
+            select(
+                CostRecord.service,
+                func.sum(CostRecord.cost_usd).label("total_unallocated"),
+                func.count(CostRecord.id).label("record_count")
+            )
+            .where(CostRecord.tenant_id == tenant_id)
+            .where(CostRecord.recorded_at >= start_date)
+            .where(CostRecord.recorded_at <= end_date)
+            .where((CostRecord.allocated_to == None) | (CostRecord.allocated_to == "Unallocated"))
+            .group_by(CostRecord.service)
+            .order_by(func.sum(CostRecord.cost_usd).desc())
+            .limit(5)
+        )
+        
+        result = await self.db.execute(query)
+        rows = result.all()
+        
+        analysis = []
+        for row in rows:
+            analysis.append({
+                "service": row.service,
+                "amount": float(row.total_unallocated),
+                "count": row.record_count,
+                "recommendation": f"Create a DIRECT rule for service '{row.service}' to a specific team bucket."
+            })
+            
+        return analysis

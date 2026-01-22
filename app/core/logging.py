@@ -84,8 +84,7 @@ def audit_log(event: str, user_id: str, tenant_id: str, details: dict = None):
     """
     logger = structlog.get_logger("audit")
     logger.info(
-        "audit_event",
-        event=event,
+        event,
         user_id=str(user_id),
         tenant_id=str(tenant_id),
         metadata=details or {},

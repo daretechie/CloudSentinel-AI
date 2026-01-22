@@ -8,8 +8,9 @@ from app.services.jobs.handlers.finops import FinOpsAnalysisHandler
 from app.services.jobs.handlers.zombie import ZombieScanHandler
 from app.services.jobs.handlers.remediation import RemediationHandler
 from app.services.jobs.handlers.billing import RecurringBillingHandler
-from app.services.jobs.handlers.costs import CostIngestionHandler, CostForecastHandler, CostExportHandler
+from app.services.jobs.handlers.costs import CostIngestionHandler, CostForecastHandler, CostExportHandler, CostAggregationHandler
 from app.services.jobs.handlers.notifications import NotificationHandler, WebhookRetryHandler
+from app.services.jobs.handlers.dunning import DunningHandler
 
 
 # Global registry of job handlers
@@ -22,8 +23,10 @@ HANDLER_REGISTRY: Dict[str, Type[BaseJobHandler]] = {
     JobType.COST_INGESTION.value: CostIngestionHandler,
     JobType.COST_FORECAST.value: CostForecastHandler,
     JobType.COST_EXPORT.value: CostExportHandler,
+    JobType.COST_AGGREGATION.value: CostAggregationHandler,
     JobType.NOTIFICATION.value: NotificationHandler,
     JobType.WEBHOOK_RETRY.value: WebhookRetryHandler,
+    JobType.DUNNING.value: DunningHandler,
 }
 
 

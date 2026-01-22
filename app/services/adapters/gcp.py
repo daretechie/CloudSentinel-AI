@@ -111,15 +111,14 @@ class GCPAdapter(BaseAdapter):
 
         table_path = f"{billing_project}.{billing_dataset}.{billing_table}"
 
-        # Phase 5: Enhanced query to extract CUD credits for amortization
+        # Phase 5: Broad Credit extraction (CUD, SUD, Free Trial, Discounts)
         query = f"""
             SELECT
                 service.description as service,
                 SUM(cost) as cost_usd,
                 SUM(
-                    (SELECT SUM(c.amount) FROM UNNEST(credits) AS c 
-                     WHERE c.name LIKE '%COMMITTED_USAGE_DISCOUNT%')
-                ) as cud_credit,
+                    (SELECT SUM(c.amount) FROM UNNEST(credits) AS c)
+                ) as total_credits,
                 MAX(currency) as currency,
                 TIMESTAMP_TRUNC(usage_start_time, DAY) as timestamp
             FROM `{table_path}`
@@ -145,8 +144,8 @@ class GCPAdapter(BaseAdapter):
                     "timestamp": row.timestamp,
                     "service": row.service,
                     "cost_usd": float(row.cost_usd),
-                    "cud_credit": float(row.cud_credit) if row.cud_credit else 0.0,
-                    "amortized_cost": float(row.cost_usd) + float(row.cud_credit or 0),  # credits are negative
+                    "credits": float(row.total_credits) if row.total_credits else 0.0,
+                    "amortized_cost": float(row.cost_usd) + float(row.total_credits or 0),
                     "currency": row.currency,
                     "region": "global" 
                 }

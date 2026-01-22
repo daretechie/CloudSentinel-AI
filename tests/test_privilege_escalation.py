@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from app.models.tenant import Tenant
 from app.models.background_job import BackgroundJob, JobStatus
 from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import Request
 
 # Mock user data
 TENANT_A = uuid4()
@@ -50,7 +51,12 @@ def mock_user(user: CurrentUser):
 @pytest.mark.asyncio
 async def test_member_cannot_process_jobs(ac: AsyncClient):
     """Verify that a user with 'member' role cannot trigger job processing."""
-    app.dependency_overrides[get_current_user] = lambda: mock_user(MEMBER_A)
+    def override_member_a(request: Request):
+        request.state.tenant_id = MEMBER_A.tenant_id
+        request.state.user_id = MEMBER_A.id
+        request.state.tier = MEMBER_A.tier
+        return MEMBER_A
+    app.dependency_overrides[get_current_user] = override_member_a
     
     response = await ac.post("/api/v1/jobs/process")
     
@@ -60,7 +66,12 @@ async def test_member_cannot_process_jobs(ac: AsyncClient):
 @pytest.mark.asyncio
 async def test_admin_can_process_jobs(ac: AsyncClient):
     """Verify that an admin CAN trigger job processing."""
-    app.dependency_overrides[get_current_user] = lambda: mock_user(ADMIN_A)
+    def override_admin_a(request: Request):
+        request.state.tenant_id = ADMIN_A.tenant_id
+        request.state.user_id = ADMIN_A.id
+        request.state.tier = ADMIN_A.tier
+        return ADMIN_A
+    app.dependency_overrides[get_current_user] = override_admin_a
     
     response = await ac.post("/api/v1/jobs/process")
     
@@ -71,7 +82,12 @@ async def test_admin_can_process_jobs(ac: AsyncClient):
 @pytest.mark.asyncio
 async def test_owner_bypasses_role_check(ac: AsyncClient):
     """Verify that an owner can access admin endpoints."""
-    app.dependency_overrides[get_current_user] = lambda: mock_user(OWNER_A)
+    def override_owner_a(request: Request):
+        request.state.tenant_id = OWNER_A.tenant_id
+        request.state.user_id = OWNER_A.id
+        request.state.tier = OWNER_A.tier
+        return OWNER_A
+    app.dependency_overrides[get_current_user] = override_owner_a
     
     response = await ac.get("/api/v1/jobs/status") # Status is admin-only (GET)
     
@@ -100,7 +116,13 @@ async def test_cross_tenant_isolation(ac: AsyncClient, db: AsyncSession):
     await db.commit()
 
     # 2. Access as User A
-    app.dependency_overrides[get_current_user] = lambda: mock_user(MEMBER_A)
+    def override_member_a(request: Request):
+        request.state.tenant_id = MEMBER_A.tenant_id
+        request.state.user_id = MEMBER_A.id
+        request.state.tier = MEMBER_A.tier
+        return MEMBER_A
+    
+    app.dependency_overrides[get_current_user] = override_member_a
     
     response = await ac.get("/api/v1/jobs/list")
     
@@ -115,7 +137,12 @@ async def test_cross_tenant_isolation(ac: AsyncClient, db: AsyncSession):
 @pytest.mark.asyncio
 async def test_member_cannot_enqueue_restricted_jobs(ac: AsyncClient):
     """Verify that valid users cannot enqueue system-level jobs (SEC-N1)."""
-    app.dependency_overrides[get_current_user] = lambda: mock_user(MEMBER_A)
+    def override_member_a(request: Request):
+        request.state.tenant_id = MEMBER_A.tenant_id
+        request.state.user_id = MEMBER_A.id
+        request.state.tier = MEMBER_A.tier
+        return MEMBER_A
+    app.dependency_overrides[get_current_user] = override_member_a
     
     payload = {
         "job_type": "recurring_billing", # Internal only

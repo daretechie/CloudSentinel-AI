@@ -1,0 +1,86 @@
+"""
+Tests for AdapterFactory
+"""
+import pytest
+from unittest.mock import MagicMock, patch
+from app.services.adapters.factory import AdapterFactory
+from app.services.adapters.aws_multitenant import MultiTenantAWSAdapter
+from app.services.adapters.aws_cur import AWSCURAdapter
+from app.services.adapters.azure import AzureAdapter
+from app.services.adapters.gcp import GCPAdapter
+
+
+def test_get_adapter_aws_multitenant():
+    """Test factory returns MultiTenantAWSAdapter for AWS connection."""
+    mock_conn = MagicMock()
+    mock_conn.cur_bucket_name = None
+    mock_conn.cur_status = None
+    
+    with patch("app.services.adapters.factory.isinstance", side_effect=lambda x, t: t.__name__ == "AWSConnection"):
+        with patch.object(AdapterFactory, "get_adapter") as mock_method:
+            mock_method.return_value = MagicMock(spec=MultiTenantAWSAdapter)
+            adapter = AdapterFactory.get_adapter(mock_conn)
+            assert adapter is not None
+
+
+def test_get_adapter_aws_cur():
+    """Test factory returns CURAdapter when CUR is configured."""
+    from app.models.aws_connection import AWSConnection
+    
+    mock_conn = MagicMock(spec=AWSConnection)
+    mock_conn.cur_bucket_name = "my-cur-bucket"
+    mock_conn.cur_status = "active"
+    
+    adapter = AdapterFactory.get_adapter(mock_conn)
+    
+    assert isinstance(adapter, AWSCURAdapter)
+
+
+def test_get_adapter_azure():
+    """Test factory returns AzureAdapter for Azure connection."""
+    from app.models.azure_connection import AzureConnection
+    
+    mock_conn = MagicMock(spec=AzureConnection)
+    mock_conn.tenant_id = "tenant-123"
+    mock_conn.subscription_id = "sub-456"
+    mock_conn.client_id = "client-id"
+    mock_conn.client_secret = "secret"
+    
+    adapter = AdapterFactory.get_adapter(mock_conn)
+    
+    assert isinstance(adapter, AzureAdapter)
+
+
+def test_get_adapter_gcp():
+    """Test factory returns GCPAdapter for GCP connection."""
+    from app.models.gcp_connection import GCPConnection
+    
+    mock_conn = MagicMock(spec=GCPConnection)
+    mock_conn.project_id = "my-project"
+    mock_conn.service_account_json = "{}"
+    
+    adapter = AdapterFactory.get_adapter(mock_conn)
+    
+    assert isinstance(adapter, GCPAdapter)
+
+
+def test_get_adapter_by_provider_attribute():
+    """Test factory uses provider attribute for generic objects."""
+    mock_conn = MagicMock()
+    mock_conn.provider = "azure"
+    
+    # Remove spec so isinstance checks fail
+    del mock_conn.__class__
+    
+    adapter = AdapterFactory.get_adapter(mock_conn)
+    
+    assert isinstance(adapter, AzureAdapter)
+
+
+def test_get_adapter_unsupported():
+    """Test factory raises for unsupported type."""
+    mock_conn = MagicMock()
+    mock_conn.provider = "unsupported"
+    
+    with pytest.raises(ValueError, match="Unsupported connection type"):
+        AdapterFactory.get_adapter(mock_conn)

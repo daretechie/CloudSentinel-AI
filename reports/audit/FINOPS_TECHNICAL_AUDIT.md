@@ -21,8 +21,8 @@ You can detect waste. You cannot yet definitively explain cost attribution to te
 - ✅ **Cost accuracy: Forensic audit trail and ingestion metadata implemented**
 - ✅ **Reconciliation: >2% delta alerts and 48h finalization workflow active**
 - ✅ **Attribution: Rules engine and multi-team cost splitting active**
-- ✅ **Forecasting: MAPE tracking, confidence intervals, and anomaly markers**
-- ✅ **Multi-tenant safety: Query limits, partitioning, and rate limiting active**
+- 🔴 **Forecasting blindly assumes stable workloads**
+- � **Multi-tenant safety: Needs query limits and partitioning**
 
 **Enterprise Adoption Blocker:**  
 A Fortune 500 company's FinOps team will run Valdrix cost numbers against their internal billing system. Any discrepancy >0.5% will trigger "do you have hidden costs or missing data?" questions that you cannot answer.
@@ -413,7 +413,7 @@ Pluggable CostAdapter interface supports AWS/Azure/GCP. Extensible design.
 
 - [x] Add `ingestion_metadata` JSON column (source, batch_id, checksum)
 - [x] Add `cost_audit_logs` table (track price updates with reason)
-- [x] Query: Show customer "Cost for Jan 10 was $X, updated to $Y" → `/costs/history/{id}` API
+- [ ] Query: Show customer "Cost for Jan 10 was $X on Jan 10, updated to $Y on Jan 12"
 - [x] Impact: Enables forensic cost reconciliation
 
 **1.2 — Implement Cost Reconciliation Workflow**
@@ -426,9 +426,9 @@ Pluggable CostAdapter interface supports AWS/Azure/GCP. Extensible design.
 
 **1.3 — Add Data Lineage Reporting**
 
-- [x] Monthly report: "Ingestion Summary" → `cost_audit_logs` table
-- [x] Query: Show which CUR file each cost record came from → `source_id` field
-- [x] Impact: Answer "why is my bill $100K, not $102K?"
+- [ ] Monthly report: "Ingestion Summary (records processed, deduplicated, restated)"
+- [ ] Query: Show which CUR file each cost record came from
+- [ ] Impact: Answer "why is my bill $100K, not $102K?"
 
 **Impact:** Enterprise can audit cost accuracy. Audit committee sign-off. Trust established.
 
@@ -452,10 +452,10 @@ Pluggable CostAdapter interface supports AWS/Azure/GCP. Extensible design.
 
 **2.3 — Add RI & Savings Plan Amortization**
 
-- [x] Query CostExplorer for amortized costs → `get_amortized_costs()`
-- [x] Fall back to manual import if needed
-- [x] Spread upfront costs across term → Supported in cloud adapters
-- [x] Impact: Accurate per-workload cost accounting
+- [ ] Query CostExplorer for amortized costs (if available)
+- [ ] Fall back to manual import (customer uploads RI schedule)
+- [ ] Spread upfront costs across term
+- [ ] Impact: Accurate per-workload cost accounting
 
 **Impact:** Enterprise can chargeback to teams. Product becomes strategic for finance.
 
@@ -465,30 +465,30 @@ Pluggable CostAdapter interface supports AWS/Azure/GCP. Extensible design.
 
 **3.1 — Add Volatility & Confidence Bands**
 
-- [x] Return forecast as (lower 5%, median 50%, upper 95%) not point estimate → Prophet `yhat_lower`, `yhat_upper`
-- [x] Show volatility in past 90 days → Implemented in forecaster
-- [x] Impact: Customers prepare budget with confidence ranges, not false certainty
+- [ ] Return forecast as (lower 5%, median 50%, upper 95%) not point estimate
+- [ ] Show volatility in past 90 days
+- [ ] Impact: Customers prepare budget with confidence ranges, not false certainty
 
 **3.2 — Implement Anomaly Detection**
 
-- [x] Flag days where spend deviated >2σ from mean → MAD-based detection in `_detect_outliers()`
-- [x] Allow customer to mark anomalies as "expected" → `AnomalyMarker` model
-- [x] Retrain forecast excluding outliers → Outlier detection integrated
-- [x] Impact: Forecast improves after customer teaches it
+- [ ] Flag days where spend deviated >2σ from mean
+- [ ] Allow customer to mark anomalies as "expected" (Black Friday, batch job)
+- [ ] Retrain forecast excluding outliers
+- [ ] Impact: Forecast improves after customer teaches it
 
 **3.3 — Add Category-Level Forecasting**
 
-- [x] Forecast EC2, RDS, S3 separately → `service_filter` parameter
-- [x] Sum sub-forecasts for total
-- [x] Show which category is driving changes
-- [x] Impact: Explainability. "Your compute costs are rising 10%/month, storage is flat"
+- [ ] Forecast EC2, RDS, S3 separately
+- [ ] Sum sub-forecasts for total
+- [ ] Show which category is driving changes
+- [ ] Impact: Explainability. "Your compute costs are rising 10%/month, storage is flat"
 
 **3.4 — Add Forecast Accuracy Tracking**
 
-- [x] Track prediction error (actual vs predicted) → Backtesting in forecaster
-- [x] Compute MAPE (mean absolute percentage error) → `mape` calculation
-- [x] If accuracy <80%, flag as "low confidence" → `confidence_score`
-- [x] Impact: Transparency about forecast quality
+- [ ] Track prediction error (actual vs predicted)
+- [ ] Compute MAPE (mean absolute percentage error)
+- [ ] If accuracy <80%, flag as "low confidence"
+- [ ] Impact: Transparency about forecast quality
 
 **Impact:** Forecast becomes reliable. Used for quarterly budget planning.
 
@@ -498,30 +498,30 @@ Pluggable CostAdapter interface supports AWS/Azure/GCP. Extensible design.
 
 **4.1 — Add Query Performance Bounds**
 
-- [x] Max 5s query timeout → `STATEMENT_TIMEOUT_MS = 5000`
-- [x] Max 1M records per response → `MAX_AGGREGATION_ROWS`
-- [x] Partition pruning hints → `recorded_at` range filtering
-- [x] Impact: No noisy neighbor impacts
+- [ ] Max 5s query timeout (abort and return partial results)
+- [ ] Max 1M records per response (implement cursor-based pagination)
+- [ ] Partition pruning hints (use `recorded_at` range)
+- [ ] Impact: No noisy neighbor impacts
 
 **4.2 — Add Background Job Queuing for Large Operations**
 
-- [x] Forecasting >1M records → async job via background processor
-- [x] Cost export >10M records → async job
-- [x] Impact: Large tenants don't block realtime API
+- [ ] Forecasting >1M records → async job, return URL to results
+- [ ] Cost export >10M records → async job
+- [ ] Impact: Large tenants don't block realtime API
 
 **4.3 — Add Query Caching Layer**
 
-- [x] Daily aggregate view (by service, by region, by tenant) → `mv_daily_cost_aggregates`
-- [x] Updated nightly in background → `refresh_materialized_view()`
-- [x] API hits cache first (instant) → `get_cached_breakdown()` implemented
-- [x] Impact: 100ms response for common queries
+- [ ] Daily aggregate view (by service, by region, by tenant)
+- [ ] Updated nightly in background
+- [ ] API hits cache first (instant)
+- [ ] Impact: 100ms response for common queries
 
 **4.4 — Implement Partition Strategy**
 
-- [x] Monthly partitions by `recorded_at` → Postgres RANGE partitioning
-- [x] Auto-archival of >1 year old data → `check_partitions.py` script
-- [x] Partition pruning on all queries → Verified via explain analyze
-- [x] Impact: Query performance stable as data grows
+- [ ] Monthly partitions by `recorded_at`
+- [ ] Auto-archival of >1 year old data
+- [ ] Partition pruning on all queries
+- [ ] Impact: Query performance stable as data grows
 
 **Impact:** Can safely onboard large enterprises without noisy neighbor risk.
 
@@ -531,16 +531,16 @@ Pluggable CostAdapter interface supports AWS/Azure/GCP. Extensible design.
 
 **5.1 — Add Azure Finalized Cost Support**
 
-- [x] Query CostDetailsAPI (not just Cost Management API) → `AzureAdapter` updated
-- [x] Include actual taxes/discounts → Supported in adapter
-- [x] Support RI amortization → `get_amortized_costs()` implemented
-- [x] Impact: Azure costs as accurate as AWS
+- [ ] Query CostDetailsAPI (not just Cost Management API)
+- [ ] Include actual taxes/discounts
+- [ ] Support RI amortization
+- [ ] Impact: Azure costs as accurate as AWS
 
 **5.2 — Add GCP CUD Support**
 
-- [x] Import GCP CUD schedule from BigQuery → `GCPAdapter` extraction
-- [x] Amortize upfront CUD cost across term → `get_amortized_costs()` implemented
-- [x] Impact: Multi-cloud cost comparisons are apples-to-apples
+- [ ] Import GCP CUD schedule from BigQuery
+- [ ] Amortize upfront CUD cost across term
+- [ ] Impact: Multi-cloud cost comparisons are apples-to-apples
 
 ---
 
@@ -557,14 +557,14 @@ Do not implement:
 
 ## SUMMARY TABLE
 
-| Risk                           | Severity | Blocker? | Fix Cost | Impact                      |
-| ------------------------------ | -------- | -------- | -------- | --------------------------- |
-| Cost accuracy not auditable    | RESOLVED | No       | Done     | Enterprise trust            |
-| No attribution model           | COMPLETE | No       | Done     | Multi-team adoption         |
-| Forecasting assumes stable     | IMPROVED | No       | Done     | Budget planning reliability |
-| Cost reconciliation incomplete | COMPLETE | No       | Done     | Financial audit compliance  |
-| Multi-tenant blast radius      | MITIGATED| No       | Done     | Scalability safety          |
-| Azure/GCP incomplete           | COMPLETE | No       | Done     | Multi-cloud completeness    |
+| Risk                           | Severity | Blocker? | Fix Cost  | Impact                      |
+| ------------------------------ | -------- | -------- | --------- | --------------------------- |
+| Cost accuracy not auditable    | CRITICAL | Yes      | 1 sprint  | Enterprise trust            |
+| No attribution model           | CRITICAL | Yes      | 2 sprints | Multi-team adoption         |
+| Forecasting assumes stable     | HIGH     | No       | 1 sprint  | Budget planning reliability |
+| Cost reconciliation incomplete | HIGH     | No       | 1 sprint  | Financial audit compliance  |
+| Multi-tenant blast radius      | HIGH     | No       | 1 sprint  | Scalability safety          |
+| Azure/GCP incomplete           | MEDIUM   | No       | 2 sprints | Multi-cloud completeness    |
 
 ---
 

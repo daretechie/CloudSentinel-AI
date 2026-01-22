@@ -20,7 +20,7 @@ def mock_cost_record():
     record.id = uuid4()
     record.tenant_id = uuid4()
     record.recorded_at = date.today()
-    record.amount = Decimal("100.00")
+    record.cost_usd = Decimal("100.00")
     record.service = "AmazonS3"
     record.region = "us-east-1"
     record.account_id = "123456789012"
@@ -128,7 +128,7 @@ class TestAttributionEngine:
         record = MagicMock(spec=CostRecord)
         record.id = uuid4()
         record.recorded_at = date.today()
-        record.amount = Decimal("200.00")
+        record.cost_usd = Decimal("200.00")
         record.service = "AmazonEC2"
         record.region = "us-east-1"
         record.account_id = "123456789012"
@@ -165,7 +165,7 @@ class TestAttributionEngine:
         record = MagicMock(spec=CostRecord)
         record.id = uuid4()
         record.recorded_at = date.today()
-        record.amount = Decimal("50.00")
+        record.cost_usd = Decimal("50.00")
         record.service = "AWSLambda"  # No rules for Lambda
         record.region = "us-west-2"
         record.account_id = "111111111111"

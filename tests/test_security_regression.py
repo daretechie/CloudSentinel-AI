@@ -5,6 +5,7 @@ from uuid import uuid4
 from app.models.tenant import Tenant, User
 from app.models.remediation import RemediationRequest, RemediationStatus, RemediationAction
 from app.core.auth import CurrentUser, get_current_user, require_tenant_access
+from fastapi import Request
 
 @pytest.fixture
 def mock_user_t1():
@@ -58,9 +59,15 @@ async def test_tenant_isolation_regression(ac: AsyncClient, db):
         tier="pro"
     )
 
+    def override_get_current_user(request: Request):
+        request.state.tenant_id = mock_user.tenant_id
+        request.state.user_id = mock_user.id
+        request.state.tier = mock_user.tier
+        return mock_user
+
     from app.main import app
     # Override all potential paths
-    app.dependency_overrides[get_current_user] = lambda: mock_user
+    app.dependency_overrides[get_current_user] = override_get_current_user
     app.dependency_overrides[require_tenant_access] = lambda: t1_id
     
     # This is tricky because requires_role("member") returns a NEW function
@@ -91,11 +98,18 @@ async def test_bound_pagination_enforcement(ac: AsyncClient, db):
     db.add(Tenant(id=tenant_id, name="Pagination Test", plan="pro"))
     await db.commit()
 
+    user_id = uuid4()
+    def override_get_current_user_pagination(request: Request):
+        request.state.tenant_id = tenant_id
+        request.state.user_id = user_id
+        request.state.tier = "pro"
+        return CurrentUser(
+            id=user_id, email="p@t.com", tenant_id=tenant_id, role="member", tier="pro"
+        )
+
     from app.main import app
     app.dependency_overrides[require_tenant_access] = lambda: tenant_id
-    app.dependency_overrides[get_current_user] = lambda: CurrentUser(
-        id=uuid4(), email="p@t.com", tenant_id=tenant_id, role="member", tier="pro"
-    )
+    app.dependency_overrides[get_current_user] = override_get_current_user_pagination
 
     try:
         # Request with limit=101 (Violates le=100)

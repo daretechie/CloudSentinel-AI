@@ -54,7 +54,8 @@ class SymbolicForecaster:
         days: int = 30, 
         service_filter: Optional[str] = None,
         db: Optional[AsyncSession] = None,
-        tenant_id: Optional[UUID] = None
+        tenant_id: Optional[UUID] = None,
+        confidence_interval_width: float = 0.95
     ) -> Dict[str, Any]:
         """
         Generates a multi-day forecast based on historical cost records.
@@ -66,7 +67,7 @@ class SymbolicForecaster:
 
         if len(history) < 7:
             logger.warning("insufficient_data_for_symbolic_forecast", count=len(history))
-            return {"forecast": [], "confidence": "low", "reason": "Need at least 7 days of data"}
+            return {"forecast": [], "confidence": "low", "reason": f"Need at least 7 days of data, got {len(history)}"}
 
         # 1. Prepare Data
         df = pd.DataFrame([
@@ -75,11 +76,12 @@ class SymbolicForecaster:
         ])
         df['ds'] = pd.to_datetime(df['ds'])
         
-        # Ensure daily continuity (fill missing days with mean)
-        df = df.set_index('ds').resample('D').mean().ffill().reset_index()
+        # Ensure daily continuity (fill missing days with mean, handle zero division)
+        df = df.sort_values('ds').set_index('ds').resample('D').mean().fillna(0).reset_index()
 
         # 1.5 Fetch and apply Anomaly Markers (FinOps Phase 3.2)
         holidays_df = None
+        markers_applied = 0
         if db and tenant_id:
             try:
                 stmt = select(AnomalyMarker).where(AnomalyMarker.tenant_id == tenant_id)
@@ -103,8 +105,15 @@ class SymbolicForecaster:
                                 'lower_window': 0,
                                 'upper_window': 0
                             })
+                        if m.exclude_from_training:
+                            # Robustly mask out training data for marked anomalies
+                            mask = (df['ds'].dt.date >= m.start_date) & (df['ds'].dt.date <= m.end_date)
+                            df.loc[mask, 'y'] = np.nan
+                    
+                    df['y'] = df['y'].interpolate(method='linear').fillna(0)
                     holidays_df = pd.DataFrame(holidays_list)
-                    logger.info("applied_anomaly_markers", count=len(markers))
+                    markers_applied = len(markers)
+                    logger.info("applied_anomaly_markers", count=markers_applied)
             except Exception as e:
                 logger.warning("failed_to_fetch_anomaly_markers", error=str(e))
 
@@ -120,24 +129,26 @@ class SymbolicForecaster:
             test_df = df.iloc[-7:]
             if PROPHET_AVAILABLE:
                 try:
-                    m_bt = Prophet(weekly_seasonality=True, interval_width=0.95).fit(train_df)
+                    m_bt = Prophet(weekly_seasonality=True, interval_width=confidence_interval_width).fit(train_df)
                     bt_forecast = m_bt.predict(m_bt.make_future_dataframe(periods=7))
                     bt_yhat = bt_forecast.tail(7)['yhat'].values
                     bt_actual = test_df['y'].values
-                    mape = np.mean(np.abs((bt_actual - bt_yhat) / bt_actual)) * 100
+                    # Weighted MAPE to avoid division by zero
+                    denom = np.abs(bt_actual).sum()
+                    if denom > 0:
+                        mape = (np.abs(bt_actual - bt_yhat).sum() / denom) * 100
                 except Exception:
                     pass
 
         # 4. Main Forecasting (Prophet)
         if PROPHET_AVAILABLE and len(df) >= 14:
             try:
-                # interval_width=0.95 provides 5%/95% confidence bands
                 m = Prophet(
                     yearly_seasonality=False,
                     weekly_seasonality=True,
                     daily_seasonality=False,
                     changepoint_prior_scale=0.05,
-                    interval_width=0.95,
+                    interval_width=confidence_interval_width,
                     holidays=holidays_df
                 )
                 m.fit(df)
@@ -145,7 +156,6 @@ class SymbolicForecaster:
                 future = m.make_future_dataframe(periods=days)
                 forecast = m.predict(future)
                 
-                # Extract future values with confidence intervals
                 future_df = forecast.tail(days)
                 
                 forecast_results = []
@@ -168,16 +178,34 @@ class SymbolicForecaster:
                         "anomalies_detected": len(anomalies),
                         "anomaly_dates": [d.date().isoformat() for d in anomalies['ds']],
                         "service_filter": service_filter,
-                        "weekly_seasonality": True
+                        "markers_applied": markers_applied,
+                        "interval_width": confidence_interval_width
                     }
                 }
             except Exception as e:
                 logger.error("prophet_forecast_failed_falling_back", error=str(e))
 
         # 5. Fallback: Holt-Winters (Statsmodels)
-        # Note: Statsmodels HW does not provide confidence intervals as easily as Prophet
         try:
             ts = df.set_index('ds')['y']
+            if ts.sum() == 0:
+                # Handle all-zero costs gracefully
+                forecast_results = []
+                for i in range(days):
+                    forecast_results.append({
+                        "date": (df['ds'].iloc[-1] + pd.Timedelta(days=i+1)).date().isoformat(),
+                        "amount": Decimal("0.0"),
+                        "confidence_lower": Decimal("0.0"),
+                        "confidence_upper": Decimal("0.0")
+                    })
+                return {
+                    "forecast": forecast_results,
+                    "total_forecasted_cost": Decimal("0.0"),
+                    "confidence": "medium",
+                    "model": "Zero-Cost Baseline",
+                    "diagnostics": {"service_filter": service_filter}
+                }
+
             try:
                 model = ExponentialSmoothing(ts, seasonal_periods=7, trend='add', seasonal='add').fit()
                 model_name = "Holt-Winters (Triple)"
@@ -187,15 +215,19 @@ class SymbolicForecaster:
 
             forecast_values = model.forecast(days)
             
-            # Estimate confidence bands for Holt-Winters (using SD of residuals)
-            # This is a simplified statistical approximation
+            # Statistically sound confidence bands for Holt-Winters
+            # HW residuals are used as a proxy for prediction interval
             residuals = ts - model.fittedvalues
             se = np.std(residuals)
+            if se == 0: se = 0.01 # Avoid zero SE for static data
             
             forecast_results = []
             for i, val in enumerate(forecast_values):
+                # Prediction interval for HW grows with sqrt of periods ahead
                 # Z=1.96 for 95% confidence
-                interval = 1.96 * se * np.sqrt(i + 1) # Error grows with time
+                z_score = 1.96 if confidence_interval_width >= 0.95 else 1.645 # simple mapping
+                interval = z_score * se * np.sqrt(i + 1)
+                
                 forecast_results.append({
                     "date": (df['ds'].iloc[-1] + pd.Timedelta(days=i+1)).date().isoformat(),
                     "amount": Decimal(str(max(0, round(val, 4)))),
@@ -211,9 +243,14 @@ class SymbolicForecaster:
                 "model": f"{model_name} (Fallback)",
                 "diagnostics": {
                     "anomalies_detected": len(anomalies),
-                    "service_filter": service_filter
+                    "service_filter": service_filter,
+                    "interval_width": confidence_interval_width
                 }
             }
+
+        except Exception as e:
+            logger.error("symbolic_forecast_failed_completely", error=str(e))
+            return {"forecast": [], "confidence": "error", "error": str(e)}
 
         except Exception as e:
             logger.error("symbolic_forecast_failed_completely", error=str(e))

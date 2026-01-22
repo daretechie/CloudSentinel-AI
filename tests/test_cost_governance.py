@@ -23,8 +23,12 @@ async def test_get_governance_report():
     untagged_row.untagged_count = 10
     untagged_result.one.return_value = untagged_row
     
+    # 3. Mock unallocated analysis query
+    unallocated_result = MagicMock()
+    unallocated_result.all.return_value = []
+    
     # Setting up the side effects for the multiple execute calls
-    db.execute.side_effect = [total_result, untagged_result]
+    db.execute.side_effect = [total_result, untagged_result, unallocated_result]
     
     report = await CostAggregator.get_governance_report(
         db, tenant_id, date(2025, 1, 1), date(2025, 1, 31)
@@ -53,7 +57,11 @@ async def test_get_governance_report_healthy():
     untagged_row.untagged_count = 5
     untagged_result.one.return_value = untagged_row
     
-    db.execute.side_effect = [total_result, untagged_result]
+    # 3. Mock unallocated analysis query
+    unallocated_result = MagicMock()
+    unallocated_result.all.return_value = []
+    
+    db.execute.side_effect = [total_result, untagged_result, unallocated_result]
     
     report = await CostAggregator.get_governance_report(
         db, tenant_id, date(2025, 1, 1), date(2025, 1, 31)

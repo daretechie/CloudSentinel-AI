@@ -58,15 +58,17 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/Valdrix-AI/valdrix"
-Repository = "https://github.com/Valdrix-AI/valdrix"
-Issues = "https://github.com/Valdrix-AI/valdrix/issues"
+Homepage = "https://github.com/valdrix/valdrix"
+Repository = "https://github.com/valdrix/valdrix"
+Issues = "https://github.com/valdrix/valdrix/issues"
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.24.0",
     "httpx>=0.28.0",
+    "moto[server]>=5.0.0",
+    "pytest-mock>=3.14.0",
 ]
 
 [build-system]
@@ -86,6 +88,8 @@ dev = [
     "pytest-cov",
     "ruff>=0.14.11",
     "safety>=3.7.0",
+    "moto[server]>=5.0.0",
+    "pytest-mock>=3.14.0",
 ]
 
 [tool.pytest.ini_options]
@@ -93,6 +97,9 @@ asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
 python_files = ["test_*.py"]
+markers = [
+    "integration: marks tests as integration tests (require database)",
+]
 filterwarnings = [
 ]
 addopts = "--cov=app --cov-report=term-missing --cov-report=html --cov-fail-under=50"

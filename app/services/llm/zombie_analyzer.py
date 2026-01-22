@@ -183,7 +183,7 @@ class ZombieAnalyzer:
             current_llm = LLMFactory.create(effective_provider, api_key=byok_key)
 
         # Sanitize zombie data to prevent prompt injection via resource tags/names
-        sanitized_zombies = LLMGuardrails.sanitize_input(zombies)
+        sanitized_zombies = await LLMGuardrails.sanitize_input(zombies)
         
         # Format zombie data for prompt
         formatted_data = json.dumps(sanitized_zombies, default=str, indent=2)
@@ -224,8 +224,8 @@ class ZombieAnalyzer:
             analysis = validated_result.model_dump()
             logger.info("zombie_analysis_complete", resource_count=len(analysis.get("resources", [])))
             return analysis
-        except json.JSONDecodeError as e:
-            logger.error("zombie_analysis_json_parse_failed", error=str(e))
+        except ValueError as e:
+            logger.error("zombie_analysis_validation_failed", error=str(e))
             return {
                 "summary": "Analysis completed but response parsing failed.",
                 "total_monthly_savings": f"${detection_results.get('total_monthly_waste', 0):.2f}",

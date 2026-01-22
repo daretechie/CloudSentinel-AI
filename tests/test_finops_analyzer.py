@@ -32,23 +32,29 @@ class TestAnalyze:
         from app.services.analysis.forecaster import SymbolicForecaster
         mock_forecast = AsyncMock(return_value={"total_forecasted_cost": 0, "forecast": []})
         
-        with MagicMock() as mock_db:
-            analyzer = FinOpsAnalyzer(llm=mock_llm, db=mock_db)
-            
-            tenant_id = str(uuid4())
-            usage_summary = CloudUsageSummary(
-                tenant_id=tenant_id,
-                provider="aws",
-                start_date=date.today(),
-                end_date=date.today(),
-                total_cost=Decimal("100.0"),
-                records=[CostRecord(date=datetime.now(), amount=Decimal("100.0"), service="EC2")]
-            )
-            
-            with patch.object(SymbolicForecaster, "forecast", side_effect=mock_forecast):
-                _ = await analyzer.analyze(usage_summary, tenant_id=tenant_id)
-            
-            mock_llm.ainvoke.assert_called_once()
+        mock_db = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = None
+        mock_db.execute.return_value = mock_result
+        analyzer = FinOpsAnalyzer(llm=mock_llm, db=mock_db)
+        
+        tenant_id = str(uuid4())
+        usage_summary = CloudUsageSummary(
+            tenant_id=tenant_id,
+            provider="aws",
+            start_date=date.today(),
+            end_date=date.today(),
+            total_cost=Decimal("100.0"),
+            records=[CostRecord(date=datetime.now(), amount=Decimal("100.0"), service="EC2")]
+        )
+        
+        from app.services.llm.usage_tracker import BudgetStatus
+        with patch.object(SymbolicForecaster, "forecast", side_effect=mock_forecast):
+            with patch("app.services.llm.analyzer.LLMBudgetManager.check_and_reserve", AsyncMock(return_value=Decimal("0.01"))):
+                with patch("app.services.llm.usage_tracker.UsageTracker.check_budget", AsyncMock(return_value=BudgetStatus.OK)):
+                    _ = await analyzer.analyze(usage_summary, tenant_id=tenant_id)
+        
+        mock_llm.ainvoke.assert_called_once()
 
     async def test_returns_parsed_result(self):
         mock_llm = MagicMock(spec=BaseChatModel)
@@ -63,24 +69,30 @@ class TestAnalyze:
         from app.services.analysis.forecaster import SymbolicForecaster
         mock_forecast = AsyncMock(return_value={"total_forecasted_cost": 120, "forecast": []})
 
-        with MagicMock() as mock_db:
-            analyzer = FinOpsAnalyzer(llm=mock_llm, db=mock_db)
-            
-            tenant_id = str(uuid4())
-            usage_summary = CloudUsageSummary(
-                tenant_id=tenant_id,
-                provider="aws",
-                start_date=date.today(),
-                end_date=date.today(),
-                total_cost=Decimal("100.0"),
-                records=[CostRecord(date=datetime.now(), amount=Decimal("100.0"), service="EC2")]
-            )
-            
-            with patch.object(SymbolicForecaster, "forecast", side_effect=mock_forecast):
-                result = await analyzer.analyze(usage_summary, tenant_id=tenant_id)
-            
-            assert "insights" in result
-            assert result["symbolic_forecast"]["total_forecasted_cost"] == 120
+        mock_db = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = None
+        mock_db.execute.return_value = mock_result
+        analyzer = FinOpsAnalyzer(llm=mock_llm, db=mock_db)
+        
+        tenant_id = str(uuid4())
+        usage_summary = CloudUsageSummary(
+            tenant_id=tenant_id,
+            provider="aws",
+            start_date=date.today(),
+            end_date=date.today(),
+            total_cost=Decimal("100.0"),
+            records=[CostRecord(date=datetime.now(), amount=Decimal("100.0"), service="EC2")]
+        )
+        
+        from app.services.llm.usage_tracker import BudgetStatus
+        with patch.object(SymbolicForecaster, "forecast", side_effect=mock_forecast):
+            with patch("app.services.llm.analyzer.LLMBudgetManager.check_and_reserve", AsyncMock(return_value=Decimal("0.01"))):
+                with patch("app.services.llm.usage_tracker.UsageTracker.check_budget", AsyncMock(return_value=BudgetStatus.OK)):
+                    result = await analyzer.analyze(usage_summary, tenant_id=tenant_id)
+        
+        assert "insights" in result
+        assert result["symbolic_forecast"]["total_forecasted_cost"] == 120
 
     async def test_handles_markdown_wrapped_json(self):
         mock_llm = MagicMock(spec=BaseChatModel)
@@ -90,23 +102,29 @@ class TestAnalyze:
         from app.services.analysis.forecaster import SymbolicForecaster
         mock_forecast = AsyncMock(return_value={"total_forecasted_cost": 0, "forecast": []})
 
-        with MagicMock() as mock_db:
-            analyzer = FinOpsAnalyzer(llm=mock_llm, db=mock_db)
-            
-            tenant_id = str(uuid4())
-            usage_summary = CloudUsageSummary(
-                tenant_id=tenant_id,
-                provider="aws",
-                start_date=date.today(),
-                end_date=date.today(),
-                total_cost=Decimal("100.0"),
-                records=[CostRecord(date=datetime.now(), amount=Decimal("100.0"), service="EC2")]
-            )
-            
-            with patch.object(SymbolicForecaster, "forecast", side_effect=mock_forecast):
-                result = await analyzer.analyze(usage_summary, tenant_id=tenant_id)
-            
-            assert "insights" in result
+        mock_db = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = None
+        mock_db.execute.return_value = mock_result
+        analyzer = FinOpsAnalyzer(llm=mock_llm, db=mock_db)
+        
+        tenant_id = str(uuid4())
+        usage_summary = CloudUsageSummary(
+            tenant_id=tenant_id,
+            provider="aws",
+            start_date=date.today(),
+            end_date=date.today(),
+            total_cost=Decimal("100.0"),
+            records=[CostRecord(date=datetime.now(), amount=Decimal("100.0"), service="EC2")]
+        )
+        
+        from app.services.llm.usage_tracker import BudgetStatus
+        with patch.object(SymbolicForecaster, "forecast", side_effect=mock_forecast):
+            with patch("app.services.llm.analyzer.LLMBudgetManager.check_and_reserve", AsyncMock(return_value=Decimal("0.01"))):
+                with patch("app.services.llm.usage_tracker.UsageTracker.check_budget", AsyncMock(return_value=BudgetStatus.OK)):
+                    result = await analyzer.analyze(usage_summary, tenant_id=tenant_id)
+        
+        assert "insights" in result
 
     async def test_handles_invalid_json_gracefully(self):
         mock_llm = MagicMock(spec=BaseChatModel)
@@ -115,22 +133,28 @@ class TestAnalyze:
         from app.services.analysis.forecaster import SymbolicForecaster
         mock_forecast = AsyncMock(return_value={"total_forecasted_cost": 0, "forecast": []})
 
-        with MagicMock() as mock_db:
-            analyzer = FinOpsAnalyzer(llm=mock_llm, db=mock_db)
-            
-            tenant_id = str(uuid4())
-            usage_summary = CloudUsageSummary(
-                tenant_id=tenant_id,
-                provider="aws",
-                start_date=date.today(),
-                end_date=date.today(),
-                total_cost=Decimal("100.0"),
-                records=[CostRecord(date=datetime.now(), amount=Decimal("100.0"), service="EC2")]
-            )
-            
-            with patch.object(SymbolicForecaster, "forecast", side_effect=mock_forecast):
-                result = await analyzer.analyze(usage_summary, tenant_id=tenant_id)
-            assert result is not None
+        mock_db = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = None
+        mock_db.execute.return_value = mock_result
+        analyzer = FinOpsAnalyzer(llm=mock_llm, db=mock_db)
+        
+        tenant_id = str(uuid4())
+        usage_summary = CloudUsageSummary(
+            tenant_id=tenant_id,
+            provider="aws",
+            start_date=date.today(),
+            end_date=date.today(),
+            total_cost=Decimal("100.0"),
+            records=[CostRecord(date=datetime.now(), amount=Decimal("100.0"), service="EC2")]
+        )
+        
+        from app.services.llm.usage_tracker import BudgetStatus
+        with patch.object(SymbolicForecaster, "forecast", side_effect=mock_forecast):
+            with patch("app.services.llm.analyzer.LLMBudgetManager.check_and_reserve", AsyncMock(return_value=Decimal("0.01"))):
+                with patch("app.services.llm.usage_tracker.UsageTracker.check_budget", AsyncMock(return_value=BudgetStatus.OK)):
+                    result = await analyzer.analyze(usage_summary, tenant_id=tenant_id)
+        assert result is not None
 
     async def test_handles_empty_cost_data(self):
         mock_llm = MagicMock(spec=BaseChatModel)
@@ -139,20 +163,26 @@ class TestAnalyze:
         from app.services.analysis.forecaster import SymbolicForecaster
         mock_forecast = AsyncMock(return_value={"total_forecasted_cost": 0, "forecast": []})
 
-        with MagicMock() as mock_db:
-            analyzer = FinOpsAnalyzer(llm=mock_llm, db=mock_db)
-            
-            tenant_id = str(uuid4())
-            usage_summary = CloudUsageSummary(
-                tenant_id=tenant_id,
-                provider="aws",
-                start_date=date.today(),
-                end_date=date.today(),
-                total_cost=Decimal("0.0"),
-                records=[]
-            )
-            
-            with patch.object(SymbolicForecaster, "forecast", side_effect=mock_forecast):
-                result = await analyzer.analyze(usage_summary, tenant_id=tenant_id)
-            
-            assert "recommendations" in result
+        mock_db = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = None
+        mock_db.execute.return_value = mock_result
+        analyzer = FinOpsAnalyzer(llm=mock_llm, db=mock_db)
+        
+        tenant_id = str(uuid4())
+        usage_summary = CloudUsageSummary(
+            tenant_id=tenant_id,
+            provider="aws",
+            start_date=date.today(),
+            end_date=date.today(),
+            total_cost=Decimal("0.0"),
+            records=[]
+        )
+        
+        from app.services.llm.usage_tracker import BudgetStatus
+        with patch.object(SymbolicForecaster, "forecast", side_effect=mock_forecast):
+            with patch("app.services.llm.analyzer.LLMBudgetManager.check_and_reserve", AsyncMock(return_value=Decimal("0.01"))):
+                with patch("app.services.llm.usage_tracker.UsageTracker.check_budget", AsyncMock(return_value=BudgetStatus.OK)):
+                    result = await analyzer.analyze(usage_summary, tenant_id=tenant_id)
+        
+        assert "recommendations" in result

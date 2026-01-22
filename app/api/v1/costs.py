@@ -14,6 +14,8 @@ from app.models.background_job import JobType
 from app.services.jobs.processor import enqueue_job
 from app.core.rate_limit import rate_limit, analysis_limit, standard_limit
 from app.services.costs.aggregator import CostAggregator
+import sqlalchemy as sa
+from app.models.llm import LLMUsage
 
 class CostAnalysisResponse(BaseModel):
     job_id: UUID
@@ -33,10 +35,44 @@ async def get_costs(
     db: AsyncSession = Depends(get_db),
 ):
     """Retrieves aggregated cloud costs and carbon for a date range."""
-    # Bound date range to max 366 days (Issue #44)
+    from fastapi import HTTPException
+    from fastapi.responses import JSONResponse
+    from app.services.costs.aggregator import LARGE_DATASET_THRESHOLD
+    
+    # 1. Bound date range to max 366 days (Issue #44)
     if (end_date - start_date).days > 366:
         raise HTTPException(status_code=400, detail="Date range cannot exceed 1 year")
     
+    # 2. Check query complexity (Phase 4.2)
+    count = await CostAggregator.count_records(db, tenant_id, start_date, end_date)
+    
+    if count > LARGE_DATASET_THRESHOLD:
+        logger.info("heavy_query_detected_shifting_to_async", 
+                    tenant_id=str(tenant_id), 
+                    count=count,
+                    threshold=LARGE_DATASET_THRESHOLD)
+        
+        # Enqueue background job for aggregation
+        job = await enqueue_job(
+            db=db,
+            job_type=JobType.COST_AGGREGATION,
+            tenant_id=tenant_id,
+            payload={
+                "start_date": start_date.isoformat(),
+                "end_date": end_date.isoformat(),
+                "provider": provider
+            }
+        )
+        return JSONResponse(
+            status_code=202,
+            content={
+                "message": "Heavy dataset detected. Aggregation job started.",
+                "job_id": str(job.id),
+                "status": "accepted"
+            }
+        )
+        
+    # 3. Fast path: cached or direct aggregation
     if provider is None:
         return await CostAggregator.get_cached_breakdown(
             db, tenant_id, start_date, end_date

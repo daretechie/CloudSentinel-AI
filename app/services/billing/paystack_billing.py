@@ -17,11 +17,11 @@ Requirements:
 import hashlib
 import hmac
 import httpx
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict, Any
 from enum import Enum
 from uuid import UUID
-from sqlalchemy import select, String, DateTime, ForeignKey
+from sqlalchemy import select, String, DateTime, ForeignKey, Integer
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -75,6 +75,11 @@ class TenantSubscription(Base):
     # Billing dates
     next_payment_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     canceled_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Dunning tracking (payment retry)
+    dunning_attempts: Mapped[int] = mapped_column(Integer, default=0)
+    last_dunning_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    dunning_next_retry_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
@@ -393,7 +398,7 @@ class WebhookHandler:
         event_type = event.get("event")
         data = event.get("data", {})
 
-        logger.info("paystack_webhook_received", event=event_type)
+        logger.info("paystack_webhook_received", paystack_event=event_type)
 
         handlers = {
             "subscription.create": self._handle_subscription_create,
@@ -569,7 +574,7 @@ class WebhookHandler:
                 await self.db.commit()
 
     async def _handle_invoice_failed(self, data: Dict) -> None:
-        """Handle failed payment - log for alerting."""
+        """Handle failed payment - trigger dunning workflow."""
         invoice_code = data.get("invoice_code")
         subscription_code = data.get("subscription_code")
         customer_code = data.get("customer", {}).get("customer_code")
@@ -579,6 +584,26 @@ class WebhookHandler:
             invoice_code=invoice_code,
             subscription_code=subscription_code,
             customer_code=customer_code,
-            msg="Payment failed - subscription may need attention"
+            msg="Payment failed - initiating dunning workflow"
         )
-        # TODO: Implement dunning logic (retry, notify customer, downgrade tier)
+        
+        # Find subscription and trigger dunning workflow
+        if subscription_code:
+            result = await self.db.execute(
+                select(TenantSubscription).where(
+                    TenantSubscription.paystack_subscription_code == subscription_code
+                )
+            )
+            sub = result.scalar_one_or_none()
+            
+            if sub:
+                # Delegate to DunningService for complete workflow
+                from app.services.billing.dunning_service import DunningService
+                dunning = DunningService(self.db)
+                await dunning.process_failed_payment(sub.id, is_webhook=True)
+                
+                logger.info(
+                    "dunning_workflow_initiated",
+                    tenant_id=str(sub.tenant_id),
+                    subscription_code=subscription_code
+                )

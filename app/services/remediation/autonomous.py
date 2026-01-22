@@ -183,10 +183,22 @@ class AutonomousRemediationEngine:
         # Auto-Pilot Logic: Enabled AND High Confidence AND Rate Limit Not Exceeded
         # AND Symbolic Safety Check Passed
         from app.services.remediation.safety import SafeOpsEngine
+        
+        # Get tags from explainability notes if available (zombie resources include tags)
+        resource_tags = {}
+        if hasattr(request, 'explainability_notes') and request.explainability_notes:
+            # Parse tags from notes if structured as JSON
+            try:
+                import json
+                notes_data = json.loads(request.explainability_notes) if isinstance(request.explainability_notes, str) else {}
+                resource_tags = notes_data.get("tags", {})
+            except (json.JSONDecodeError, TypeError):
+                pass
+        
         is_safe, safety_reason = SafeOpsEngine.validate_deletion_sync({
             "resource_id": resource_id,
             "resource_type": resource_type,
-            "tags": {}, # TODO: Fetch tags if possible for better safety
+            "tags": resource_tags,
             "confidence": confidence
         })
 

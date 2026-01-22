@@ -17,12 +17,12 @@
 
 | Dimension                      | Status        | Risk                        |
 | ------------------------------ | ------------- | --------------------------- |
-| **Cost Data Trust**            | ✅ Recovered  | Low (was Critical)          |
+| **Cost Data Trust**            | ✅ Recovered  | Medium → Low (was Critical) |
 | **Multi-Tenant Isolation**     | ✅ Hardened   | Low                         |
-| **Operational Stability**      | ✅ Improved   | Low                         |
-| **Attribution Model**          | ✅ Complete   | Low (was Critical)          |
-| **Forecasting Reliability**    | ✅ Improved   | Medium (was High)           |
-| **Query Performance at Scale** | ✅ Hardened   | Low (was High)              |
+| **Operational Stability**      | ✅ Improved   | Low-Medium                  |
+| **Attribution Model**          | 🟡 Incomplete | **Critical**                |
+| **Forecasting Reliability**    | 🟡 Risky      | **High**                    |
+| **Query Performance at Scale** | 🟡 Guarded    | **High**                    |
 | **Security Posture**           | ✅ Solid      | Low                         |
 | **Founder/Team Capability**    | ✅ Evident    | Low                         |
 
@@ -168,7 +168,7 @@ Investors will ask "How do you know who did what?" You have audit logs. Acquirer
 **Why This Matters:**
 A large tenant could freeze your database. You've added circuit breakers.
 
-**Assessment:** ✅ **COMPLETE** — Partitioning, indexes, and safeguards in place
+**Assessment:** 🟡 **INCOMPLETE** — See "Critical Risk #5" below
 
 ---
 
@@ -225,7 +225,7 @@ YES: "Attribution rules are in beta — we support tag-based and manual allocati
 
 **Fix Timeline:** 4 weeks (allocation engine + basic API + test)
 
-**Current State:** ✅ **RESOLVED** — `AttributionEngine` with percentage splits and rule chaining implemented
+**Current State:** 🔴 **BLOCKS PRODUCT-MARKET-FIT**
 
 ---
 
@@ -270,7 +270,7 @@ YES: "Our forecasts work for stable workloads. For volatile workloads, we recomm
 
 **Fix Timeline:** 8 weeks (volatility bands, service decomposition, accuracy tracking)
 
-**Current State:** ✅ **IMPROVED** — MAPE tracking, confidence intervals, and anomaly markers implemented
+**Current State:** 🔴 **DANGEROUS TO OVERSELL**
 
 ---
 
@@ -315,7 +315,7 @@ Customer exports cost data → query hits timeout → "System error" → support
 2. Add caching layer for common aggregations (2 weeks)
 3. Consider TimescaleDB or native partitioning query optimization (4 weeks)
 
-**Current State:** ✅ **HARDENED** — Partitioning, indexes, statement timeouts, and query limits active
+**Current State:** 🟡 **MEDIUM RISK** (Safeguards prevent explosion, but customer UX degrades)
 
 ---
 
@@ -350,7 +350,7 @@ A customer's controller reconciles Valdrix to AWS bill on Jan 20. Cost for Jan 1
 
 **Fix Timeline:** 2 weeks (add pipeline enforcement + dashboard disclosure)
 
-**Current State:** ✅ **COMPLETE** — Reconciliation service with PRELIMINARY/FINAL workflow implemented
+**Current State:** 🟡 **SCHEMA READY, IMPLEMENTATION UNCLEAR**
 
 ---
 
@@ -397,7 +397,7 @@ await db.execute(text(f"SET statement_timeout TO {STATEMENT_TIMEOUT_MS}"))  # Ki
 
 **Fix Timeline:** 3 weeks (add per-tenant concurrent limits, bound forecasting input size)
 
-**Current State:** ✅ **MITIGATED** — Per-tenant rate limiting and bounded queries active
+**Current State:** 🟡 **MITIGATED BUT NOT ELIMINATED**
 
 ---
 
@@ -406,8 +406,8 @@ await db.execute(text(f"SET statement_timeout TO {STATEMENT_TIMEOUT_MS}"))  # Ki
 **Reality Check:**
 
 - ✅ AWS: Full CUR ingestion + Cost Explorer API
-- ✅ Azure: Cost Management API adapter with RI handling
-- ✅ GCP: BigQuery export with commitment amortization
+- 🟡 Azure: Basic Cost Management API adapter (missing: reserved instance handling)
+- 🟡 GCP: BigQuery export (missing: commitment/discount amortization)
 
 **What This Means:**
 When a customer with multi-cloud says "Show me my Azure costs across teams", you can ingest them, but:
@@ -423,7 +423,7 @@ When a customer with multi-cloud says "Show me my Azure costs across teams", you
 
 **Fix Timeline:** 4 weeks (add RI amortization for each cloud)
 
-**Current State:** ✅ **COMPLETE FOR MVP** — Core cloud adapters functional
+**Current State:** 🟡 **INCOMPLETE FOR ENTERPRISE**
 
 ---
 
@@ -441,7 +441,6 @@ When a customer with multi-cloud says "Show me my Azure costs across teams", you
 2. Scheduled jobs pause (APScheduler not running)
 3. Customer's midnight analysis job doesn't run
 4. Dashboard is stale
-4. Dashboard is stale
 
 **At Scale:**
 
@@ -455,7 +454,7 @@ YES: "Scheduler is single-instance. We recommend running a dedicated scheduler i
 
 **Fix Timeline:** 6 weeks (move to Celery + Redis)
 
-**Current State:** ✅ **RESOLVED** — Distributed background job processor with `SKIP LOCKED` concurrency safety implemented.
+**Current State:** 🟡 **ADEQUATE FOR MVP, NOT FOR PRODUCTION**
 
 ---
 
@@ -510,7 +509,7 @@ def decode_jwt(token: str) -> dict:
 3. Refresh token mechanism exists
 4. Token lifetime is reasonable (15-30 minutes, not 1 year)
 
-**Assessment:** ✅ **VERIFIED** — Supabase JWT handling with expiration checks
+**Assessment:** 🟡 **ASSUME IMPLEMENTED** (Supabase handles this, but verify)
 
 ---
 
@@ -573,7 +572,7 @@ SENSITIVE_FIELDS = {
 - ⚠️ No cache of previous analyses
 - ⚠️ Customer sees "unavailable" instead of "here's yesterday's analysis"
 
-**Assessment:** ✅ **IMPROVED** — LLM fallback chain with graceful degradation
+**Assessment:** 🟡 **ACCEPTABLE** (could be improved with caching)
 
 ---
 
@@ -583,11 +582,11 @@ SENSITIVE_FIELDS = {
 
 **Acceptance Criteria:**
 
-- [x] Create attribution rules via API → `POST /allocation/rules`
-- [x] System applies rules during ingestion
-- [x] Dashboard shows "allocated_to" breakdown by team/project
-- [x] Test: Create rule "Split S3 costs 60% Team A, 40% Team B" → `tests/test_due_diligence.py`
-- [x] Docs: Customer guide for setting up allocation rules
+- [ ] Create attribution rules via API
+- [ ] System applies rules during ingestion
+- [ ] Dashboard shows "allocated_to" breakdown by team/project
+- [ ] Test: Create rule "Split S3 costs 60% Team A, 40% Team B" → verify CostAllocation records
+- [ ] Docs: Customer guide for setting up allocation rules
 
 **Timeline:** 4 weeks  
 **Confidence:** High (schema exists, just need the engine)  
@@ -599,12 +598,12 @@ SENSITIVE_FIELDS = {
 
 **Acceptance Criteria:**
 
-- [x] CUR data marked PRELIMINARY for exactly 48h
-- [x] After 48h, auto-marked FINAL (no manual step)
-- [x] Dashboard shows "Data through Jan 14 (final). Jan 15-17 (preliminary)."
-- [x] Forecast training uses only FINAL data
-- [x] Test: Verify cost changes >2% are logged in cost_audit_logs
-- [x] Test: Verify forecast doesn't retrain on preliminary data
+- [ ] CUR data marked PRELIMINARY for exactly 48h
+- [ ] After 48h, auto-marked FINAL (no manual step)
+- [ ] Dashboard shows "Data through Jan 14 (final). Jan 15-17 (preliminary)."
+- [ ] Forecast training uses only FINAL data
+- [ ] Test: Verify cost changes >2% are logged in cost_audit_logs
+- [ ] Test: Verify forecast doesn't retrain on preliminary data
 
 **Timeline:** 2 weeks  
 **Confidence:** High (schema exists)  
@@ -616,12 +615,11 @@ SENSITIVE_FIELDS = {
 
 **Acceptance Criteria:**
 
-- [x] Track forecast accuracy (MAPE, MAE) on historical data
-- [x] Dashboard shows "Forecast accuracy: X%"
-- [x] Documentation honest about accuracy for spiky vs stable workloads
-- [x] Customer can see "This forecast is low confidence (volatility high)"
-- [x] Test: 30-day hindcast accuracy validation
-- [x] Test: 30-day hindcast accuracy verification integrated
+- [ ] Track forecast accuracy (MAPE, MAE) on historical data
+- [ ] Dashboard shows "Forecast accuracy: 85%" (or whatever it is)
+- [ ] Documentation honest about accuracy for spiky vs stable workloads
+- [ ] Customer can see "This forecast is low confidence (volatility high)"
+- [ ] Test: 30-day hindcast accuracy >80% for 80% of customers
 
 **Timeline:** 4 weeks  
 **Confidence:** High  
@@ -633,24 +631,30 @@ SENSITIVE_FIELDS = {
 
 **Acceptance Criteria:**
 
-- [x] Durable job processing via database queue
-- [x] Jobs persist (survive restart)
-- [x] Distributed execution (multiple instances don't duplicate jobs via `SKIP LOCKED`)
-- [x] Visibility: BackgroundJob model with status tracking
-- [x] Test: `tests/test_due_diligence.py` verified job execution
+- [ ] Move from APScheduler to Celery + Redis
+- [ ] Jobs persist (survive restart)
+- [ ] Distributed execution (multiple instances don't duplicate jobs)
+- [ ] Visibility: `/jobs/status` endpoint shows pending/running/completed
+- [ ] Test: Restart API mid-job, verify job completes correctly
 
-**Status:** ✅ **RESOLVED** using Postgres-native distributed pattern.
+**Timeline:** 6 weeks  
+**Confidence:** Medium (some risk on Celery integration)  
+**Investment:** 1 senior engineer for 6 weeks
 
 ---
 
+### 5. **NICE-TO-HAVE: Multi-Tenant Blast Radius Limits**
+
 **Acceptance Criteria:**
 
-- [x] Per-tenant rate limiting → `check_remediation_rate_limit()`
-- [x] Per-tenant quota on large queries → Aggregation safety gates
-- [x] Forecasting input size bounded → `SymbolicForecaster` limits
-- [x] Test: Verified under concurrent load in `tests/test_due_diligence.py`
+- [ ] Per-tenant concurrent request limit (e.g., max 5 concurrent)
+- [ ] Per-tenant quota on large queries (e.g., max 500K rows/day)
+- [ ] Forecasting input size bounded (max 10M records)
+- [ ] Test: Large tenant's query doesn't slow small tenant's dashboard
 
-**Status:** ✅ **MITIGATED**
+**Timeline:** 3 weeks  
+**Confidence:** High  
+**Investment:** 1 mid-level engineer for 3 weeks
 
 ---
 
@@ -667,10 +671,10 @@ SENSITIVE_FIELDS = {
 
 **Work:**
 
-- [x] Code review: `_check_for_significant_adjustments` verified wired up
-- [x] Integration test: Ingest same cost twice → `tests/test_due_diligence.py`
-- [x] Integration test: cost_status transitions verified
-- [x] Dashboard: Data freshness indicator → `get_data_freshness()` API
+- [ ] Code review: app/services/costs/persistence.py — verify `_check_for_significant_adjustments` is wired up
+- [ ] Add integration test: Ingest same cost twice with different amount → verify audit_log entry
+- [ ] Add integration test: Verify cost_status transitions (PRELIMINARY → FINAL after 48h)
+- [ ] Dashboard: Add "Data freshness" indicator
 
 **Owner:** 1 senior engineer (40h)  
 **Risk:** LOW (schema exists, just need verification)
@@ -686,27 +690,32 @@ SENSITIVE_FIELDS = {
 
 **Work:**
 
-- [x] Build allocation engine: `AttributionEngine.apply_rules_to_tenant()`
-- [x] Add API endpoint: `POST /allocation/rules`
-- [x] Add API endpoint: `GET /allocation/summary?team=X`
-- [x] Add UI: Allocation breakdown component → `AllocationBreakdown.svelte`
+- [ ] Build allocation engine: `apply_attribution_rules(cost, rules) → List[CostAllocation]`
+- [ ] Add API endpoint: `POST /allocation/rules` (create rule)
+- [ ] Add API endpoint: `GET /allocation/summary?team=X` (show allocated costs)
+- [ ] Add UI: Simple rule builder (tag-based conditions, percentage splits)
 
 **Owner:** 2 engineers (40h each, parallelized)  
 **Risk:** MEDIUM (new feature, needs design review)
 
 ---
 
+### Week 5-6: Forecast Accuracy Tracking
+
 **Goals:**
 
-- ✅ Accuracy transparency via MAPE/MAE
-- ✅ Historical backtesting for confidence validation
+- Move from "trust me" to "here's the math"
+- Stop overselling forecast accuracy
 
 **Work:**
 
-- [x] Build accuracy metrics: MAPE calculation in `SymbolicForecaster`
-- [x] 30-day hindcast: Backtesting integrated into forecasting pipeline
-- [x] Dashboard: Confidence scores exposed
-- [x] Docs: Documentation updated with accuracy caveats
+- [ ] Build accuracy metrics: MAPE, MAE, directional accuracy (up/down)
+- [ ] 30-day hindcast: Compare yesterday's forecast vs actual
+- [ ] Dashboard: "Forecast accuracy in last 30 days: 82%"
+- [ ] Docs: Update forecasting docs with accuracy caveats
+
+**Owner:** 1 data engineer (40h)  
+**Risk:** LOW (straightforward metrics)
 
 ---
 
@@ -719,40 +728,54 @@ SENSITIVE_FIELDS = {
 
 **Work:**
 
-- [x] Architecture: Durable queue using Postgres `BackgroundJob` table
-- [x] Spike: Verified concurrency with `SKIP LOCKED`
-- [x] Design: Job idempotency using deterministic dedup keys
-- [x] Design: Graceful shutdown and retry handling implemented
+- [ ] Architecture doc: Celery + Redis deployment model
+- [ ] Spike: Test Celery with Koyeb deployment
+- [ ] Design: Job idempotency using dedup keys
+- [ ] Design: Graceful shutdown (kill running job vs cancel queue)
 
 **Owner:** 1 senior engineer (40h)  
 **Risk:** MEDIUM (deployment complexity)
 
 ---
 
+### Week 9-12: Execute Distributed Scheduler
+
 **Goals:**
 
-- ✅ Distributed job processing with Postgres `SKIP LOCKED`
-- ✅ Elimination of scheduler as single point of failure
+- Migrate to Celery
+- Eliminate scheduler as single point of failure
 
 **Work:**
 
-- [x] Implement database-backed job queue
-- [x] Concurrency safety with `SELECT FOR UPDATE SKIP LOCKED`
-- [x] Retry logic with exponential backoff
-- [x] Per-tenant job isolation (RLS supported)
+- [ ] Implement Celery workers
+- [ ] Migrate all APScheduler jobs to Celery
+- [ ] Add Redis health check
+- [ ] Add job monitoring: stuck job detector
+- [ ] Deploy with canary (run both in parallel briefly)
+- [ ] Add alerting: job failure, queue depth
+
+**Owner:** 2 engineers (40h each)  
+**Risk:** HIGH (migration risk, but rollback is simple)
 
 ---
 
+### Week 13: Stabilization & Series-A Demo Prep
+
+**Goals:**
+
+- Get into pitch mode
+- Prepare technical deep-dives
+
 **Work:**
 
-- [x] Document all "what's fixed" with demo walkthrough
-- [x] Prepare due diligence answers:
-  - "How do you handle cost accuracy?" → Forensic trail verified
-  - "How do you allocate costs?" → AttributionEngine verified
-  - "How accurate is your forecast?" → MAPE metrics verified
-  - "What happens if you crash?" → Durable job queue verified
-- [x] Load test: Concurrency and scale tests verified
-- [x] Security audit: RLS, JWT, and audit logging verified
+- [ ] Document all "what's fixed" with demo walkthrough
+- [ ] Prepare due diligence answers:
+  - "How do you handle cost accuracy?" (show forensic trail)
+  - "How do you allocate costs?" (show rule-based allocation)
+  - "How accurate is your forecast?" (show accuracy metrics)
+  - "What happens if you crash?" (show scheduler resilience)
+- [ ] Load test: 100 concurrent users, 2-year cost history
+- [ ] Security audit: Confirm RLS, JWT, audit logging
 
 **Owner:** 1 product + 1 engineer (40h each)
 
@@ -761,20 +784,21 @@ SENSITIVE_FIELDS = {
 ## WHAT WILL IMPRESS INVESTORS
 
 1. **Cost accuracy forensic trail** — "We can explain every dollar discrepancy"
-2. **Multi-tenant isolation** — "RLS + code filters + concurrent safety verified"
-3. **Honest about limitations** — "MAPE metrics and confidence bands show forecast reality"
+2. **Multi-tenant isolation** — "We tested this under load, RLS + code filters"
+3. **Honest about limitations** — "Forecasts work for stable workloads, not volatile ones"
 4. **Cost controls** — "LLM spend is pre-authorized, no runaway costs"
 5. **SOC2-ready audit logging** — "Every action is logged, exportable"
-6. **Distributed Scheduler** — "Durable queue with `SKIP LOCKED` concurrency"
+6. **Founder narrative** — "We learned from FAANG how to build financial systems"
 
 ---
 
-## WHAT WILL SCARE INVESTORS (Status: MITIGATED)
+## WHAT WILL SCARE INVESTORS
 
-1. **"Will attribution scale?"** → Verified with bulk rule processing
-2. **"Can forecasting handle spikes?"** → Anomaly markers and MAD-based detection applied
-3. **"Is the scheduler resilient?"** → Database-backed durable queue implemented
-4. **"Does RLS hold up?"** → Stress tested with concurrent cross-tenant queries
+1. **"We have attribution schema but not the engine"** — Sounds like vaporware
+2. **"Forecasts assume stable workloads"** — Every customer has batch jobs
+3. **"Scheduler is single-instance"** — HA deployment impossible
+4. **"We discovered this during audit"** — Lack of visibility
+5. **"We haven't tested RLS at scale"** — Multi-tenant is your moat, don't fumble it
 
 ---
 
@@ -811,20 +835,18 @@ Don't tell investors "Valdrix allocates costs to teams." Tell them "We're buildi
 
 ## FINAL ASSESSMENT
 
-| Assessment                                    | Verdict               |
-| --------------------------------------------- | --------------------- |
-| **Can you raise Series-A with this?**         | **YES (Confident)**   |
-| **Will it be a smooth due diligence?**        | Yes (Low friction)    |
-| **Will the first Fortune 500 customer work?** | Yes                   |
-| **What breaks first at 10x?**                 | Scaling cloud storage |
-| **Would I acquire this?**                     | **YES**               |
-| **Would I inherit this as CTO?**              | **YES (with pride)**  |
+| Assessment                                    | Verdict                           |
+| --------------------------------------------- | --------------------------------- |
+| **Can you raise Series-A with this?**         | Yes                               |
+| **Will it be a smooth due diligence?**        | No (but expected friction)        |
+| **Will the first Fortune 500 customer work?** | Yes (with caveats)                |
+| **What breaks first at 10x?**                 | Query performance on 10M+ records |
+| **Would I acquire this?**                     | Yes (if team stays)               |
+| **Would I inherit this as CTO?**              | Yes (with confidence)             |
 
 ---
 
-**Grade: A**
-
-Valdrix has evolved from a credible prototype into a hardened, enterprise-ready FinOps platform. The implementation of cost forensics, attribution rules, and distributed job processing removes all major technical barriers to a successful Series-A.
+**Grade: B+ → A- (with 90-day execution)**
 
 You're not vaporware. You're not a toy. You're a credible system with known gaps. That's exactly where Series-A companies live.
 

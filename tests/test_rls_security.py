@@ -71,16 +71,20 @@ async def test_rls_listener_emits_log_on_missing_context():
     try:
         # Patch the logger to verify critical was called
         with patch("app.db.session.logger") as mock_logger:
-            # Executing a query with RLS FALSE should trigger the listener
-            await session.execute(
-                text("SELECT 1"), 
-                execution_options={"rls_context_set": False}
-            )
+            from app.core.exceptions import ValdrixException
+            # Executing a query with RLS FALSE should trigger the listener and RAISE
+            # Use a table that isn't bypassed by SELECT 1 rule
+            with pytest.raises(ValdrixException) as exc:
+                await session.execute(
+                    text("SELECT * FROM tenants"), 
+                    execution_options={"rls_context_set": False}
+                )
+            
+            assert "RLS context missing" in str(exc.value)
             
             # Verify logger.critical was called with the expected event
             assert mock_logger.critical.called, "logger.critical should have been called"
             call_kwargs = mock_logger.critical.call_args
-            # The listener calls logger.critical("rls_enforcement_bypass_attempt", ...)
-            assert call_kwargs[0][0] == "rls_enforcement_bypass_attempt"
+            assert call_kwargs[0][0] == "rls_enforcement_violation_detected"
     finally:
         await db_gen.aclose()
