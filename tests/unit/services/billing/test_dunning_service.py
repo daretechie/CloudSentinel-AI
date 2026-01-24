@@ -5,12 +5,12 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 from datetime import datetime, timezone, timedelta
-from app.services.billing.dunning_service import (
+from app.modules.reporting.domain.billing.dunning_service import (
     DunningService, 
     DUNNING_RETRY_SCHEDULE_DAYS,
     DUNNING_MAX_ATTEMPTS
 )
-from app.services.billing.paystack_billing import SubscriptionStatus, PricingTier
+from app.modules.reporting.domain.billing.paystack_billing import SubscriptionStatus, PricingTier
 
 
 @pytest.fixture
@@ -47,7 +47,7 @@ async def test_process_failed_payment_first_attempt(mock_db, mock_subscription):
     """Test first payment failure triggers dunning workflow."""
     setup_mock_db_result(mock_db, mock_subscription)
     
-    with patch("app.services.billing.dunning_service.enqueue_job", new_callable=AsyncMock) as mock_enqueue:
+    with patch("app.modules.reporting.domain.billing.dunning_service.enqueue_job", new_callable=AsyncMock) as mock_enqueue:
         mock_enqueue.return_value = MagicMock()
         
         with patch.object(DunningService, "_send_payment_failed_email", new_callable=AsyncMock):
@@ -82,7 +82,7 @@ async def test_retry_payment_success(mock_db, mock_subscription):
     mock_subscription.dunning_attempts = 2
     setup_mock_db_result(mock_db, mock_subscription)
     
-    with patch("app.services.billing.dunning_service.BillingService") as mock_billing_cls:
+    with patch("app.modules.reporting.domain.billing.dunning_service.BillingService") as mock_billing_cls:
         mock_billing = MagicMock()
         mock_billing.charge_renewal = AsyncMock(return_value=True)
         mock_billing_cls.return_value = mock_billing
@@ -102,12 +102,12 @@ async def test_retry_payment_failure_continues_dunning(mock_db, mock_subscriptio
     mock_subscription.dunning_attempts = 1
     setup_mock_db_result(mock_db, mock_subscription)
     
-    with patch("app.services.billing.dunning_service.BillingService") as mock_billing_cls:
+    with patch("app.modules.reporting.domain.billing.dunning_service.BillingService") as mock_billing_cls:
         mock_billing = MagicMock()
         mock_billing.charge_renewal = AsyncMock(return_value=False)
         mock_billing_cls.return_value = mock_billing
         
-        with patch("app.services.billing.dunning_service.enqueue_job", new_callable=AsyncMock) as mock_enqueue:
+        with patch("app.modules.reporting.domain.billing.dunning_service.enqueue_job", new_callable=AsyncMock) as mock_enqueue:
             mock_enqueue.return_value = MagicMock()
             
             with patch.object(DunningService, "_send_payment_failed_email", new_callable=AsyncMock):

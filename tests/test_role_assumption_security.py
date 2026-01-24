@@ -1,7 +1,7 @@
 import pytest
 from datetime import datetime, timezone
 from unittest.mock import MagicMock, AsyncMock, patch
-from app.services.adapters.aws_multitenant import MultiTenantAWSAdapter
+from app.shared.adapters.aws_multitenant import MultiTenantAWSAdapter
 from app.models.aws_connection import AWSConnection
 
 @pytest.mark.asyncio

@@ -2,8 +2,8 @@ import pytest
 from uuid import uuid4
 from decimal import Decimal
 from unittest.mock import MagicMock, AsyncMock, patch
-from app.services.scheduler.processors import SavingsProcessor
-from app.services.llm.guardrails import FinOpsAnalysisResult, FinOpsRecommendation
+from app.modules.governance.domain.scheduler.processors import SavingsProcessor
+from app.shared.llm.guardrails import FinOpsAnalysisResult, FinOpsRecommendation
 from app.models.remediation import RemediationAction, RemediationStatus
 
 @pytest.mark.asyncio
@@ -30,7 +30,7 @@ async def test_savings_processor_executes_autonomous_ready(db):
     )
     
     # 2. Mock RemediationService
-    with patch("app.services.zombies.remediation_service.RemediationService", autospec=True) as mock_service_cls:
+    with patch("app.modules.optimization.domain.remediation_service.RemediationService", autospec=True) as mock_service_cls:
         mock_service = mock_service_cls.return_value
         mock_service.create_request = AsyncMock()
         mock_service.approve = AsyncMock()
@@ -71,7 +71,7 @@ async def test_savings_processor_skips_non_autonomous(db):
     )
     result = FinOpsAnalysisResult(recommendations=[rec])
     
-    with patch("app.services.zombies.remediation_service.RemediationService", autospec=True) as mock_service_cls:
+    with patch("app.modules.optimization.domain.remediation_service.RemediationService", autospec=True) as mock_service_cls:
         mock_service = mock_service_cls.return_value
         processor = SavingsProcessor()
         await processor.process_recommendations(db, tenant_id, result)

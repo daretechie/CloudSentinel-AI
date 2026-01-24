@@ -10,8 +10,6 @@
 		db_connections: 0
 	};
 
-	let loading = $state(true);
-
 	onMount(async () => {
 		// In a real implementation, this would fetch from /api/v1/health-dashboard
 		setTimeout(() => {
@@ -22,7 +20,6 @@
 				llm_latency: '1.4s',
 				db_connections: 8
 			};
-			loading = false;
 		}, 500);
 	});
 </script>

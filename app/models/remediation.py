@@ -18,7 +18,7 @@ from sqlalchemy import Column, String, Integer, Boolean, ForeignKey, Enum as SQL
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
-from app.db.base import Base
+from app.shared.db.base import Base
 
 
 class RemediationStatus(str, Enum):

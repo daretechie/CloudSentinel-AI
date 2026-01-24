@@ -3,7 +3,7 @@ import uuid
 import json
 from unittest.mock import AsyncMock, patch, MagicMock
 from botocore.exceptions import ClientError
-from app.services.connections.cur_automation import IAMCURManager
+from app.shared.connections.cur_automation import IAMCURManager
 from app.models.aws_connection import AWSConnection
 
 @pytest.mark.asyncio

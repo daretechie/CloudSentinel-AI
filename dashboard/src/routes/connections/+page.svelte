@@ -1,4 +1,5 @@
 <script lang="ts">
+	/* eslint-disable svelte/no-navigation-without-resolve */
 	import { PUBLIC_API_URL } from '$env/static/public';
 	import { base } from '$app/paths';
 	import CloudLogo from '$lib/components/CloudLogo.svelte';
@@ -78,7 +79,7 @@
 			if (awsConnection?.is_management_account) {
 				loadDiscoveredAccounts();
 			}
-		} catch (error_un) {
+		} catch {
 			error = 'Failed to load cloud accounts. Check backend connection.';
 			loadingAWS = loadingAzure = loadingGCP = false;
 		}
@@ -363,6 +364,8 @@
 					Connect via Workload Identity Federation for secret-less security.
 				</p>
 				<div class="flex flex-col gap-2">
+					<a
+						<a
 						href={['growth', 'pro', 'enterprise', 'trial'].includes(data.subscription?.tier)
 							? `${base}/onboarding`
 							: `${base}/billing`}
@@ -437,6 +440,7 @@
 					Seamless integration using GCP Workload Identity pools.
 				</p>
 				<div class="flex flex-col gap-2">
+					<a
 						href={['growth', 'pro', 'enterprise', 'trial'].includes(data.subscription?.tier)
 							? `${base}/onboarding`
 							: `${base}/billing`}
@@ -507,7 +511,9 @@
 							Unlock the ability to automatically discover, monitor, and optimize hundreds of member
 							accounts across your entire AWS Organization.
 						</p>
-						<a href="{base}/billing" class="btn btn-primary !w-auto px-8 py-3">Upgrade to Growth Tier</a>
+						<a href="{base}/billing" class="btn btn-primary !w-auto px-8 py-3"
+							>Upgrade to Growth Tier</a
+						>
 					</div>
 				{:else}
 					<div class="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">

@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock
-from app.services.remediation.autonomous import AutonomousRemediationEngine
+from app.shared.remediation.autonomous import AutonomousRemediationEngine
 from app.models.remediation import RemediationAction
 
 @pytest.mark.asyncio

@@ -1,7 +1,7 @@
 import pytest
 from datetime import datetime
 from unittest.mock import MagicMock, patch
-from app.services.adapters.gcp import GCPAdapter
+from app.shared.adapters.gcp import GCPAdapter
 from app.models.gcp_connection import GCPConnection
 
 @pytest.fixture

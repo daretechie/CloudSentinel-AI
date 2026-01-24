@@ -8,7 +8,7 @@ from datetime import date, datetime, timezone
 from uuid import uuid4
 from unittest.mock import MagicMock, AsyncMock
 
-from app.services.costs.attribution_engine import AttributionEngine
+from app.modules.reporting.domain.attribution_engine import AttributionEngine
 from app.models.attribution import AttributionRule, CostAllocation
 from app.models.cloud import CostRecord
 

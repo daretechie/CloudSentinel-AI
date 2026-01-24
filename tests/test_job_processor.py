@@ -15,7 +15,7 @@ from datetime import datetime, timezone, timedelta
 from uuid import uuid4
 
 from app.models.background_job import BackgroundJob, JobStatus, JobType
-from app.services.jobs.processor import JobProcessor, enqueue_job, BACKOFF_BASE_SECONDS
+from app.modules.governance.domain.jobs.processor import JobProcessor, enqueue_job, BACKOFF_BASE_SECONDS
 
 
 def create_mock_job(
@@ -62,7 +62,7 @@ class TestJobProcessor:
         assert results["failed"] == 0
     
     @pytest.mark.asyncio
-    @patch('app.services.jobs.processor.get_handler_factory')
+    @patch('app.modules.governance.domain.jobs.processor.get_handler_factory')
     async def test_marks_job_running_on_start(self, mock_factory):
         """Job status should change to RUNNING when processing starts."""
         mock_db = AsyncMock()
@@ -85,7 +85,7 @@ class TestJobProcessor:
         await processor.process_pending_jobs()
     
     @pytest.mark.asyncio
-    @patch('app.services.jobs.processor.get_handler_factory')
+    @patch('app.modules.governance.domain.jobs.processor.get_handler_factory')
     async def test_marks_job_completed_on_success(self, mock_factory):
         """Job status should change to COMPLETED on success."""
         mock_db = AsyncMock()
@@ -113,7 +113,7 @@ class TestJobProcessor:
         assert mock_job.completed_at is not None
     
     @pytest.mark.asyncio
-    @patch('app.services.jobs.processor.get_handler_factory')
+    @patch('app.modules.governance.domain.jobs.processor.get_handler_factory')
     async def test_retries_on_failure(self, mock_factory):
         """Job should be rescheduled on failure with backoff."""
         mock_db = AsyncMock()
@@ -144,7 +144,7 @@ class TestJobProcessor:
         assert mock_job.scheduled_for > datetime.now(timezone.utc) - timedelta(seconds=1)
     
     @pytest.mark.asyncio
-    @patch('app.services.jobs.processor.get_handler_factory')
+    @patch('app.modules.governance.domain.jobs.processor.get_handler_factory')
     async def test_dead_letter_on_max_attempts(self, mock_factory):
         """Job should go to dead letter after max attempts."""
         mock_db = AsyncMock()
@@ -172,7 +172,7 @@ class TestJobProcessor:
         assert mock_job.completed_at is not None
     
     @pytest.mark.asyncio
-    @patch('app.services.jobs.processor.get_handler_factory')
+    @patch('app.modules.governance.domain.jobs.processor.get_handler_factory')
     async def test_increments_attempts(self, mock_factory):
         """Attempts should increment on each processing."""
         mock_db = AsyncMock()
@@ -220,7 +220,7 @@ class TestEnqueueJob:
         mock_db = AsyncMock()
         mock_db.add = MagicMock()
         
-        with patch('app.services.jobs.processor.BackgroundJob') as MockJob:
+        with patch('app.modules.governance.domain.jobs.processor.BackgroundJob') as MockJob:
             mock_instance = MagicMock()
             mock_instance.id = uuid4()
             MockJob.return_value = mock_instance
@@ -241,7 +241,7 @@ class TestEnqueueJob:
         mock_db.add = MagicMock()
         future_time = datetime.now(timezone.utc) + timedelta(hours=1)
         
-        with patch('app.services.jobs.processor.BackgroundJob') as MockJob:
+        with patch('app.modules.governance.domain.jobs.processor.BackgroundJob') as MockJob:
             mock_instance = MagicMock()
             mock_instance.id = uuid4()
             MockJob.return_value = mock_instance

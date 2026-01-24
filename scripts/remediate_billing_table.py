@@ -1,6 +1,6 @@
 import asyncio
 import traceback
-from app.db.session import async_session_maker
+from app.shared.db.session import async_session_maker
 from sqlalchemy import text
 import structlog
 

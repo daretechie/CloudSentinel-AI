@@ -1,5 +1,5 @@
 import pytest
-from app.core.config import Settings
+from app.shared.core.config import Settings
 from pydantic import ValidationError
 
 def test_config_production_validation():

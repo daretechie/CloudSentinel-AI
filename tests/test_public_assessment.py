@@ -14,7 +14,7 @@ async def test_public_assessment_endpoint():
         "potential_savings": 100.0
     }
     
-    with patch("app.services.llm.analyzer.FinOpsAnalyzer.analyze", new_callable=AsyncMock) as mock_analyze:
+    with patch("app.shared.llm.analyzer.FinOpsAnalyzer.analyze", new_callable=AsyncMock) as mock_analyze:
         mock_analyze.return_value = mock_analysis
         
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:

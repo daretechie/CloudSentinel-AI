@@ -11,7 +11,7 @@ Tests:
 import pytest
 from unittest.mock import AsyncMock
 
-from app.api.v1.billing import (
+from app.modules.billing import (
     CheckoutRequest,
     SubscriptionResponse,
 )
@@ -66,12 +66,12 @@ class TestBillingService:
     
     def test_billing_service_exists(self):
         """BillingService class should exist and be importable."""
-        from app.services.billing.paystack_billing import BillingService
+        from app.modules.reporting.domain.billing.paystack_billing import BillingService
         assert BillingService is not None
     
     def test_billing_service_has_required_methods(self):
         """BillingService should have expected methods."""
-        from app.services.billing.paystack_billing import BillingService
+        from app.modules.reporting.domain.billing.paystack_billing import BillingService
         
         mock_db = AsyncMock()
         service = BillingService(mock_db)
@@ -85,7 +85,7 @@ class TestWebhookHandler:
     
     def test_webhook_signature_verification_invalid(self):
         """Invalid signature should be rejected."""
-        from app.services.billing.paystack_billing import WebhookHandler
+        from app.modules.reporting.domain.billing.paystack_billing import WebhookHandler
         
         mock_db = AsyncMock()
         _ = WebhookHandler(mock_db)
@@ -96,7 +96,7 @@ class TestWebhookHandler:
     @pytest.mark.asyncio
     async def test_webhook_subscription_create(self):
         """subscription.create event should update database."""
-        from app.services.billing.paystack_billing import WebhookHandler
+        from app.modules.reporting.domain.billing.paystack_billing import WebhookHandler
         
         mock_db = AsyncMock()
         handler = WebhookHandler(mock_db)
@@ -110,7 +110,7 @@ class TestPricingTier:
     
     def test_pricing_tier_values(self):
         """PricingTier should have expected values."""
-        from app.services.billing.paystack_billing import PricingTier
+        from app.modules.reporting.domain.billing.paystack_billing import PricingTier
         
         assert PricingTier.TRIAL.value == "trial"
         assert PricingTier.STARTER.value == "starter"
@@ -119,7 +119,7 @@ class TestPricingTier:
     
     def test_pricing_tier_from_string(self):
         """PricingTier should be creatable from string."""
-        from app.services.billing.paystack_billing import PricingTier
+        from app.modules.reporting.domain.billing.paystack_billing import PricingTier
         
         tier = PricingTier("pro")
         assert tier == PricingTier.PRO
@@ -130,7 +130,7 @@ class TestTenantSubscriptionModel:
     
     def test_tenant_subscription_fields(self):
         """TenantSubscription should have correct fields."""
-        from app.services.billing.paystack_billing import TenantSubscription
+        from app.modules.reporting.domain.billing.paystack_billing import TenantSubscription
         
         # Verify model has expected columns
         assert hasattr(TenantSubscription, 'tenant_id')

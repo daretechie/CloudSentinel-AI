@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
-from app.services.zombies.service import ZombieService
+from app.modules.optimization.domain.service import ZombieService
 
 @pytest.fixture
 def mock_db():
@@ -19,7 +19,7 @@ class TestZombieServiceExpanded:
         user = MagicMock()
         user.tier = "starter"
         
-        with patch("app.services.zombies.service.select") as mock_select:
+        with patch("app.modules.optimization.domain.service.select") as mock_select:
             mock_conn_res = MagicMock()
             mock_conn_res.scalars.return_value.all.return_value = []
             mock_db.execute.return_value = mock_conn_res
@@ -32,7 +32,7 @@ class TestZombieServiceExpanded:
     async def test_send_notifications_failure(self, zombie_service):
         """Test that notification failures don't crash the service."""
         zombies = {"total_monthly_waste": 100.0}
-        with patch("app.services.notifications.get_slack_service") as mock_get_slack:
+        with patch("app.modules.notifications.domain.get_slack_service") as mock_get_slack:
             mock_slack = AsyncMock()
             mock_slack.notify_zombies.side_effect = Exception("Slack Down")
             mock_get_slack.return_value = mock_slack

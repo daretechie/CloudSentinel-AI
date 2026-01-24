@@ -3,7 +3,7 @@ import pytest
 from datetime import date, timedelta, datetime
 from decimal import Decimal
 from app.schemas.costs import CostRecord
-from app.services.analysis.forecaster import SymbolicForecaster
+from app.shared.analysis.forecaster import SymbolicForecaster
 
 @pytest.mark.asyncio
 async def test_forecaster_insufficient_data():
@@ -41,8 +41,8 @@ async def test_forecaster_prophet_success():
     
     mock_prophet_class = MagicMock(return_value=mock_prophet_instance)
     
-    with patch("app.services.analysis.forecaster.Prophet", mock_prophet_class, create=True), \
-         patch("app.services.analysis.forecaster.PROPHET_AVAILABLE", True):
+    with patch("app.shared.analysis.forecaster.Prophet", mock_prophet_class, create=True), \
+         patch("app.shared.analysis.forecaster.PROPHET_AVAILABLE", True):
         
         result = await SymbolicForecaster.forecast(history, days=5)
         

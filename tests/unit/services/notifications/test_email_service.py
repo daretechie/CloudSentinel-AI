@@ -4,7 +4,7 @@ Tests for EmailService - SMTP Notifications
 import pytest
 from unittest.mock import MagicMock, patch, AsyncMock
 from datetime import datetime, timezone
-from app.services.notifications.email_service import EmailService
+from app.modules.notifications.domain.email_service import EmailService
 
 
 @pytest.fixture
@@ -19,7 +19,7 @@ def email_service():
 
 
 def test_escape_html():
-    from app.services.notifications.email_service import escape_html
+    from app.modules.notifications.domain.email_service import escape_html
     assert escape_html("<script>") == "&lt;script&gt;"
 
 

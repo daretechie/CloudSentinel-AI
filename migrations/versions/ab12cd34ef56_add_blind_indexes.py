@@ -8,7 +8,7 @@ Create Date: 2026-01-14 23:25:00.000000
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.orm import Session
-from app.core.security import generate_blind_index
+from app.shared.core.security import generate_blind_index
 
 # revision identifiers, used by Alembic.
 revision = 'ab12cd34ef56'

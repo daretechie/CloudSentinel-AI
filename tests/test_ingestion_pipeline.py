@@ -12,7 +12,7 @@ from app.models.aws_connection import AWSConnection
 from app.models.tenant import Tenant
 from app.models.background_job import BackgroundJob, JobType, JobStatus
 from app.models.cloud import CostRecord as CostRecordModel
-from app.services.jobs.processor import JobProcessor, enqueue_job
+from app.modules.governance.domain.jobs.processor import JobProcessor, enqueue_job
 
 @pytest.mark.asyncio
 async def test_end_to_end_cost_ingestion_pipeline(db):
@@ -106,7 +106,7 @@ async def test_end_to_end_cost_ingestion_pipeline(db):
             
     mock_adapter.stream_cost_and_usage = mock_stream
 
-    with patch("app.services.adapters.factory.AdapterFactory.get_adapter", return_value=mock_adapter):
+    with patch("app.shared.adapters.factory.AdapterFactory.get_adapter", return_value=mock_adapter):
         # 3. Enqueue the job
         job = await enqueue_job(
             db=db,
@@ -151,7 +151,7 @@ async def test_end_to_end_cost_ingestion_pipeline(db):
             tenant_id=tenant.id
     )
     
-    with patch("app.services.adapters.factory.AdapterFactory.get_adapter", return_value=mock_adapter):
+    with patch("app.shared.adapters.factory.AdapterFactory.get_adapter", return_value=mock_adapter):
         await processor.process_pending_jobs(limit=1)
         
         result = await db.execute(

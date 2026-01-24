@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import MagicMock, patch, AsyncMock
-from app.services.zombies.aws_provider.detector import AWSZombieDetector
-from app.services.zombies.aws_provider.plugins import UnattachedVolumesPlugin
+from app.modules.optimization.domain.aws_provider.detector import AWSZombieDetector
+from app.modules.optimization.domain.aws_provider.plugins import UnattachedVolumesPlugin
 
 @pytest.fixture
 def mock_boto_session():

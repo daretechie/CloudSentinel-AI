@@ -1,0 +1,124 @@
+"""
+Reporting Domain Service
+Orchestrates cost ingestion, aggregation, and attribution.
+"""
+import structlog
+from typing import Dict, Any, List
+from datetime import datetime, timezone, timedelta
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+from app.shared.adapters.factory import AdapterFactory
+from app.modules.reporting.domain.persistence import CostPersistenceService
+from app.modules.reporting.domain.attribution_engine import AttributionEngine
+from app.models.aws_connection import AWSConnection
+from app.models.azure_connection import AzureConnection
+from app.models.gcp_connection import GCPConnection
+from app.models.cloud import CloudAccount
+
+logger = structlog.get_logger()
+
+class ReportingService:
+    def __init__(self, db: AsyncSession):
+        self.db = db
+
+    async def _get_all_connections(self, tenant_id: Any) -> List[Any]:
+        """Fetch all cloud connections for a tenant."""
+        connections = []
+        for model in [AWSConnection, AzureConnection, GCPConnection]:
+            q = await self.db.execute(select(model).where(model.tenant_id == tenant_id))
+            connections.extend(q.scalars().all())
+        return connections
+
+    async def ingest_costs_for_tenant(self, tenant_id: Any, days: int = 7) -> Dict[str, Any]:
+        """
+        Orchestrates multi-cloud cost ingestion and attribution.
+        """
+        connections = await self._get_all_connections(tenant_id)
+        if not connections:
+            return {"status": "skipped", "reason": "no_active_connections"}
+
+        persistence = CostPersistenceService(self.db)
+        results = []
+        
+        # 1. Sync CloudAccount registry
+        for conn in connections:
+            stmt = pg_insert(CloudAccount).values(
+                id=conn.id,
+                tenant_id=conn.tenant_id,
+                provider=conn.provider,
+                name=getattr(conn, "name", f"{conn.provider.upper()} Connection"),
+                credentials_encrypted="managed_by_connection_table",
+                is_active=True
+            ).on_conflict_do_update(
+                index_elements=['id'],
+                set_={
+                    "provider": conn.provider,
+                    "name": getattr(conn, "name", f"{conn.provider.upper()} Connection")
+                }
+            )
+            await self.db.execute(stmt)
+        await self.db.commit()
+
+        # 2. Ingest per connection
+        for conn in connections:
+            try:
+                adapter = AdapterFactory.get_adapter(conn)
+                end_date = datetime.now(timezone.utc)
+                start_date = end_date - timedelta(days=days)
+                
+                cost_stream = adapter.stream_cost_and_usage(
+                    start_date=start_date,
+                    end_date=end_date,
+                    granularity="HOURLY"
+                )
+                
+                records_ingested = 0
+                total_cost_acc = 0.0
+                
+                async def tracking_wrapper(stream):
+                    nonlocal records_ingested, total_cost_acc
+                    async for r in stream:
+                        records_ingested += 1
+                        total_cost_acc += float(r.get("cost_usd", 0) or 0)
+                        yield r
+
+                save_result = await persistence.save_records_stream(
+                    records=tracking_wrapper(cost_stream),
+                    tenant_id=str(conn.tenant_id),
+                    account_id=str(conn.id)
+                )
+                
+                conn.last_ingested_at = datetime.now(timezone.utc)
+                self.db.add(conn) 
+                
+                results.append({
+                    "connection_id": str(conn.id),
+                    "provider": conn.provider,
+                    "records_ingested": save_result.get("records_saved", 0),
+                    "total_cost": total_cost_acc
+                })
+                    
+            except Exception as e:
+                logger.error("cost_ingestion_failed", connection_id=str(conn.id), error=str(e))
+                results.append({"connection_id": str(conn.id), "status": "failed", "error": str(e)})
+
+        await self.db.commit()
+
+        # 3. Trigger Attribution
+        try:
+            attr_engine = AttributionEngine(self.db)
+            # Use current month for context
+            now = datetime.now(timezone.utc).date()
+            start_of_month = now.replace(day=1)
+            await attr_engine.apply_rules_to_tenant(tenant_id, start_date=start_of_month, end_date=now)
+            logger.info("attribution_applied_post_ingestion", tenant_id=str(tenant_id))
+        except Exception as e:
+            logger.error("attribution_trigger_failed", tenant_id=str(tenant_id), error=str(e))
+
+        return {
+            "status": "completed",
+            "connections_processed": len(connections),
+            "details": results
+        }

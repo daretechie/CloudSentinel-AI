@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { createSupabaseBrowserClient } from '$lib/supabase';
+	/* eslint-disable svelte/no-navigation-without-resolve */
 	import CloudLogo from '$lib/components/CloudLogo.svelte';
 
 	let { data } = $props();
@@ -12,7 +12,6 @@
 	let magicLink = $state('');
 	let cloudformationYaml = $state('');
 	let terraformHcl = $state('');
-	let permissionsSummary: string[] = $state([]);
 	let roleArn = $state('');
 	let awsAccountId = $state('');
 	let isManagementAccount = $state(false);
@@ -34,10 +33,10 @@
 	let success = $state(false);
 	let copied = $state(false);
 
+	import { base } from '$app/paths';
 	import { PUBLIC_API_URL } from '$env/static/public';
 
 	const API_URL = PUBLIC_API_URL || 'http://localhost:8000';
-	const supabase = createSupabaseBrowserClient();
 
 	// Get access token from server-loaded session (avoids getSession warning)
 	async function getAccessToken(): Promise<string | null> {
@@ -110,12 +109,12 @@
 				magicLink = data.magic_link;
 				cloudformationYaml = data.cloudformation_yaml;
 				terraformHcl = data.terraform_hcl;
-				permissionsSummary = data.permissions_summary || [];
 			} else {
 				cloudShellSnippet = data.snippet;
 			}
-		} catch (e: any) {
-			error = `Failed to initialize ${selectedProvider.toUpperCase()} setup: ${e.message}`;
+		} catch (e) {
+			const err = e as Error;
+			error = `Failed to initialize ${selectedProvider.toUpperCase()} setup: ${err.message}`;
 		} finally {
 			isLoading = false;
 		}
@@ -203,8 +202,9 @@
 				}
 
 				currentStep = 3; // Done
-			} catch (e: any) {
-				error = e.message;
+			} catch (e) {
+				const err = e as Error;
+				error = err.message;
 			} finally {
 				isVerifying = false;
 			}
@@ -253,8 +253,9 @@
 				}
 
 				currentStep = 3; // Done
-			} catch (e: any) {
-				error = e.message;
+			} catch (e) {
+				const err = e as Error;
+				error = err.message;
 			} finally {
 				isVerifying = false;
 			}
@@ -856,7 +857,7 @@
 			<h2>Connection Successful!</h2>
 			<p>Valdrix can now analyze your AWS costs and help you save money.</p>
 
-			<a href="/" class="primary-btn"> Go to Dashboard → </a>
+			<a href="{base}/" class="primary-btn"> Go to Dashboard → </a>
 		</div>
 	{/if}
 </div>

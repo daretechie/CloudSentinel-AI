@@ -11,7 +11,7 @@ Covers:
 import pytest
 from unittest.mock import patch
 
-from app.services.llm.circuit_breaker import (
+from app.shared.llm.circuit_breaker import (
     LLMCircuitBreaker,
     CircuitState,
     CircuitOpenError,
@@ -150,7 +150,7 @@ class TestLLMCircuitBreakerSingleton:
     def test_get_circuit_breaker_returns_singleton(self):
         """get_circuit_breaker should return same instance."""
         # Clear singleton for test
-        import app.services.llm.circuit_breaker as cb_module
+        import app.shared.llm.circuit_breaker as cb_module
         cb_module._circuit_breaker = None
         
         breaker1 = get_circuit_breaker()

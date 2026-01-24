@@ -9,10 +9,10 @@
 -->
 
 <script lang="ts">
-	import { PUBLIC_API_URL } from '$env/static/public';
+	/* eslint-disable svelte/no-navigation-without-resolve */
 	import { base } from '$app/paths';
-	import { createSupabaseBrowserClient } from '$lib/supabase';
-	import { AlertTriangle } from '@lucide/svelte';
+	import { AlertTriangle, Clock } from '@lucide/svelte';
+	import { PUBLIC_API_URL } from '$env/static/public';
 	import CloudLogo from '$lib/components/CloudLogo.svelte';
 	import { api } from '$lib/api';
 	import { goto } from '$app/navigation';
@@ -23,6 +23,9 @@
 	import SavingsHero from '$lib/components/SavingsHero.svelte';
 	import FindingsTable from '$lib/components/FindingsTable.svelte';
 	import CarbonImpact from '$lib/components/CarbonImpact.svelte';
+	import GreenOpsWidget from '$lib/components/GreenOpsWidget.svelte';
+	import CloudDistributionMatrix from '$lib/components/CloudDistributionMatrix.svelte';
+	import ROAChart from '$lib/components/ROAChart.svelte';
 
 	let { data } = $props();
 
@@ -190,7 +193,7 @@
 
 		<!-- CTA Buttons -->
 		<div class="fade-in-up flex flex-col sm:flex-row gap-4" style="animation-delay: 300ms;">
-			<a href="/auth/login" class="btn btn-primary text-base px-8 py-3 pulse-glow">
+			<a href="{base}/auth/login" class="btn btn-primary text-base px-8 py-3 pulse-glow">
 				Get Started Free →
 			</a>
 			<a href="#features" class="btn btn-secondary text-base px-8 py-3"> Learn More </a>
@@ -313,13 +316,23 @@
 				</div>
 			{/if}
 
-			<!-- Carbon Impact Section -->
-			<CarbonImpact {carbon} />
+			<!-- ESG & Multi-Cloud Matrix -->
+			<div class="grid gap-6 md:grid-cols-2 lg:grid-cols-2">
+				<GreenOpsWidget />
+				<CloudDistributionMatrix />
+			</div>
 
-			<!-- Cost Allocation Breakdown -->
-			{#if allocation && allocation.buckets && allocation.buckets.length > 0}
-				<AllocationBreakdown data={allocation} />
-			{/if}
+			<!-- Long-Term Value & Allocation -->
+			<div class="grid gap-6 md:grid-cols-1 lg:grid-cols-2">
+				<ROAChart />
+				{#if allocation && allocation.buckets && allocation.buckets.length > 0}
+					<AllocationBreakdown data={allocation} />
+				{:else}
+					<div class="glass-panel flex flex-col items-center justify-center text-ink-500">
+						<p>Cost Allocation data will appear here once attribution rules are defined.</p>
+					</div>
+				{/if}
+			</div>
 
 			<!-- Zombie Resources Table -->
 			{#if zombieCount > 0}
@@ -504,7 +517,9 @@
 											<div class="flex items-center gap-1.5">
 												<span class="badge badge-default">Idle EC2 ({ec2.instance_type})</span>
 												{#if ec2.is_gpu}
-													<span class="badge badge-error py-0 text-[9px] uppercase font-bold">GPU</span>
+													<span class="badge badge-error py-0 text-[9px] uppercase font-bold"
+														>GPU</span
+													>
 												{/if}
 											</div>
 										</td>

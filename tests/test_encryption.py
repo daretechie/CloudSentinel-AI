@@ -1,6 +1,6 @@
 import pytest
 from app.models.llm import LLMBudget
-from app.core.security import encrypt_string, decrypt_string, generate_new_key
+from app.shared.core.security import encrypt_string, decrypt_string, generate_new_key
 from uuid import uuid4
 from unittest.mock import patch
 
@@ -9,7 +9,7 @@ def test_encryption_decryption_utilities():
     plain_text = "sk-1234567890abcdef"
     
     # Use a stable key for the test
-    with patch('app.core.security.settings') as mock_settings:
+    with patch('app.shared.core.security.settings') as mock_settings:
         mock_settings.ENCRYPTION_KEY = generate_new_key()
         mock_settings.KDF_SALT = "test-salt"
         mock_settings.KDF_ITERATIONS = 1000
@@ -26,7 +26,7 @@ def test_encryption_with_different_keys():
     k2 = generate_new_key()
     
     # Encrypt with k1
-    with patch('app.core.security.get_settings') as mock_get:
+    with patch('app.shared.core.security.get_settings') as mock_get:
         mock_get.return_value.ENCRYPTION_KEY = k1
         mock_get.return_value.LEGACY_ENCRYPTION_KEYS = []
         mock_get.return_value.KDF_SALT = "test-salt"
@@ -35,7 +35,7 @@ def test_encryption_with_different_keys():
         assert decrypt_string(enc1) == plain
 
     # Try to decrypt with k2
-    with patch('app.core.security.get_settings') as mock_get:
+    with patch('app.shared.core.security.get_settings') as mock_get:
         mock_get.return_value.ENCRYPTION_KEY = k2
         mock_get.return_value.LEGACY_ENCRYPTION_KEYS = []
         mock_get.return_value.KDF_SALT = "test-salt"

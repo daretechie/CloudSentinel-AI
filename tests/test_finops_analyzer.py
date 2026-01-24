@@ -9,7 +9,7 @@ from decimal import Decimal
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage
 
-from app.services.llm.analyzer import FinOpsAnalyzer
+from app.shared.llm.analyzer import FinOpsAnalyzer
 from app.schemas.costs import CloudUsageSummary, CostRecord
 
 # Mock system prompt for tests
@@ -29,8 +29,8 @@ class TestAnalyze:
         mock_llm = MagicMock(spec=BaseChatModel)
         mock_llm.ainvoke = AsyncMock(return_value=AIMessage(content='{"insights":[],"zombie_resources":[],"recommendations":[],"summary":{"total_estimated_savings":"$0/month"}}'))
         
-        from app.services.llm.budget_manager import LLMBudgetManager
-        from app.services.analysis.forecaster import SymbolicForecaster
+        from app.shared.llm.budget_manager import LLMBudgetManager
+        from app.shared.analysis.forecaster import SymbolicForecaster
         
         mock_reserve = AsyncMock(return_value=Decimal("0.01"))
         mock_forecast = AsyncMock(return_value={"total_forecasted_cost": 0, "forecast": []})
@@ -51,10 +51,10 @@ class TestAnalyze:
                 records=[CostRecord(date=datetime.now(), amount=Decimal("100.0"), service="EC2")]
             )
             
-            from app.services.llm.usage_tracker import BudgetStatus
+            from app.shared.llm.usage_tracker import BudgetStatus
             with patch.object(LLMBudgetManager, "check_and_reserve", side_effect=mock_reserve):
                 with patch.object(SymbolicForecaster, "forecast", side_effect=mock_forecast):
-                    with patch("app.services.llm.usage_tracker.UsageTracker.check_budget", AsyncMock(return_value=BudgetStatus.OK)):
+                    with patch("app.shared.llm.usage_tracker.UsageTracker.check_budget", AsyncMock(return_value=BudgetStatus.OK)):
                         _ = await analyzer.analyze(usage_summary, tenant_id=tenant_id)
             
             mock_llm.ainvoke.assert_called_once()
@@ -69,8 +69,8 @@ class TestAnalyze:
         }
         mock_llm.ainvoke = AsyncMock(return_value=AIMessage(content=json.dumps(mock_response)))
         
-        from app.services.llm.budget_manager import LLMBudgetManager
-        from app.services.analysis.forecaster import SymbolicForecaster
+        from app.shared.llm.budget_manager import LLMBudgetManager
+        from app.shared.analysis.forecaster import SymbolicForecaster
         
         mock_reserve = AsyncMock(return_value=Decimal("0.05"))
         mock_forecast = AsyncMock(return_value={"total_forecasted_cost": 120, "forecast": []})
@@ -91,10 +91,10 @@ class TestAnalyze:
                 records=[CostRecord(date=datetime.now(), amount=Decimal("100.0"), service="EC2")]
             )
             
-            from app.services.llm.usage_tracker import BudgetStatus
+            from app.shared.llm.usage_tracker import BudgetStatus
             with patch.object(LLMBudgetManager, "check_and_reserve", side_effect=mock_reserve):
                 with patch.object(SymbolicForecaster, "forecast", side_effect=mock_forecast):
-                    with patch("app.services.llm.usage_tracker.UsageTracker.check_budget", AsyncMock(return_value=BudgetStatus.OK)):
+                    with patch("app.shared.llm.usage_tracker.UsageTracker.check_budget", AsyncMock(return_value=BudgetStatus.OK)):
                         result = await analyzer.analyze(usage_summary, tenant_id=tenant_id)
             
             assert "insights" in result
@@ -105,8 +105,8 @@ class TestAnalyze:
         mock_response = '```json\n{"insights":[],"zombie_resources":[],"recommendations":[],"summary":{"total_estimated_savings":"$0/month"}}\n```'
         mock_llm.ainvoke = AsyncMock(return_value=AIMessage(content=mock_response))
         
-        from app.services.llm.budget_manager import LLMBudgetManager
-        from app.services.analysis.forecaster import SymbolicForecaster
+        from app.shared.llm.budget_manager import LLMBudgetManager
+        from app.shared.analysis.forecaster import SymbolicForecaster
         
         mock_reserve = AsyncMock(return_value=Decimal("0.0"))
         mock_forecast = AsyncMock(return_value={"total_forecasted_cost": 0, "forecast": []})
@@ -127,10 +127,10 @@ class TestAnalyze:
                 records=[CostRecord(date=datetime.now(), amount=Decimal("100.0"), service="EC2")]
             )
             
-            from app.services.llm.usage_tracker import BudgetStatus
+            from app.shared.llm.usage_tracker import BudgetStatus
             with patch.object(LLMBudgetManager, "check_and_reserve", side_effect=mock_reserve):
                 with patch.object(SymbolicForecaster, "forecast", side_effect=mock_forecast):
-                    with patch("app.services.llm.usage_tracker.UsageTracker.check_budget", AsyncMock(return_value=BudgetStatus.OK)):
+                    with patch("app.shared.llm.usage_tracker.UsageTracker.check_budget", AsyncMock(return_value=BudgetStatus.OK)):
                         result = await analyzer.analyze(usage_summary, tenant_id=tenant_id)
             
             assert "insights" in result
@@ -139,8 +139,8 @@ class TestAnalyze:
         mock_llm = MagicMock(spec=BaseChatModel)
         mock_llm.ainvoke = AsyncMock(return_value=AIMessage(content="This is not valid JSON at all"))
         
-        from app.services.llm.budget_manager import LLMBudgetManager
-        from app.services.analysis.forecaster import SymbolicForecaster
+        from app.shared.llm.budget_manager import LLMBudgetManager
+        from app.shared.analysis.forecaster import SymbolicForecaster
         
         mock_reserve = AsyncMock(return_value=Decimal("0.0"))
         mock_forecast = AsyncMock(return_value={"total_forecasted_cost": 0, "forecast": []})
@@ -161,10 +161,10 @@ class TestAnalyze:
                 records=[CostRecord(date=datetime.now(), amount=Decimal("100.0"), service="EC2")]
             )
             
-            from app.services.llm.usage_tracker import BudgetStatus
+            from app.shared.llm.usage_tracker import BudgetStatus
             with patch.object(LLMBudgetManager, "check_and_reserve", side_effect=mock_reserve):
                 with patch.object(SymbolicForecaster, "forecast", side_effect=mock_forecast):
-                    with patch("app.services.llm.usage_tracker.UsageTracker.check_budget", AsyncMock(return_value=BudgetStatus.OK)):
+                    with patch("app.shared.llm.usage_tracker.UsageTracker.check_budget", AsyncMock(return_value=BudgetStatus.OK)):
                         result = await analyzer.analyze(usage_summary, tenant_id=tenant_id)
             assert result is not None
 
@@ -172,8 +172,8 @@ class TestAnalyze:
         mock_llm = MagicMock(spec=BaseChatModel)
         mock_llm.ainvoke = AsyncMock(return_value=AIMessage(content='{"insights":[],"zombie_resources":[],"recommendations":[],"summary":{"total_estimated_savings":"$0/month"}}'))
         
-        from app.services.llm.budget_manager import LLMBudgetManager
-        from app.services.analysis.forecaster import SymbolicForecaster
+        from app.shared.llm.budget_manager import LLMBudgetManager
+        from app.shared.analysis.forecaster import SymbolicForecaster
         
         mock_reserve = AsyncMock(return_value=Decimal("0.0"))
         mock_forecast = AsyncMock(return_value={"total_forecasted_cost": 0, "forecast": []})
@@ -194,10 +194,10 @@ class TestAnalyze:
                 records=[]
             )
             
-            from app.services.llm.usage_tracker import BudgetStatus
+            from app.shared.llm.usage_tracker import BudgetStatus
             with patch.object(LLMBudgetManager, "check_and_reserve", side_effect=mock_reserve):
                 with patch.object(SymbolicForecaster, "forecast", side_effect=mock_forecast):
-                    with patch("app.services.llm.usage_tracker.UsageTracker.check_budget", AsyncMock(return_value=BudgetStatus.OK)):
+                    with patch("app.shared.llm.usage_tracker.UsageTracker.check_budget", AsyncMock(return_value=BudgetStatus.OK)):
                         result = await analyzer.analyze(usage_summary, tenant_id=tenant_id)
             
             assert "recommendations" in result

@@ -2,7 +2,7 @@ import pytest
 import uuid
 from decimal import Decimal
 from app.models.tenant import Tenant, User
-from app.core.security import generate_blind_index
+from app.shared.core.security import generate_blind_index
 
 def test_blind_index_generation():
     email = "test@example.com"

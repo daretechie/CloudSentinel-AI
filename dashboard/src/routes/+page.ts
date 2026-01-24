@@ -75,7 +75,8 @@ export const load: PageLoad = async ({ fetch, parent, url }) => {
 			endDate,
 			provider
 		};
-	} catch (err: any) {
+	} catch (err) {
+		const e = err as Error;
 		return {
 			costs: null,
 			carbon: null,
@@ -85,7 +86,7 @@ export const load: PageLoad = async ({ fetch, parent, url }) => {
 			freshness: null,
 			startDate,
 			endDate,
-			error: err.message
+			error: e.message
 		};
 	}
 };

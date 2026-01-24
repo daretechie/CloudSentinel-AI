@@ -3,8 +3,8 @@ from unittest.mock import MagicMock, patch, AsyncMock
 
 from uuid import uuid4
 from decimal import Decimal
-from app.services.llm.usage_tracker import UsageTracker
-from app.core.exceptions import BudgetExceededError
+from app.shared.llm.usage_tracker import UsageTracker
+from app.shared.core.exceptions import BudgetExceededError
 
 @pytest.mark.asyncio
 async def test_budget_reproduction_fail_closed(db):
@@ -28,7 +28,7 @@ async def test_budget_reproduction_fail_closed(db):
     await db.execute(sa.text(f"SELECT set_config('app.current_tenant_id', '{tenant_id}', true)"))
     
     # Mock cache to raise an error
-    with patch("app.services.llm.usage_tracker.get_cache_service") as mock_cache_service:
+    with patch("app.shared.llm.usage_tracker.get_cache_service") as mock_cache_service:
         cache_mock = MagicMock()
         cache_mock.enabled = True
         cache_mock.client.get = AsyncMock(side_effect=Exception("Redis Connection Time-out"))
@@ -64,7 +64,7 @@ async def test_budget_allowed_when_healthy(db):
     await db.execute(sa.text(f"SELECT set_config('app.current_tenant_id', '{tenant_id}', true)"))
     
     # Mock cache to be healthy but empty
-    with patch("app.services.llm.usage_tracker.get_cache_service") as mock_cache_service:
+    with patch("app.shared.llm.usage_tracker.get_cache_service") as mock_cache_service:
         cache_mock = MagicMock()
         cache_mock.enabled = True
         cache_mock.client.get = AsyncMock(return_value=None)

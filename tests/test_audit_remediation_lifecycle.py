@@ -6,8 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.remediation import RemediationRequest, RemediationStatus, RemediationAction
 from app.models.tenant import Tenant, User
-from app.services.security.audit_log import AuditLog
-from app.services.zombies.service import ZombieService
+from app.modules.governance.domain.security.audit_log import AuditLog
+from app.modules.optimization.domain.service import ZombieService
 
 @pytest.mark.asyncio
 async def test_remediation_lifecycle_audit(db: AsyncSession):

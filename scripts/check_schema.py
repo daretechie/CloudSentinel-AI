@@ -1,6 +1,6 @@
 import asyncio
 from sqlalchemy import select
-from app.db.session import async_session_maker
+from app.shared.db.session import async_session_maker
 from app.models.aws_connection import AWSConnection
 from app.models.tenant import Tenant, User
 from app.models.cloud import CloudAccount, CostRecord

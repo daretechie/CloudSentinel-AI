@@ -12,9 +12,9 @@ Tests cover:
 import pytest
 from unittest.mock import AsyncMock
 
-from app.services.zombies.detector import ZombieDetector
-from app.services.zombies.zombie_plugin import ZombiePlugin, ESTIMATED_COSTS
-from app.services.zombies.aws_provider.plugins import (
+from app.modules.optimization.domain.detector import ZombieDetector
+from app.modules.optimization.domain.zombie_plugin import ZombiePlugin, ESTIMATED_COSTS
+from app.modules.optimization.domain.aws_provider.plugins import (
     UnattachedVolumesPlugin, OldSnapshotsPlugin, IdleS3BucketsPlugin,
     UnusedElasticIpsPlugin, IdleInstancesPlugin,
     OrphanLoadBalancersPlugin, UnderusedNatGatewaysPlugin,

@@ -4,7 +4,7 @@ from decimal import Decimal
 from sqlalchemy import String, Numeric, DateTime, Date, ForeignKeyConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID
-from app.db.base import Base
+from app.shared.db.base import Base
 
 class CostAuditLog(Base):
     """

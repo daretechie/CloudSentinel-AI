@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch, AsyncMock
 from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid import uuid4
-from app.services.llm.factory import LLMFactory
+from app.shared.llm.factory import LLMFactory
 
 class AsyncContextManagerMock:
     def __init__(self, return_value):
@@ -27,8 +27,8 @@ class AsyncIterator:
 @pytest.mark.asyncio
 async def test_llm_factory_byok_priority():
     """Verify that LLMFactory prioritizes provide API key over global settings."""
-    with patch('app.services.llm.factory.ChatOpenAI') as mock_openai:
-        with patch('app.services.llm.factory.get_settings') as mock_settings:
+    with patch('app.shared.llm.factory.ChatOpenAI') as mock_openai:
+        with patch('app.shared.llm.factory.get_settings') as mock_settings:
             mock_settings.return_value.OPENAI_API_KEY = "sk-" + "a" * 32
             mock_settings.return_value.OPENAI_MODEL = "gpt-4o"
             
@@ -56,7 +56,7 @@ async def test_llm_factory_byok_priority():
 @pytest.mark.asyncio
 async def test_scheduler_concurrency():
     """Verify that Scheduler runs tenants in parallel with semaphore limit."""
-    from app.services.scheduler.orchestrator import SchedulerService
+    from app.modules.governance.domain.scheduler.orchestrator import SchedulerService
     
     # Mock DB session and tenants (mock 15 tenants)
     mock_db = MagicMock(spec=AsyncSession)
@@ -77,13 +77,13 @@ async def test_scheduler_concurrency():
     
     scheduler = SchedulerService(session_maker=mock_session_maker)
     
-    with patch('app.services.scheduler.orchestrator.sa.select'):
+    with patch('app.modules.governance.domain.scheduler.orchestrator.sa.select'):
         mock_result = MagicMock()
         mock_result.scalars.return_value.all.return_value = mock_tenants
         mock_db.execute.return_value = mock_result
         
-        with patch('app.services.scheduler.orchestrator.set_correlation_id'):
-            with patch('app.services.scheduler.processors.ZombieDetector') as mock_detector:
+        with patch('app.modules.governance.domain.scheduler.orchestrator.set_correlation_id'):
+            with patch('app.modules.governance.domain.scheduler.processors.ZombieDetector') as mock_detector:
                 detector_instance = mock_detector.return_value
                 detector_instance.scan_all = AsyncMock(side_effect=slow_analysis)
                 

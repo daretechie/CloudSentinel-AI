@@ -2,7 +2,7 @@ import pytest
 from uuid import uuid4
 from httpx import AsyncClient
 from app.main import app
-from app.core.auth import get_current_user, CurrentUser
+from app.shared.core.auth import get_current_user, CurrentUser
 from datetime import datetime, timezone
 from app.models.tenant import Tenant
 from app.models.background_job import BackgroundJob, JobStatus

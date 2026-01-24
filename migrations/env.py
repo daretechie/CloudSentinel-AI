@@ -7,7 +7,7 @@ from sqlalchemy.engine import Connection
 from alembic import context
 import ssl
 
-from app.db.base import Base
+from app.shared.db.base import Base
 # Import all models so Base knows about them!
 from app.models.llm import LLMUsage, LLMBudget  # noqa: F401 # pylint: disable=unused-import
 from app.models.carbon_settings import CarbonSettings  # noqa: F401 # pylint: disable=unused-import
@@ -27,7 +27,7 @@ from app.services.security.audit_log import AuditLog  # noqa: F401 # pylint: dis
 from app.models.attribution import AttributionRule, CostAllocation  # noqa: F401 # pylint: disable=unused-import
 from app.models.anomaly_marker import AnomalyMarker  # noqa: F401 # pylint: disable=unused-import
 
-from app.core.config import get_settings
+from app.shared.core.config import get_settings
 from sqlalchemy.ext.asyncio import create_async_engine
 
 

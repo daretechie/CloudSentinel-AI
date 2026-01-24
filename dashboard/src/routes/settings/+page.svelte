@@ -9,14 +9,13 @@
 -->
 
 <script lang="ts">
+	/* eslint-disable svelte/no-navigation-without-resolve */
 	import { PUBLIC_API_URL } from '$env/static/public';
-	import { createSupabaseBrowserClient } from '$lib/supabase';
+	import { base } from '$app/paths';
 	import { api } from '$lib/api';
 	import { z } from 'zod';
 
 	let { data } = $props();
-
-	const supabase = createSupabaseBrowserClient();
 
 	let loading = $state(true);
 	let saving = $state(false);
@@ -72,11 +71,12 @@
 			}
 			success = 'General settings saved!';
 			setTimeout(() => (success = ''), 3000);
-		} catch (e: any) {
+		} catch (e) {
 			if (e instanceof z.ZodError) {
 				error = e.issues.map((err: z.ZodIssue) => err.message).join(', ');
 			} else {
-				error = e.message;
+				const err = e as Error;
+				error = err.message;
 			}
 		} finally {
 			saving = false;
@@ -148,8 +148,9 @@
 
 			success = 'Test notification sent to Slack!';
 			setTimeout(() => (success = ''), 3000);
-		} catch (e: any) {
-			error = e.message;
+		} catch (e) {
+			const err = e as Error;
+			error = err.message;
 		} finally {
 			testing = false;
 		}
@@ -174,8 +175,8 @@
 			if (res.ok) {
 				carbonSettings = await res.json();
 			}
-		} catch (e: any) {
-			console.error('Failed to load carbon settings:', e);
+		} catch (error_un) {
+			console.error('Failed to load carbon settings:', error_un);
 		} finally {
 			loadingCarbon = false;
 		}
@@ -207,13 +208,14 @@
 
 			success = 'Carbon settings saved successfully!';
 			setTimeout(() => (success = ''), 3000);
-		} catch (e: any) {
+		} catch (e) {
 			if (e instanceof z.ZodError) {
 				error = e.issues
 					.map((err: z.ZodIssue) => `${err.path.join('.')}: ${err.message}`)
 					.join(', ');
 			} else {
-				error = e.message;
+				const err = e as Error;
+				error = err.message;
 			}
 		} finally {
 			savingCarbon = false;
@@ -239,8 +241,8 @@
 			if (res.ok) {
 				llmSettings = await res.json();
 			}
-		} catch (e: any) {
-			console.error('Failed to load LLM settings:', e);
+		} catch (error_un) {
+			console.error('Failed to load LLM settings:', error_un);
 		} finally {
 			loadingLLM = false;
 		}
@@ -290,13 +292,14 @@
 
 			success = 'AI strategy settings saved!';
 			setTimeout(() => (success = ''), 3000);
-		} catch (e: any) {
+		} catch (e) {
 			if (e instanceof z.ZodError) {
 				error = e.issues
 					.map((err: z.ZodIssue) => `${err.path.join('.')}: ${err.message}`)
 					.join(', ');
 			} else {
-				error = e.message;
+				const err = e as Error;
+				error = err.message;
 			}
 		} finally {
 			savingLLM = false;
@@ -311,8 +314,8 @@
 			if (res.ok) {
 				activeOpsSettings = await res.json();
 			}
-		} catch (e: any) {
-			console.error('Failed to load ActiveOps settings:', e);
+		} catch (error_un) {
+			console.error('Failed to load ActiveOps settings:', error_un);
 		} finally {
 			loadingActiveOps = false;
 		}
@@ -343,13 +346,14 @@
 
 			success = 'ActiveOps / Auto-Pilot settings saved!';
 			setTimeout(() => (success = ''), 3000);
-		} catch (e: any) {
+		} catch (e) {
 			if (e instanceof z.ZodError) {
 				error = e.issues
 					.map((err: z.ZodIssue) => `${err.path.join('.')}: ${err.message}`)
 					.join(', ');
 			} else {
-				error = e.message;
+				const err = e as Error;
+				error = err.message;
 			}
 		} finally {
 			savingActiveOps = false;
@@ -388,7 +392,8 @@
 	{#if !data.user}
 		<div class="card text-center py-12">
 			<p class="text-ink-400">
-				Please <a href="/auth/login" class="text-accent-400 hover:underline">sign in</a> to manage settings.
+				Please <a href="{base}/auth/login" class="text-accent-400 hover:underline">sign in</a> to manage
+				settings.
 			</p>
 		</div>
 	{:else if loading}
@@ -430,9 +435,9 @@
 
 			{#if !['growth', 'pro', 'enterprise', 'trial'].includes(data.subscription?.tier)}
 				<div class="absolute inset-0 z-10 flex items-center justify-center bg-transparent">
-					<a href="/billing" class="btn btn-primary shadow-lg pointer-events-auto"
-						>Upgrade to Unlock GreenOps</a
-					>
+					<a href="{base}/billing" class="btn btn-primary shadow-lg pointer-events-auto">
+						Upgrade to Unlock GreenOps
+					</a>
 				</div>
 			{/if}
 
@@ -578,7 +583,7 @@
 								class="select"
 								aria-label="Preferred AI model"
 							>
-								{#each providerModels[llmSettings.preferred_provider as keyof typeof providerModels] as model}
+								{#each providerModels[llmSettings.preferred_provider as keyof typeof providerModels] as model (model)}
 									<option value={model}>{model}</option>
 								{/each}
 							</select>
@@ -738,9 +743,9 @@
 
 			{#if !['pro', 'enterprise'].includes(data.subscription?.tier)}
 				<div class="absolute inset-0 z-10 flex items-center justify-center bg-transparent">
-					<a href="/billing" class="btn btn-primary shadow-lg pointer-events-auto"
-						>Upgrade to Unlock Auto-Pilot</a
-					>
+					<a href="{base}/billing" class="btn btn-primary shadow-lg pointer-events-auto">
+						Upgrade to Unlock Auto-Pilot
+					</a>
 				</div>
 			{/if}
 
@@ -888,7 +893,7 @@
 							>
 								{#each Array(24)
 									.fill(0)
-									.map((_, i) => i) as h}
+									.map((_, i) => i) as h (h)}
 									<option value={h}>{h.toString().padStart(2, '0')}:00</option>
 								{/each}
 							</select>
@@ -901,7 +906,7 @@
 								class="select"
 								aria-label="Digest delivery minute"
 							>
-								{#each [0, 15, 30, 45] as m}
+								{#each [0, 15, 30, 45] as m (m)}
 									<option value={m}>:{m.toString().padStart(2, '0')}</option>
 								{/each}
 							</select>

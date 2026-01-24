@@ -8,6 +8,7 @@
 -->
 
 <script lang="ts">
+	/* eslint-disable svelte/no-navigation-without-resolve */
 	import { base } from '$app/paths';
 	import { goto } from '$app/navigation';
 
@@ -66,8 +67,8 @@
 	{#if !data.user}
 		<div class="card text-center py-12">
 			<p class="text-ink-400">
-				Please <a href="{base}/auth/login" class="text-accent-400 hover:underline">sign in</a> to
-				view leaderboards.
+				Please <a href="{base}/auth/login" class="text-accent-400 hover:underline">sign in</a> to view
+				leaderboards.
 			</p>
 		</div>
 	{:else if loading}

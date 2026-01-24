@@ -10,7 +10,7 @@ from sqlalchemy import String, Integer, Float, Boolean, ForeignKey, DateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
-from app.db.base import Base
+from app.shared.db.base import Base
 
 
 class CarbonSettings(Base):

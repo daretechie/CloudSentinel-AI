@@ -3,8 +3,8 @@ import asyncio
 from unittest.mock import MagicMock, AsyncMock, patch, call
 from uuid import uuid4
 from datetime import datetime, timezone
-from app.services.scheduler.orchestrator import SchedulerService
-from app.services.scheduler.cohorts import TenantCohort
+from app.modules.governance.domain.scheduler.orchestrator import SchedulerService
+from app.modules.governance.domain.scheduler.cohorts import TenantCohort
 from app.models.tenant import Tenant
 
 @pytest.mark.asyncio

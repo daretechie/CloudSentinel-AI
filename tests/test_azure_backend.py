@@ -4,7 +4,7 @@ from uuid import uuid4
 from datetime import datetime, timezone
 from fastapi import HTTPException
 
-from app.services.connections.azure import AzureConnectionService
+from app.shared.connections.azure import AzureConnectionService
 from app.models.azure_connection import AzureConnection
 
 @pytest.mark.asyncio
@@ -23,7 +23,7 @@ async def test_azure_verify_connection_success():
     result_mock.scalar_one_or_none.return_value = mock_connection
     db.execute.return_value = result_mock
 
-    with patch("app.services.connections.azure.AzureAdapter") as MockAdapter:
+    with patch("app.shared.connections.azure.AzureAdapter") as MockAdapter:
         mock_adapter_instance = MockAdapter.return_value
         mock_adapter_instance.verify_connection = AsyncMock(return_value=True)
 
@@ -51,7 +51,7 @@ async def test_azure_verify_connection_failure():
     result_mock.scalar_one_or_none.return_value = mock_connection
     db.execute.return_value = result_mock
 
-    with patch("app.services.connections.azure.AzureAdapter") as MockAdapter:
+    with patch("app.shared.connections.azure.AzureAdapter") as MockAdapter:
         mock_adapter_instance = MockAdapter.return_value
         mock_adapter_instance.verify_connection = AsyncMock(return_value=False)
 

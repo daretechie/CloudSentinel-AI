@@ -28,7 +28,7 @@ async def test_remediation_rate_limiting():
     
     Verifies that remediation has rate limits to prevent runaway deletions.
     """
-    from app.core.rate_limit import check_remediation_rate_limit, _remediation_counts
+    from app.shared.core.rate_limit import check_remediation_rate_limit, _remediation_counts
     
     # Clear any existing state
     _remediation_counts.clear()
@@ -67,7 +67,7 @@ async def test_large_query_hits_limit():
     
     Verifies that queries are bounded and don't crash the system.
     """
-    from app.core.config import get_settings
+    from app.shared.core.config import get_settings
     
     settings = get_settings()
     
@@ -84,7 +84,7 @@ async def test_statement_timeout_configured():
     
     Verifies that statement_timeout is set in database configuration.
     """
-    from app.core.config import get_settings
+    from app.shared.core.config import get_settings
     
     settings = get_settings()
     
@@ -159,7 +159,7 @@ async def test_attribution_engine_exists():
     
     Verifies the AttributionEngine class exists and has required methods.
     """
-    from app.services.costs.attribution_engine import AttributionEngine
+    from app.modules.reporting.domain.attribution_engine import AttributionEngine
     
     # Verify class exists
     assert AttributionEngine is not None
@@ -197,7 +197,7 @@ async def test_rls_policies_are_enforced():
     assert hasattr(CostRecord, 'tenant_id'), "CostRecord must have tenant_id for RLS"
     
     # Check that we have RLS enforcement in the session module
-    from app.db.session import check_rls_policy
+    from app.shared.db.session import check_rls_policy
     assert callable(check_rls_policy), "RLS enforcement function should exist"
 
 
@@ -208,7 +208,7 @@ async def test_grace_period_remediation():
     
     Verifies that remediation service implements grace periods.
     """
-    from app.services.zombies.remediation_service import RemediationService
+    from app.modules.optimization.domain.remediation_service import RemediationService
     from app.models.remediation import RemediationStatus
     
     # Mock database session
@@ -244,7 +244,7 @@ async def test_llm_budget_enforcement():
     
     Verifies that LLM usage has budget controls.
     """
-    from app.services.llm.usage_tracker import UsageTracker
+    from app.shared.llm.usage_tracker import UsageTracker
     
     # Verify budget check methods exist
     assert hasattr(UsageTracker, 'check_budget'), "UsageTracker should have check_budget method"
@@ -263,7 +263,7 @@ async def test_attribution_rule_s3_split_60_40(db):
     
     Verifies that attribution rules correctly split costs between teams.
     """
-    from app.services.costs.attribution_engine import AttributionEngine
+    from app.modules.reporting.domain.attribution_engine import AttributionEngine
     from app.models.tenant import Tenant
     from app.models.cloud import CostRecord, CloudAccount
     from app.models.attribution import AttributionRule, CostAllocation

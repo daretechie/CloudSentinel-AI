@@ -6,10 +6,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import UUID, uuid4
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.background_job import BackgroundJob
-from app.services.jobs.handlers.zombie import ZombieScanHandler
-from app.services.jobs.handlers.notifications import NotificationHandler, WebhookRetryHandler
-from app.services.jobs.handlers.remediation import RemediationHandler
-from app.services.jobs.handlers.finops import FinOpsAnalysisHandler
+from app.modules.governance.domain.jobs.handlers.zombie import ZombieScanHandler
+from app.modules.governance.domain.jobs.handlers.notifications import NotificationHandler, WebhookRetryHandler
+from app.modules.governance.domain.jobs.handlers.remediation import RemediationHandler
+from app.modules.governance.domain.jobs.handlers.finops import FinOpsAnalysisHandler
 
 
 @pytest.fixture
@@ -63,7 +63,7 @@ async def test_zombie_scan_handler_success(mock_db, sample_job):
     mock_db.execute.side_effect = [mock_aws_result, mock_empty_result, mock_empty_result]
     
     # Mock detector and factory
-    with patch("app.services.zombies.factory.ZombieDetectorFactory.get_detector") as mock_factory:
+    with patch("app.modules.optimization.domain.factory.ZombieDetectorFactory.get_detector") as mock_factory:
         mock_detector = AsyncMock()
         mock_detector.provider_name = "aws"
         mock_detector.scan_all.return_value = {
@@ -87,7 +87,7 @@ async def test_notification_handler_success(mock_db, sample_job):
     handler = NotificationHandler()
     sample_job.payload = {"message": "Hello", "title": "Test Title"}
     
-    with patch("app.services.notifications.get_slack_service") as mock_get_slack:
+    with patch("app.modules.notifications.domain.get_slack_service") as mock_get_slack:
         mock_slack = AsyncMock()
         mock_slack.send_alert.return_value = True
         mock_get_slack.return_value = mock_slack
@@ -116,7 +116,7 @@ async def test_webhook_retry_handler_paystack(mock_db, sample_job):
     handler = WebhookRetryHandler()
     sample_job.payload = {"provider": "paystack"}
     
-    with patch("app.services.billing.webhook_retry.process_paystack_webhook") as mock_process:
+    with patch("app.modules.reporting.domain.billing.webhook_retry.process_paystack_webhook") as mock_process:
         mock_process.return_value = {"status": "completed"}
         
         result = await handler.execute(sample_job, mock_db)
@@ -155,7 +155,7 @@ async def test_remediation_handler_targeted(mock_db, sample_job):
     request_id = str(uuid4())
     sample_job.payload = {"request_id": request_id}
     
-    with patch("app.services.zombies.remediation_service.RemediationService") as mock_service_cls:
+    with patch("app.modules.optimization.domain.remediation_service.RemediationService") as mock_service_cls:
         mock_service = AsyncMock()
         mock_result = MagicMock()
         mock_result.id = UUID(request_id)
@@ -186,12 +186,12 @@ async def test_remediation_handler_autonomous_sweep(mock_db, sample_job):
     mock_result.scalar_one_or_none.return_value = mock_conn
     mock_db.execute.return_value = mock_result
     
-    with patch("app.services.adapters.aws_multitenant.MultiTenantAWSAdapter") as mock_adapter_cls:
+    with patch("app.shared.adapters.aws_multitenant.MultiTenantAWSAdapter") as mock_adapter_cls:
         mock_adapter = AsyncMock()
         mock_adapter.get_credentials.return_value = {"key": "val"}
         mock_adapter_cls.return_value = mock_adapter
         
-        with patch("app.services.remediation.autonomous.AutonomousRemediationEngine") as mock_engine_cls:
+        with patch("app.shared.remediation.autonomous.AutonomousRemediationEngine") as mock_engine_cls:
             mock_engine = AsyncMock()
             mock_engine.run_autonomous_sweep.return_value = {
                 "mode": "dry_run",
@@ -219,17 +219,17 @@ async def test_finops_analysis_handler_success(mock_db, sample_job):
     mock_result.scalar_one_or_none.return_value = mock_conn
     mock_db.execute.return_value = mock_result
     
-    with patch("app.services.adapters.aws_multitenant.MultiTenantAWSAdapter") as mock_adapter_cls:
+    with patch("app.shared.adapters.aws_multitenant.MultiTenantAWSAdapter") as mock_adapter_cls:
         mock_adapter = AsyncMock()
         mock_adapter.get_daily_costs.return_value = MagicMock()
         mock_adapter_cls.return_value = mock_adapter
         
-        with patch("app.services.llm.analyzer.FinOpsAnalyzer") as mock_analyzer_cls:
+        with patch("app.shared.llm.analyzer.FinOpsAnalyzer") as mock_analyzer_cls:
             mock_analyzer = AsyncMock()
             mock_analyzer.analyze.return_value = "Long analysis text"
             mock_analyzer_cls.return_value = mock_analyzer
             
-            with patch("app.services.llm.factory.LLMFactory.create") as mock_create:
+            with patch("app.shared.llm.factory.LLMFactory.create") as mock_create:
                 mock_create.return_value = MagicMock()
                 
                 result = await handler.execute(sample_job, mock_db)

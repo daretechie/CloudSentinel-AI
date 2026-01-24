@@ -4,9 +4,9 @@ from datetime import date, timedelta
 from unittest.mock import AsyncMock, patch
 from decimal import Decimal
 
-from app.services.adapters.gcp import GCPAdapter
-from app.services.adapters.azure import AzureAdapter
-from app.services.costs.attribution_engine import AttributionEngine
+from app.shared.adapters.gcp import GCPAdapter
+from app.shared.adapters.azure import AzureAdapter
+from app.modules.reporting.domain.attribution_engine import AttributionEngine
 from app.models.cloud import CostRecord
 
 @pytest.mark.asyncio

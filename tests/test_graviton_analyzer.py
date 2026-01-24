@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import MagicMock, patch, AsyncMock
-from app.services.carbon.graviton_analyzer import GravitonAnalyzer
+from app.modules.reporting.domain.graviton_analyzer import GravitonAnalyzer
 
 class AsyncIterator:
     def __init__(self, items):

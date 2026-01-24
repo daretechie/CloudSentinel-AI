@@ -6,7 +6,7 @@ from decimal import Decimal
 from sqlalchemy import select, func
 from app.models.cloud import CostRecord, CloudAccount
 from app.schemas.costs import CloudUsageSummary, CostRecord as CostRecordSchema
-from app.services.costs.persistence import CostPersistenceService
+from app.modules.reporting.domain.persistence import CostPersistenceService
 
 @pytest.mark.asyncio
 async def test_cost_persistence_idempotency(db):

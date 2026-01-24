@@ -8,7 +8,7 @@ Tests:
 """
 
 
-from app.services.carbon.calculator import CarbonCalculator
+from app.modules.reporting.domain.calculator import CarbonCalculator
 
 
 class TestCarbonCalculatorInitialization:

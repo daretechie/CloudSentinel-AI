@@ -9,15 +9,14 @@
 -->
 
 <script lang="ts">
+	/* eslint-disable svelte/no-navigation-without-resolve */
 	import { PUBLIC_API_URL } from '$env/static/public';
-	import { createSupabaseBrowserClient } from '$lib/supabase';
+	import { base } from '$app/paths';
 	import { goto } from '$app/navigation';
 
 	import { onMount } from 'svelte';
 
 	let { data } = $props();
-
-	const supabase = createSupabaseBrowserClient();
 
 	let billingCycle = $state('monthly'); // 'monthly' or 'annual'
 	let upgrading = $state(''); // plan ID being upgraded to
@@ -79,7 +78,7 @@
 
 		// If not logged in, redirect to signup
 		if (!data.user) {
-			goto(`/auth/signup?plan=${planId}&cycle=${billingCycle}`);
+			goto(`${base}/auth/signup?plan=${planId}&cycle=${billingCycle}`);
 			return;
 		}
 
@@ -108,17 +107,10 @@
 
 			const { checkout_url } = await res.json();
 			window.location.href = checkout_url;
-		} catch (e: any) {
-			error = e.message;
+		} catch (e) {
+			const err = e as Error;
+			error = err.message;
 			upgrading = '';
-		}
-	}
-
-	function startTrial() {
-		if (!data.user) {
-			goto('/auth/signup?trial=true');
-		} else {
-			goto('/');
 		}
 	}
 </script>
@@ -165,7 +157,7 @@
 
 	<!-- Pricing Grid -->
 	<div class="pricing-grid">
-		{#each plans as plan, i}
+		{#each plans as plan, i (plan.id)}
 			<div
 				class="pricing-card {plan.popular ? 'popular' : ''}"
 				style="animation-delay: {i * 100}ms;"
@@ -190,7 +182,7 @@
 				</div>
 
 				<ul class="feature-list">
-					{#each plan.features as feature}
+					{#each plan.features as feature (feature)}
 						<li>
 							<span class="check-icon">✓</span>
 							{feature}

@@ -3,7 +3,7 @@ from datetime import datetime, timezone, timedelta
 from sqlalchemy import String, Boolean, DateTime, Text
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.dialects.postgresql import UUID
-from app.db.base import Base
+from app.shared.db.base import Base
 
 # BE-CONN-2: Default key rotation period
 KEY_ROTATION_DAYS = 30

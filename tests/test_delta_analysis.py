@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock, patch
 from datetime import date
 from uuid import uuid4
 
-from app.services.llm.delta_analysis import (
+from app.shared.llm.delta_analysis import (
     CostDelta,
     DeltaAnalysisResult,
     DeltaAnalysisService,
@@ -243,7 +243,7 @@ class TestAnalyzeWithDelta:
         mock_cache = AsyncMock()
         mock_cache.get_analysis = AsyncMock(return_value=cached_result)
         
-        with patch('app.services.llm.delta_analysis.get_cache_service', return_value=mock_cache):
+        with patch('app.shared.llm.delta_analysis.get_cache_service', return_value=mock_cache):
             mock_analyzer = AsyncMock()
             
             result = await analyze_with_delta(
@@ -265,7 +265,7 @@ class TestAnalyzeWithDelta:
         mock_cache.get_analysis = AsyncMock(return_value=None)
         mock_cache.set_analysis = AsyncMock()
         
-        with patch('app.services.llm.delta_analysis.get_cache_service', return_value=mock_cache):
+        with patch('app.shared.llm.delta_analysis.get_cache_service', return_value=mock_cache):
             mock_analyzer = AsyncMock()
             
             # Empty costs = no changes

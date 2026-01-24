@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import MagicMock
-from app.services.zombies.gcp_provider.plugins.unattached_disks import GCPUnattachedDisksPlugin
+from app.modules.optimization.domain.gcp_provider.plugins.unattached_disks import GCPUnattachedDisksPlugin
 
 @pytest.fixture
 def plugin():

@@ -2,7 +2,7 @@ import pytest
 from unittest.mock import MagicMock, patch, AsyncMock
 from uuid import uuid4
 from fastapi import HTTPException
-from app.services.connections.aws import AWSConnectionService
+from app.shared.connections.aws import AWSConnectionService
 from app.models.aws_connection import AWSConnection
 
 @pytest.mark.asyncio

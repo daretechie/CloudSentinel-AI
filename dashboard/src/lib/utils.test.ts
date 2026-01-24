@@ -1,3 +1,4 @@
+/* eslint-disable no-constant-binary-expression */
 import { describe, it, expect } from 'vitest';
 import { cn } from './utils';
 
@@ -7,7 +8,7 @@ describe('cn utility', () => {
 	});
 
 	it('handles conditional classes', () => {
-		expect(cn('btn', true && 'active', false && 'hidden')).toBe('btn active');
+		expect(cn('btn', 1 > 0 && 'active', 1 < 0 && 'hidden')).toBe('btn active');
 	});
 
 	it('resolves tailwind conflicts', () => {

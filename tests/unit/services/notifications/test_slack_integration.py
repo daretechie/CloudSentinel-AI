@@ -3,7 +3,7 @@ Tests for SlackService - Notification Coverage
 """
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-from app.services.notifications.slack import SlackService, get_slack_service
+from app.modules.notifications.domain.slack import SlackService, get_slack_service
 
 
 class TestSlackService:
@@ -139,7 +139,7 @@ class TestGetSlackService:
 
     def test_returns_none_when_not_configured(self):
         """Test factory returns None when Slack is not configured."""
-        with patch("app.core.config.get_settings") as mock_settings:
+        with patch("app.shared.core.config.get_settings") as mock_settings:
             mock_settings.return_value = MagicMock(
                 SLACK_BOT_TOKEN=None,
                 SLACK_CHANNEL_ID=None
@@ -150,7 +150,7 @@ class TestGetSlackService:
 
     def test_returns_service_when_configured(self):
         """Test factory returns SlackService when configured."""
-        with patch("app.core.config.get_settings") as mock_settings:
+        with patch("app.shared.core.config.get_settings") as mock_settings:
             mock_settings.return_value = MagicMock(
                 SLACK_BOT_TOKEN="xoxb-test-token",
                 SLACK_CHANNEL_ID="#test-channel"

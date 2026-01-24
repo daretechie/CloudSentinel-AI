@@ -8,20 +8,30 @@
 -->
 
 <script lang="ts">
+	/* eslint-disable svelte/no-navigation-without-resolve */
 	import { PUBLIC_API_URL } from '$env/static/public';
-	import { createSupabaseBrowserClient } from '$lib/supabase';
+	import { base } from '$app/paths';
 
 	let { data } = $props();
 
-	const supabase = createSupabaseBrowserClient();
-
 	let loading = $state(true);
-	let subscription = $state<any>(null);
+	let subscription = $state<{ tier?: string; status?: string; next_payment_date?: string } | null>(
+		null
+	);
 	let error = $state('');
 	let upgrading = $state('');
 	let billingCycle = $state('monthly');
 
-	let plans = $state<any[]>([]);
+	let plans = $state<
+		{
+			id: string;
+			name: string;
+			price_monthly: number;
+			price_annual: number;
+			popular?: boolean;
+			features: string[];
+		}[]
+	>([]);
 
 	$effect(() => {
 		if (!data.user) {
@@ -46,8 +56,9 @@
 			} else {
 				subscription = { tier: 'free', status: 'active' };
 			}
-		} catch (e: any) {
-			error = e.message;
+		} catch (e) {
+			const err = e as Error;
+			error = err.message;
 			subscription = { tier: 'free', status: 'active' };
 		} finally {
 			loading = false;
@@ -92,8 +103,9 @@
 
 			const { checkout_url } = await res.json();
 			window.location.href = checkout_url;
-		} catch (e: any) {
-			error = e.message;
+		} catch (e) {
+			const err = e as Error;
+			error = err.message;
 			upgrading = '';
 		}
 	}
@@ -117,12 +129,14 @@
 	{#if !data.user}
 		<div class="card text-center py-12">
 			<p class="text-ink-400">
-				Please <a href="/auth/login" class="text-accent-400 hover:underline">sign in</a> to manage billing.
+				Please <a href="{base}/auth/login" class="text-accent-400 hover:underline">sign in</a> to manage
+				billing.
 			</p>
 		</div>
 	{:else if loading}
 		<div class="grid gap-5 md:grid-cols-3">
-			{#each [1, 2, 3] as i}
+			<!-- eslint-disable-next-line @typescript-eslint/no-unused-vars -->
+			{#each [1, 2, 3] as i (i)}
 				<div class="card">
 					<div class="skeleton h-6 w-24 mb-4"></div>
 					<div class="skeleton h-10 w-32 mb-6"></div>
@@ -195,7 +209,7 @@
 			</div>
 
 			<div class="grid gap-5 md:grid-cols-4">
-				{#each plans as plan, i}
+				{#each plans as plan, i (plan.id)}
 					<div
 						class="card stagger-enter {tierIsCurrent(plan.id)
 							? 'border-accent-500 border-2 bg-accent-500/5'
@@ -228,7 +242,7 @@
 
 						<!-- Features -->
 						<ul class="space-y-2 mb-6 flex-grow">
-							{#each plan.features as feature}
+							{#each plan.features as feature (feature)}
 								<li class="flex items-start gap-2 text-xs text-ink-300">
 									<span class="text-success-400 mt-0.5">✓</span>
 									{feature}

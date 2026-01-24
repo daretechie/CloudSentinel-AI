@@ -10,16 +10,16 @@ from fastapi_csrf_protect.exceptions import CsrfProtectError
 from pydantic import BaseModel
 from prometheus_fastapi_instrumentator import Instrumentator
 
-from app.core.config import get_settings
-from app.core.logging import setup_logging
-from app.core.middleware import RequestIDMiddleware, SecurityHeadersMiddleware
-from app.core.security_metrics import CSRF_ERRORS, RATE_LIMIT_EXCEEDED
-from app.core.ops_metrics import API_ERRORS_TOTAL
-from app.core.sentry import init_sentry
-from app.services.scheduler import SchedulerService
-from app.core.timeout import TimeoutMiddleware
-from app.core.tracing import setup_tracing
-from app.db.session import get_db
+from app.shared.core.config import get_settings
+from app.shared.core.logging import setup_logging
+from app.shared.core.middleware import RequestIDMiddleware, SecurityHeadersMiddleware
+from app.shared.core.security_metrics import CSRF_ERRORS, RATE_LIMIT_EXCEEDED
+from app.shared.core.ops_metrics import API_ERRORS_TOTAL
+from app.shared.core.sentry import init_sentry
+from app.modules.governance.domain.scheduler import SchedulerService
+from app.shared.core.timeout import TimeoutMiddleware
+from app.shared.core.tracing import setup_tracing
+from app.shared.db.session import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
 
 # Ensure all models are registered with SQLAlchemy
@@ -31,25 +31,25 @@ import app.models.remediation
 import app.models.background_job
 import app.models.azure_connection
 import app.models.gcp_connection
-import app.services.security.audit_log
+import app.modules.governance.domain.security.audit_log
 
 
 from codecarbon import EmissionsTracker
-from app.api.v1.settings.onboard import router as onboard_router
-from app.api.v1.settings.connections import router as connections_router
-from app.api.v1.settings import router as settings_router
-from app.api.v1.leaderboards import router as leaderboards_router
-from app.api.v1.costs import router as costs_router
-from app.api.v1.carbon import router as carbon_router
-from app.api.v1.zombies import router as zombies_router
-from app.api.v1.admin import router as admin_router
-from app.api.v1.billing import router as billing_router
-from app.api.v1.audit import router as audit_router
-from app.api.v1.jobs import router as jobs_router
-from app.api.v1.health_dashboard import router as health_dashboard_router
-from app.api.v1.usage import router as usage_router
-from app.api.oidc import router as oidc_router
-from app.api.v1.public import router as public_router
+from app.modules.governance.api.v1.settings.onboard import router as onboard_router
+from app.modules.governance.api.v1.settings.connections import router as connections_router
+from app.modules.governance.api.v1.settings import router as settings_router
+from app.modules.reporting.api.v1.leaderboards import router as leaderboards_router
+from app.modules.reporting.api.v1.costs import router as costs_router
+from app.modules.reporting.api.v1.carbon import router as carbon_router
+from app.modules.optimization.api.v1.zombies import router as zombies_router
+from app.modules.governance.api.v1.admin import router as admin_router
+from app.modules.reporting.api.v1.billing import router as billing_router
+from app.modules.governance.api.v1.audit import router as audit_router
+from app.modules.governance.api.v1.jobs import router as jobs_router
+from app.modules.governance.api.v1.health_dashboard import router as health_dashboard_router
+from app.modules.reporting.api.v1.usage import router as usage_router
+from app.modules.governance.api.oidc import router as oidc_router
+from app.modules.governance.api.v1.public import router as public_router
 
 # Configure logging and Sentry
 setup_logging()
@@ -89,7 +89,7 @@ async def lifespan(app: FastAPI):
     app.state.emissions_tracker = tracker
 
     # Pass shared session factory to scheduler (DI pattern)
-    from app.db.session import async_session_maker
+    from app.shared.db.session import async_session_maker
     scheduler = SchedulerService(session_maker=async_session_maker)
     if not settings.TESTING:
         scheduler.start()
@@ -106,12 +106,12 @@ async def lifespan(app: FastAPI):
     tracker.stop()
 
     # Item 18: Async Database Engine Cleanup
-    from app.db.session import engine
+    from app.shared.db.session import engine
     await engine.dispose()
     logger.info("db_engine_disposed")
 
 from fastapi.responses import JSONResponse
-from app.core.exceptions import ValdrixException
+from app.shared.core.exceptions import ValdrixException
 
 # Application instance
 settings = get_settings()
@@ -203,7 +203,7 @@ async def value_error_handler(request: Request, exc: ValueError):
     )
 
 # Setup rate limiting early for test visibility
-from app.core.rate_limit import setup_rate_limiting, RateLimitExceeded, _rate_limit_exceeded_handler
+from app.shared.core.rate_limit import setup_rate_limiting, RateLimitExceeded, _rate_limit_exceeded_handler
 setup_rate_limiting(app)
 
 # Override handler to include metrics (SEC-03)
@@ -267,7 +267,7 @@ async def health_check(
     Enhanced health check for load balancers.
     Checks DB, Redis, and AWS STS reachability.
     """
-    from app.services.health import HealthService
+    from app.shared.core.health import HealthService
     from fastapi import Response
 
     service = HealthService(db)

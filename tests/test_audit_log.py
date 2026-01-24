@@ -11,7 +11,7 @@ Tests:
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 
-from app.services.security.audit_log import (
+from app.modules.governance.domain.security.audit_log import (
     AuditEventType,
     AuditLog,
     AuditLogger,
@@ -110,6 +110,23 @@ class TestAuditLogger:
         assert entry.event_type == "auth.login"
         assert entry.success is True
 
+    @pytest.mark.asyncio
+    async def test_log_with_details_triggers_masking(self):
+        """AuditLogger.log() should mask details."""
+        mock_db = AsyncMock()
+        mock_db.add = MagicMock()
+        mock_db.flush = AsyncMock()
+        
+        logger = AuditLogger(mock_db, "tenant-123")
+        
+        entry = await logger.log(
+            event_type=AuditEventType.RESOURCE_CREATE,
+            details={"secret": "hide_me", "public": "show_me"}
+        )
+        
+        assert entry.details["secret"] == "***REDACTED***"
+        assert entry.details["public"] == "show_me"
+
 
 class TestSensitiveDataMasking:
     """Test sensitive field masking in AuditLogger."""
@@ -182,6 +199,22 @@ class TestSensitiveDataMasking:
         assert logger._mask_sensitive("string") == "string"
         assert logger._mask_sensitive(123) == 123
         assert logger._mask_sensitive(None) is None
+
+    def test_mask_list_of_dicts(self):
+        """Should mask sensitive fields inside lists."""
+        mock_db = MagicMock()
+        logger = AuditLogger(mock_db, "tenant-123")
+        
+        data = [
+            {"user": "u1", "token": "s1"},
+            {"user": "u2", "secret": "s2"}
+        ]
+        masked = logger._mask_sensitive(data)
+        
+        assert isinstance(masked, list)
+        assert len(masked) == 2
+        assert masked[0]["token"] == "***REDACTED***"
+        assert masked[1]["secret"] == "***REDACTED***"
 
 
 class TestAuditLoggerSensitiveFields:

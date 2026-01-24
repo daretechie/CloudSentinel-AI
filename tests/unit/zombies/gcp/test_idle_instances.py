@@ -3,8 +3,8 @@ from unittest.mock import MagicMock, patch
 
 # Mock engine before any app imports to avoid ConnectionRefusedError
 with patch("sqlalchemy.ext.asyncio.create_async_engine"):
-    with patch("app.db.session.engine"):
-        from app.services.zombies.gcp_provider.plugins.idle_instances import GCPIdleInstancePlugin
+    with patch("app.shared.db.session.engine"):
+        from app.modules.optimization.domain.gcp_provider.plugins.idle_instances import GCPIdleInstancePlugin
 
 @pytest.mark.asyncio
 async def test_gcp_idle_instance_plugin_gpu_detection():

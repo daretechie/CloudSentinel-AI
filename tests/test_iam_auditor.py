@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import patch, MagicMock, AsyncMock
-from app.services.security.iam_auditor import IAMAuditor
+from app.modules.governance.domain.security.iam_auditor import IAMAuditor
 
 @pytest.mark.asyncio
 async def test_iam_auditor_admin_risk():

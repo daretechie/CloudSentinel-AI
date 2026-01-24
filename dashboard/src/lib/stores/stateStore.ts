@@ -92,10 +92,14 @@ export function createPersistentState<T>(key: string, initialValue: T, expiryHou
 }
 
 // Pre-configured stores
-export const settingsStore = createPersistentState('settings', {} as Record<string, any>, 1);
+export const settingsStore = createPersistentState('settings', {} as Record<string, unknown>, 1);
 export const onboardingStore = createPersistentState(
 	'onboarding',
-	{ step: 1 } as Record<string, any>,
+	{ step: 1 } as Record<string, unknown>,
 	24
 );
-export const remediationStore = createPersistentState('remediation', {} as Record<string, any>, 1);
+export const remediationStore = createPersistentState(
+	'remediation',
+	{} as Record<string, unknown>,
+	1
+);

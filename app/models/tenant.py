@@ -3,12 +3,12 @@ from datetime import datetime
 from sqlalchemy import String, ForeignKey, DateTime, UniqueConstraint, event
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID
-from app.db.base import Base
-from app.core.security import generate_blind_index
+from app.shared.db.base import Base
+from app.shared.core.security import generate_blind_index
 
 from sqlalchemy_utils import StringEncryptedType
 from sqlalchemy_utils.types.encrypted.encrypted_type import AesEngine
-from app.core.config import get_settings
+from app.shared.core.config import get_settings
 
 settings = get_settings()
 _encryption_key = settings.ENCRYPTION_KEY

@@ -1,8 +1,8 @@
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 from uuid import uuid4
-from app.services.zombies.service import ZombieService
-from app.core.pricing import PricingTier, FeatureFlag
+from app.modules.optimization.domain.service import ZombieService
+from app.shared.core.pricing import PricingTier, FeatureFlag
 
 @pytest.mark.asyncio
 async def test_zombie_service_field_masking_starter():
@@ -11,7 +11,7 @@ async def test_zombie_service_field_masking_starter():
     tenant_id = uuid4()
     
     # Mock tenant tier as STARTER
-    with patch("app.core.pricing.get_tenant_tier", return_value=PricingTier.STARTER):
+    with patch("app.shared.core.pricing.get_tenant_tier", return_value=PricingTier.STARTER):
         # Mock connections
         db.execute = AsyncMock()
         db.execute.return_value.scalars.return_value.all.return_value = [] # No connections for simplicity of scan loop
@@ -32,7 +32,7 @@ async def test_zombie_service_field_masking_starter():
         })
         mock_detector.provider_name = "aws"
         
-        with patch("app.services.zombies.factory.ZombieDetectorFactory.get_detector", return_value=mock_detector):
+        with patch("app.modules.optimization.domain.factory.ZombieDetectorFactory.get_detector", return_value=mock_detector):
             # We need to have at least one connection to trigger the loop
             connection = MagicMock()
             connection.tenant_id = tenant_id
@@ -54,7 +54,7 @@ async def test_zombie_service_no_masking_pro():
     tenant_id = uuid4()
     
     # Mock tenant tier as PRO
-    with patch("app.core.pricing.get_tenant_tier", return_value=PricingTier.PRO):
+    with patch("app.shared.core.pricing.get_tenant_tier", return_value=PricingTier.PRO):
         connection = MagicMock()
         connection.tenant_id = tenant_id
         db.execute.return_value.scalars.return_value.all.return_value = [connection]
@@ -69,7 +69,7 @@ async def test_zombie_service_no_masking_pro():
         })
         mock_detector.provider_name = "aws"
         
-        with patch("app.services.zombies.factory.ZombieDetectorFactory.get_detector", return_value=mock_detector):
+        with patch("app.modules.optimization.domain.factory.ZombieDetectorFactory.get_detector", return_value=mock_detector):
             service = ZombieService(db)
             results = await service.scan_for_tenant(tenant_id)
             
@@ -80,12 +80,12 @@ async def test_zombie_service_no_masking_pro():
 @pytest.mark.asyncio
 async def test_remediation_service_iac_gating_starter():
     """Verify that Starter tier users cannot generate IaC plans."""
-    from app.services.zombies.remediation_service import RemediationService
+    from app.modules.optimization.domain.remediation_service import RemediationService
     db = AsyncMock()
     tenant_id = uuid4()
     
     # Mock tenant tier as STARTER
-    with patch("app.core.pricing.get_tenant_tier", return_value=PricingTier.STARTER):
+    with patch("app.shared.core.pricing.get_tenant_tier", return_value=PricingTier.STARTER):
         service = RemediationService(db)
         request = MagicMock()
         
@@ -95,12 +95,12 @@ async def test_remediation_service_iac_gating_starter():
 @pytest.mark.asyncio
 async def test_remediation_service_iac_allowed_pro():
     """Verify that Pro tier users can generate IaC plans."""
-    from app.services.zombies.remediation_service import RemediationService
+    from app.modules.optimization.domain.remediation_service import RemediationService
     db = AsyncMock()
     tenant_id = uuid4()
     
     # Mock tenant tier as PRO
-    with patch("app.core.pricing.get_tenant_tier", return_value=PricingTier.PRO):
+    with patch("app.shared.core.pricing.get_tenant_tier", return_value=PricingTier.PRO):
         service = RemediationService(db)
         request = MagicMock()
         request.resource_id = "res-id"

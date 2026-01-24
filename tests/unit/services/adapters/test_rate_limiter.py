@@ -4,7 +4,7 @@ Tests for Rate Limiter and Backoff
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 import asyncio
-from app.services.adapters.rate_limiter import (
+from app.shared.adapters.rate_limiter import (
     RateLimiter, 
     get_aws_rate_limiter,
     with_rate_limit,
@@ -89,7 +89,7 @@ async def test_with_backoff_no_exception_state():
 
 def test_get_aws_rate_limiter_singleton():
     """Test get_aws_rate_limiter returns singleton."""
-    with patch("app.services.adapters.rate_limiter._aws_rate_limiter", None):
+    with patch("app.shared.adapters.rate_limiter._aws_rate_limiter", None):
         limiter1 = get_aws_rate_limiter()
         limiter2 = get_aws_rate_limiter()
         
@@ -101,7 +101,7 @@ async def test_with_rate_limit():
     """Test with_rate_limit wraps coroutine."""
     mock_coro = AsyncMock(return_value="result")
     
-    with patch("app.services.adapters.rate_limiter.get_aws_rate_limiter") as mock_get:
+    with patch("app.shared.adapters.rate_limiter.get_aws_rate_limiter") as mock_get:
         mock_limiter = MagicMock()
         mock_limiter.acquire = AsyncMock()
         mock_get.return_value = mock_limiter
@@ -176,7 +176,7 @@ async def test_with_backoff_non_throttle_error():
 @pytest.mark.asyncio
 async def test_rate_limited_decorator():
     """Test rate_limited decorator."""
-    with patch("app.services.adapters.rate_limiter.get_aws_rate_limiter") as mock_get:
+    with patch("app.shared.adapters.rate_limiter.get_aws_rate_limiter") as mock_get:
         mock_limiter = MagicMock()
         mock_limiter.acquire = AsyncMock()
         mock_get.return_value = mock_limiter

@@ -12,7 +12,7 @@ import pytest
 from unittest.mock import patch
 from datetime import date
 
-from app.services.adapters.cost_cache import (
+from app.shared.adapters.cost_cache import (
     InMemoryCache,
     CostCache,
     get_cost_cache,
@@ -176,11 +176,11 @@ class TestCostCacheFactory:
     @pytest.mark.asyncio
     async def test_factory_returns_cache(self):
         """Factory should return CostCache instance."""
-        with patch("app.services.adapters.cost_cache.settings") as mock_settings:
+        with patch("app.shared.adapters.cost_cache.settings") as mock_settings:
             mock_settings.REDIS_URL = None
             
             # Reset singleton
-            import app.services.adapters.cost_cache as cache_module
+            import app.shared.adapters.cost_cache as cache_module
             cache_module._cache_instance = None
             
             cache = await get_cost_cache()

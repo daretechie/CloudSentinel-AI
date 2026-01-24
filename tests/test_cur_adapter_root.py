@@ -9,7 +9,7 @@ Tests:
 
 from datetime import date
 
-from app.services.adapters.cur_adapter import CURAdapter, CURConfig
+from app.shared.adapters.cur_adapter import CURAdapter, CURConfig
 
 
 class TestCURAdapterInitialization:

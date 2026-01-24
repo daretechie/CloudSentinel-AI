@@ -1,11 +1,11 @@
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any
-from sqlalchemy import String, DateTime, Numeric, Boolean
+from sqlalchemy import String, DateTime, Numeric, Boolean, JSON
 from sqlalchemy.dialects.postgresql import JSONB, UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 import uuid
 
-from app.db.base import Base
+from app.shared.db.base import Base
 
 class PricingPlan(Base):
     """
@@ -20,11 +20,11 @@ class PricingPlan(Base):
     price_usd: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
     
     # Store features and limits as JSONB for flexibility
-    features: Mapped[Dict[str, Any]] = mapped_column(JSONB, default=dict)
-    limits: Mapped[Dict[str, Any]] = mapped_column(JSONB, default=dict)
+    features: Mapped[Dict[str, Any]] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=dict)
+    limits: Mapped[Dict[str, Any]] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=dict)
     
     # UI Metadata
-    display_features: Mapped[list[str]] = mapped_column(JSONB, default=list)
+    display_features: Mapped[list[str]] = mapped_column(JSON().with_variant(JSONB, "postgresql"), default=list)
     cta_text: Mapped[str] = mapped_column(String(50), default="Get Started")
     is_popular: Mapped[bool] = mapped_column(Boolean, default=False)
     

@@ -2,7 +2,7 @@
 import pytest
 from uuid import uuid4
 from unittest.mock import AsyncMock, MagicMock, patch
-from app.services.zombies.remediation_service import RemediationService
+from app.modules.optimization.domain.remediation_service import RemediationService
 from app.models.remediation import RemediationRequest, RemediationAction, RemediationStatus
 from botocore.exceptions import ClientError
 

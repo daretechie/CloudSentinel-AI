@@ -1,5 +1,5 @@
 import asyncio
-from app.db.session import async_session_maker
+from app.shared.db.session import async_session_maker
 from sqlalchemy import text
 
 async def check_tables():

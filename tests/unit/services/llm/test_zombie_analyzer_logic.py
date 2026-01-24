@@ -8,8 +8,8 @@ from datetime import datetime
 import json
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.services.llm.zombie_analyzer import ZombieAnalyzer
-from app.services.llm.guardrails import ZombieAnalysisResult
+from app.shared.llm.zombie_analyzer import ZombieAnalyzer
+from app.shared.llm.guardrails import ZombieAnalysisResult
 
 
 @pytest.fixture
@@ -80,7 +80,7 @@ async def test_analyze_with_byok_config(mock_llm, mock_db):
         mock_or.return_value = mock_chain
         
         # Patch LLMFactory.create since it's called for BYOK
-        with patch("app.services.llm.factory.LLMFactory.create") as mock_factory_create:
+        with patch("app.shared.llm.factory.LLMFactory.create") as mock_factory_create:
             mock_factory_create.return_value = mock_llm
             
             result = await analyzer.analyze(
@@ -132,7 +132,7 @@ async def test_analyze_usage_tracking(mock_llm, mock_db):
         mock_chain.ainvoke.return_value = mock_response
         mock_or.return_value = mock_chain
         
-        with patch("app.services.llm.zombie_analyzer.UsageTracker") as mock_tracker_cls:
+        with patch("app.shared.llm.zombie_analyzer.UsageTracker") as mock_tracker_cls:
             mock_tracker = AsyncMock()
             mock_tracker_cls.return_value = mock_tracker
             

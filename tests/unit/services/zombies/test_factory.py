@@ -1,11 +1,11 @@
 import pytest
 from uuid import uuid4
-from app.services.zombies.factory import ZombieDetectorFactory
-from app.services.zombies.aws_provider.detector import AWSZombieDetector
-from app.services.zombies.aws_provider.plugins import UnattachedVolumesPlugin
-from app.services.zombies.azure_provider.detector import AzureZombieDetector
-from app.services.zombies.gcp_provider.detector import GCPZombieDetector
-from app.services.zombies.gcp_provider.plugins.unattached_disks import GCPUnattachedDisksPlugin
+from app.modules.optimization.domain.factory import ZombieDetectorFactory
+from app.modules.optimization.domain.aws_provider.detector import AWSZombieDetector
+from app.modules.optimization.domain.aws_provider.plugins import UnattachedVolumesPlugin
+from app.modules.optimization.domain.azure_provider.detector import AzureZombieDetector
+from app.modules.optimization.domain.gcp_provider.detector import GCPZombieDetector
+from app.modules.optimization.domain.gcp_provider.plugins.unattached_disks import GCPUnattachedDisksPlugin
 from app.models.aws_connection import AWSConnection
 from app.models.azure_connection import AzureConnection
 from app.models.gcp_connection import GCPConnection

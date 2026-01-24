@@ -1,5 +1,5 @@
 import pytest
-from app.core.pricing import TIER_CONFIG, PricingTier
+from app.shared.core.pricing import TIER_CONFIG, PricingTier
 
 def test_annual_pricing_discount():
     """

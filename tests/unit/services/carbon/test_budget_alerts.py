@@ -5,7 +5,7 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 from datetime import date, datetime, timezone
-from app.services.carbon.budget_alerts import CarbonBudgetService
+from app.modules.reporting.domain.budget_alerts import CarbonBudgetService
 
 
 @pytest.fixture
@@ -187,7 +187,7 @@ async def test_send_carbon_alert_slack(carbon_service, mock_db):
         mock_check.return_value = True
         
         with patch.object(carbon_service, "mark_alert_sent", new_callable=AsyncMock):
-            with patch("app.core.config.get_settings") as mock_settings:
+            with patch("app.shared.core.config.get_settings") as mock_settings:
                 mock_cfg = MagicMock()
                 mock_cfg.SLACK_BOT_TOKEN = "xoxb-test"
                 mock_cfg.SLACK_CHANNEL_ID = "C123"
@@ -204,7 +204,7 @@ async def test_send_carbon_alert_slack(carbon_service, mock_db):
                 mock_result.scalar_one_or_none.return_value = mock_notif
                 mock_db.execute.return_value = mock_result
                 
-                with patch("app.services.notifications.SlackService") as mock_slack_cls:
+                with patch("app.modules.notifications.domain.SlackService") as mock_slack_cls:
                     mock_slack = AsyncMock()
                     mock_slack_cls.return_value = mock_slack
                     

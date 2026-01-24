@@ -9,10 +9,10 @@ import uuid
 from datetime import datetime
 from enum import Enum
 from typing import TYPE_CHECKING
-from sqlalchemy import String, Text, Integer, DateTime, ForeignKey, Boolean, event
+from sqlalchemy import String, Text, Integer, DateTime, ForeignKey, Boolean, event, JSON, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy.dialects.postgresql import UUID, JSONB
-from app.db.base import Base
+from sqlalchemy.dialects.postgresql import JSONB
+from app.shared.db.base import Base
 
 if TYPE_CHECKING:
     from app.models.tenant import Tenant
@@ -57,7 +57,7 @@ class BackgroundJob(Base):
     __tablename__ = "background_jobs"
     
     id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), 
+        Uuid, 
         primary_key=True, 
         default=uuid.uuid4
     )
@@ -74,8 +74,8 @@ class BackgroundJob(Base):
         nullable=True
     )
     status: Mapped[str] = mapped_column(String(20), default=JobStatus.PENDING, index=True)
-    payload: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
-    result: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    payload: Mapped[dict | None] = mapped_column(JSON().with_variant(JSONB, "postgresql"), nullable=True)
+    result: Mapped[dict | None] = mapped_column(JSON().with_variant(JSONB, "postgresql"), nullable=True)
     attempts: Mapped[int] = mapped_column(Integer, default=0)
     max_attempts: Mapped[int] = mapped_column(Integer, default=3)
     # BE-SCHED-5: Job priority (higher = more urgent, 0 = normal, negative = low priority)

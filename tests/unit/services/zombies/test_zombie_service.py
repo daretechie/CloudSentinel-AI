@@ -3,7 +3,7 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.services.zombies.service import ZombieService
+from app.modules.optimization.domain.service import ZombieService
 from app.models.aws_connection import AWSConnection
 from app.models.azure_connection import AzureConnection
 from app.models.gcp_connection import GCPConnection
@@ -53,8 +53,8 @@ async def test_scan_for_tenant_parallel_success(zombie_service, db_session):
     }
     mock_detector.provider_name = "aws"
     
-    with patch("app.services.zombies.factory.ZombieDetectorFactory.get_detector", return_value=mock_detector):
-        with patch("app.services.zombies.service.is_feature_enabled", return_value=False): # Skip AI
+    with patch("app.modules.optimization.domain.factory.ZombieDetectorFactory.get_detector", return_value=mock_detector):
+        with patch("app.modules.optimization.domain.service.is_feature_enabled", return_value=False): # Skip AI
             results = await zombie_service.scan_for_tenant(tenant_id, user)
             
             assert results["total_monthly_waste"] == 60.0 # 30 (aws) + 30 (gcp)
@@ -71,7 +71,7 @@ async def test_scan_for_tenant_timeout_handling(zombie_service, db_session):
     mock_res.scalars.return_value.all.side_effect = [[aws_conn], [], []]
     db_session.execute.return_value = mock_res
     
-    with patch("app.services.zombies.factory.ZombieDetectorFactory.get_detector", return_value=AsyncMock()):
+    with patch("app.modules.optimization.domain.factory.ZombieDetectorFactory.get_detector", return_value=AsyncMock()):
         with patch("asyncio.wait_for", side_effect=asyncio.TimeoutError()):
             results = await zombie_service.scan_for_tenant(tenant_id, user)
             assert results.get("scan_timeout") is True
@@ -83,7 +83,7 @@ async def test_ai_enrichment_tier_gating(zombie_service, db_session):
     user = MagicMock(tenant_id=tenant_id, tier="trial")
     zombies = {"unattached_volumes": []}
     
-    with patch("app.services.zombies.service.is_feature_enabled", return_value=False):
+    with patch("app.modules.optimization.domain.service.is_feature_enabled", return_value=False):
         await zombie_service._enrich_with_ai(zombies, user)
         assert "upgrade_required" in zombies["ai_analysis"]
 
@@ -93,8 +93,8 @@ async def test_ai_enrichment_failure_handling(zombie_service, db_session):
     user = MagicMock(tenant_id=tenant_id, tier="growth")
     zombies = {"unattached_volumes": []}
     
-    with patch("app.services.zombies.service.is_feature_enabled", return_value=True):
-        with patch("app.services.llm.factory.LLMFactory.create", side_effect=Exception("LLM Down")):
+    with patch("app.modules.optimization.domain.service.is_feature_enabled", return_value=True):
+        with patch("app.shared.llm.factory.LLMFactory.create", side_effect=Exception("LLM Down")):
             await zombie_service._enrich_with_ai(zombies, user)
             assert "AI analysis failed" in zombies["ai_analysis"]["error"]
 
@@ -111,7 +111,7 @@ async def test_parallel_scan_exception_handling(zombie_service, db_session):
     mock_detector = AsyncMock()
     mock_detector.scan_all.side_effect = Exception("Provider Failure")
     
-    with patch("app.services.zombies.factory.ZombieDetectorFactory.get_detector", return_value=mock_detector):
+    with patch("app.modules.optimization.domain.factory.ZombieDetectorFactory.get_detector", return_value=mock_detector):
         results = await zombie_service.scan_for_tenant(tenant_id, user)
         # Should finish successfully but with 0 waste due to error in provider
         assert results["total_monthly_waste"] == 0.0

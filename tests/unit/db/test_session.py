@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from fastapi import Request
 from sqlalchemy import text
 import time
-from app.db.session import (
+from app.shared.db.session import (
     get_db,
     before_cursor_execute,
     after_cursor_execute,
@@ -20,7 +20,7 @@ async def test_get_db_yields_session():
     mock_request = MagicMock(spec=Request)
     mock_request.state.tenant_id = "tenant-1"
     
-    with patch("app.db.session.async_session_maker") as mock_maker:
+    with patch("app.shared.db.session.async_session_maker") as mock_maker:
         mock_session = AsyncMock()
         # async_session_maker() returns mock_session
         mock_maker.return_value = mock_session
@@ -46,7 +46,7 @@ async def test_get_db_yields_session():
 @pytest.mark.asyncio
 async def test_get_db_no_request():
     """Test get_db works without a request (e.g., background jobs)."""
-    with patch("app.db.session.async_session_maker") as mock_maker:
+    with patch("app.shared.db.session.async_session_maker") as mock_maker:
         mock_session = AsyncMock()
         mock_maker.return_value = mock_session
         mock_session.__aenter__.return_value = mock_session
@@ -68,7 +68,7 @@ def test_before_after_cursor_execute():
     before_cursor_execute(mock_conn, None, "SELECT 1", None, mock_context, False)
     assert "query_start_time" in mock_conn.info
     
-    with patch("app.db.session.logger") as mock_logger:
+    with patch("app.shared.db.session.logger") as mock_logger:
         # Simulate 1s duration
         # We need to mock time.perf_counter() for after_cursor_execute
         # and ensure a value is in mock_conn.info["query_start_time"]

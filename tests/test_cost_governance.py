@@ -4,7 +4,7 @@ from uuid import uuid4
 from datetime import date
 from decimal import Decimal
 from unittest.mock import MagicMock, AsyncMock
-from app.services.costs.aggregator import CostAggregator
+from app.modules.reporting.domain.aggregator import CostAggregator
 
 @pytest.mark.asyncio
 async def test_get_governance_report():

@@ -2,11 +2,11 @@
 import pytest
 from uuid import uuid4
 from unittest.mock import AsyncMock, MagicMock, patch
-from app.services.zombies.service import ZombieService
+from app.modules.optimization.domain.service import ZombieService
 from app.models.aws_connection import AWSConnection
 from app.models.azure_connection import AzureConnection
 from app.models.gcp_connection import GCPConnection
-from app.core.pricing import PricingTier, FeatureFlag
+from app.shared.core.pricing import PricingTier, FeatureFlag
 
 @pytest.fixture
 async def zombie_service(db):
@@ -53,7 +53,7 @@ async def test_scan_for_tenant_multi_provider(zombie_service, db):
     db.execute = AsyncMock(side_effect=mock_execute)
     
     # Mock Detectors
-    with patch("app.services.zombies.factory.ZombieDetectorFactory.get_detector") as mock_factory:
+    with patch("app.modules.optimization.domain.factory.ZombieDetectorFactory.get_detector") as mock_factory:
         # AWS Detector
         mock_aws_detector = AsyncMock()
         mock_aws_detector.provider_name = "aws"
@@ -96,9 +96,9 @@ async def test_enrich_with_ai_success(zombie_service):
     user = MagicMock(tier=PricingTier.ENTERPRISE, tenant_id=uuid4())
     zombies = {"total_monthly_waste": 100.0}
     
-    with patch("app.services.llm.zombie_analyzer.ZombieAnalyzer.analyze", new_callable=AsyncMock) as mock_analyze:
+    with patch("app.shared.llm.zombie_analyzer.ZombieAnalyzer.analyze", new_callable=AsyncMock) as mock_analyze:
         mock_analyze.return_value = {"summary": "Kill them all"}
-        with patch("app.services.llm.factory.LLMFactory.create", MagicMock()):
+        with patch("app.shared.llm.factory.LLMFactory.create", MagicMock()):
             await zombie_service._enrich_with_ai(zombies, user)
             assert zombies["ai_analysis"]["summary"] == "Kill them all"
 
@@ -114,7 +114,7 @@ async def test_scan_provider_error_handling(zombie_service, db):
     mock_result.scalars.return_value.all.side_effect = [[aws_conn], [], []]
     db.execute = AsyncMock(return_value=mock_result)
     
-    with patch("app.services.zombies.factory.ZombieDetectorFactory.get_detector") as mock_factory:
+    with patch("app.modules.optimization.domain.factory.ZombieDetectorFactory.get_detector") as mock_factory:
         mock_detector = AsyncMock()
         mock_detector.scan_all.side_effect = Exception("Cloud is down")
         mock_factory.return_value = mock_detector

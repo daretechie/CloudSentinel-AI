@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 from decimal import Decimal
 from datetime import datetime, timezone
-from app.services.llm.usage_tracker import UsageTracker, BudgetStatus
-from app.core.exceptions import BudgetExceededError
+from app.shared.llm.usage_tracker import UsageTracker, BudgetStatus
+from app.shared.core.exceptions import BudgetExceededError
 
 
 @pytest.fixture
@@ -43,9 +43,9 @@ async def test_record_usage(mock_db):
     tracker = UsageTracker(mock_db)
     tenant_id = uuid4()
     
-    with patch("app.services.llm.usage_tracker.get_cache_service") as mock_cache_cls:
+    with patch("app.shared.llm.usage_tracker.get_cache_service") as mock_cache_cls:
         mock_cache_cls.return_value.enabled = False
-        with patch("app.core.ops_metrics.LLM_SPEND_USD") as mock_metrics:
+        with patch("app.shared.core.ops_metrics.LLM_SPEND_USD") as mock_metrics:
             # Mock check_budget call at the end
             with patch.object(tracker, "_check_budget_and_alert", new_callable=AsyncMock):
                 usage = await tracker.record(
@@ -124,7 +124,7 @@ async def test_check_budget_hard_limit(mock_db):
     tenant_id = uuid4()
     
     # Mock Cache
-    with patch("app.services.llm.usage_tracker.get_cache_service") as mock_cache_cls:
+    with patch("app.shared.llm.usage_tracker.get_cache_service") as mock_cache_cls:
         mock_cache_cls.return_value.enabled = False
         
         # Mock Budget DB Query
@@ -151,7 +151,7 @@ async def test_check_budget_soft_limit(mock_db):
     tracker = UsageTracker(mock_db)
     tenant_id = uuid4()
     
-    with patch("app.services.llm.usage_tracker.get_cache_service") as mock_cache_cls:
+    with patch("app.shared.llm.usage_tracker.get_cache_service") as mock_cache_cls:
         mock_cache_cls.return_value.enabled = False
         
         mock_budget = MagicMock()
@@ -189,11 +189,11 @@ async def test_check_budget_and_alert_sends_slack(mock_db):
     with patch.object(tracker, "get_monthly_usage", new_callable=AsyncMock) as mock_usage:
         mock_usage.return_value = Decimal("85.0")
         
-        with patch("app.core.config.get_settings") as mock_settings:
+        with patch("app.shared.core.config.get_settings") as mock_settings:
             mock_settings.return_value.SLACK_BOT_TOKEN = "xoxb-test"
             mock_settings.return_value.SLACK_CHANNEL_ID = "C123"
             
-            with patch("app.services.notifications.SlackService") as mock_slack_cls:
+            with patch("app.modules.notifications.domain.SlackService") as mock_slack_cls:
                 mock_slack = AsyncMock()
                 mock_slack_cls.return_value = mock_slack
                 
@@ -211,7 +211,7 @@ async def test_check_budget_cache_hit_hard_limit(mock_db):
     tracker = UsageTracker(mock_db)
     tenant_id = uuid4()
     
-    with patch("app.services.llm.usage_tracker.get_cache_service") as mock_cache_cls:
+    with patch("app.shared.llm.usage_tracker.get_cache_service") as mock_cache_cls:
         mock_cache = MagicMock()
         mock_cache.enabled = True
         mock_cache.client.get = AsyncMock(return_value="1")
@@ -241,7 +241,7 @@ async def test_check_budget_and_alert_skip_if_already_sent(mock_db):
     with patch.object(tracker, "get_monthly_usage", new_callable=AsyncMock) as mock_usage:
         mock_usage.return_value = Decimal("90.0")
         
-        with patch("app.services.notifications.SlackService") as mock_slack_cls:
+        with patch("app.modules.notifications.domain.SlackService") as mock_slack_cls:
             mock_slack = AsyncMock()
             mock_slack_cls.return_value = mock_slack
             
@@ -269,11 +269,11 @@ async def test_check_budget_and_alert_slack_error_graceful(mock_db):
     with patch.object(tracker, "get_monthly_usage", new_callable=AsyncMock) as mock_usage:
         mock_usage.return_value = Decimal("90.0")
         
-        with patch("app.core.config.get_settings") as mock_settings:
+        with patch("app.shared.core.config.get_settings") as mock_settings:
             mock_settings.return_value.SLACK_BOT_TOKEN = "xoxb-test"
             mock_settings.return_value.SLACK_CHANNEL_ID = "C123"
             
-            with patch("app.services.notifications.SlackService") as mock_slack_cls:
+            with patch("app.modules.notifications.domain.SlackService") as mock_slack_cls:
                 mock_slack = AsyncMock()
                 mock_slack.send_alert.side_effect = Exception("Slack down")
                 mock_slack_cls.return_value = mock_slack
@@ -285,7 +285,7 @@ async def test_check_budget_and_alert_slack_error_graceful(mock_db):
 
 def test_count_tokens_fallback():
     """Test token counting fallback when tiktoken is unavailable."""
-    from app.services.llm.usage_tracker import count_tokens
+    from app.shared.llm.usage_tracker import count_tokens
     with patch("tiktoken.get_encoding") as mock_get:
         mock_get.side_effect = ImportError("No tiktoken")
         # should use fallback (len // 4)
@@ -309,7 +309,7 @@ async def test_authorize_request_no_budget(mock_db):
 async def test_check_budget_cache_soft_limit(mock_db):
     """Test check_budget using cached soft limit."""
     tracker = UsageTracker(mock_db)
-    with patch("app.services.llm.usage_tracker.get_cache_service") as mock_cache_cls:
+    with patch("app.shared.llm.usage_tracker.get_cache_service") as mock_cache_cls:
         mock_cache = MagicMock()
         mock_cache.enabled = True
         # Create a proper client mock with async get method

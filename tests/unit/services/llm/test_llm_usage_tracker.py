@@ -1,11 +1,11 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from fastapi import Request, HTTPException
-from app.services.llm.usage_tracker import UsageTracker, BudgetStatus
+from app.shared.llm.usage_tracker import UsageTracker, BudgetStatus
 from app.models.llm import LLMBudget, LLMUsage
 from uuid import uuid4
 from decimal import Decimal
-from app.core.exceptions import BudgetExceededError
+from app.shared.core.exceptions import BudgetExceededError
 
 @pytest.fixture
 def db_session():
@@ -66,7 +66,7 @@ async def test_check_budget_status_soft_limit(tracker, db_session):
     
     # Mock monthly usage at 85%
     with patch.object(tracker, "get_monthly_usage", return_value=Decimal("85.0")):
-        with patch("app.services.llm.usage_tracker.get_cache_service") as mock_cache:
+        with patch("app.shared.llm.usage_tracker.get_cache_service") as mock_cache:
             mock_cache.return_value.enabled = False
             status = await tracker.check_budget(tenant_id)
             assert status == BudgetStatus.SOFT_LIMIT
@@ -77,7 +77,7 @@ async def test_check_budget_status_hard_limit_fail_closed(tracker, db_session):
     # Mock DB failure
     db_session.execute.side_effect = Exception("DB Down")
     
-    with patch("app.services.llm.usage_tracker.get_cache_service") as mock_cache:
+    with patch("app.shared.llm.usage_tracker.get_cache_service") as mock_cache:
         mock_cache.return_value.enabled = False
         with pytest.raises(BudgetExceededError) as exc:
             await tracker.check_budget(tenant_id)

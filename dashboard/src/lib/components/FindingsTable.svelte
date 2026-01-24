@@ -1,6 +1,7 @@
 <script lang="ts">
 	import CloudLogo from './CloudLogo.svelte';
 	import DOMPurify from 'dompurify';
+	import { Terminal, Copy, Check } from '@lucide/svelte';
 
 	interface ZombieFinding {
 		provider: 'aws' | 'azure' | 'gcp';
@@ -17,14 +18,65 @@
 		is_gpu?: boolean;
 	}
 
-	export let resources: ZombieFinding[] = [];
-	export let onRemediate: (finding: ZombieFinding) => Promise<void>;
-	export let remediating: string | null = null;
+	let {
+		resources = [],
+		onRemediate,
+		remediating = null
+	}: {
+		resources: ZombieFinding[];
+		onRemediate: (finding: ZombieFinding) => Promise<void>;
+		remediating?: string | null;
+	} = $props();
 
-	let currentPage = 0;
+	let currentPage = $state(0);
+	let copiedId = $state<string | null>(null);
 	const pageSize = 10;
-	$: totalPages = Math.ceil(resources.length / pageSize);
-	$: paginatedResources = resources.slice(currentPage * pageSize, (currentPage + 1) * pageSize);
+	
+	let totalPages = $derived(Math.ceil(resources.length / pageSize));
+	let paginatedResources = $derived(resources.slice(currentPage * pageSize, (currentPage + 1) * pageSize));
+
+	function generateSniperCommand(finding: ZombieFinding): string {
+		const id = finding.resource_id;
+		const type = finding.resource_type?.toLowerCase() || '';
+		
+		if (finding.provider === 'aws') {
+			if (type.includes('volume') || type.includes('ebs')) {
+				return `aws ec2 delete-volume --volume-id ${id}`;
+			}
+			if (type.includes('instance')) {
+				return `aws ec2 terminate-instances --instance-ids ${id}`;
+			}
+			if (type.includes('snapshot')) {
+				return `aws ec2 delete-snapshot --snapshot-id ${id}`;
+			}
+			if (type.includes('eip') || type.includes('address')) {
+				return `aws ec2 release-address --allocation-id ${id}`;
+			}
+			return `# AWS Snipe: ${id}\naws resourcegroupstaggingapi untag-resources --resource-arn-list ${id}`;
+		}
+		
+		if (finding.provider === 'azure') {
+			return `az resource delete --ids ${id}`;
+		}
+		
+		if (finding.provider === 'gcp') {
+			return `gcloud compute instances delete ${id} --quiet`;
+		}
+		
+		return `# Sniper Command for ${id} not generated`;
+	}
+
+	async function copyToClipboard(text: string, id: string) {
+		try {
+			await navigator.clipboard.writeText(text);
+			copiedId = id;
+			setTimeout(() => {
+				if (copiedId === id) copiedId = null;
+			}, 2000);
+		} catch (err) {
+			console.error('Failed to copy: ', err);
+		}
+	}
 </script>
 
 <div class="card stagger-enter" style="animation-delay: 250ms;">
@@ -103,23 +155,15 @@
 
 						<!-- Type Badge -->
 						<td class="py-3 pr-4">
-							<div class="flex items-center gap-1.5">
 								<span class="badge badge-default text-xs">
 									{finding.resource_type || 'Resource'}
 								</span>
-								{#if finding.is_gpu === 'Upgrade to Growth'}
+								{#if finding.is_gpu}
 									<span
-										class="badge badge-warning py-0.5 px-1.5 text-[10px] uppercase font-bold border border-warning-500/20"
-										title="Precision GPU Discovery requires Growth tier"
-									>
-										Locked
-									</span>
-								{:else if finding.is_gpu}
-									<span class="badge badge-error py-0.5 px-1.5 text-[10px] uppercase font-bold animate-pulse"
+										class="badge badge-error py-0.5 px-1.5 text-[10px] uppercase font-bold animate-pulse"
 										>GPU</span
 									>
 								{/if}
-							</div>
 						</td>
 
 						<!-- Monthly Cost -->
@@ -181,17 +225,30 @@
 
 						<!-- Action Button -->
 						<td class="py-3 text-right">
-							<button
-								class="btn btn-ghost text-xs hover:bg-accent-500/20 hover:text-accent-400"
-								on:click={() => onRemediate(finding)}
-								disabled={remediating === finding.resource_id}
-							>
-								{#if remediating === finding.resource_id}
-									<span class="animate-pulse">...</span>
-								{:else}
-									{finding.recommended_action || 'Review'}
-								{/if}
-							</button>
+							<div class="flex items-center justify-end gap-2">
+								<button
+									class="btn btn-ghost btn-xs text-ink-400 hover:text-accent-400"
+									onclick={() => copyToClipboard(generateSniperCommand(finding), finding.resource_id)}
+									title="Copy Sniper Command"
+								>
+									{#if copiedId === finding.resource_id}
+										<Check size={14} class="text-success-400" />
+									{:else}
+										<Terminal size={14} />
+									{/if}
+								</button>
+								<button
+									class="btn btn-ghost text-xs hover:bg-accent-500/20 hover:text-accent-400"
+									onclick={() => onRemediate(finding)}
+									disabled={remediating === finding.resource_id}
+								>
+									{#if remediating === finding.resource_id}
+										<span class="animate-pulse">...</span>
+									{:else}
+										{finding.recommended_action || 'Review'}
+									{/if}
+								</button>
+							</div>
 						</td>
 					</tr>
 				{/each}
@@ -205,12 +262,13 @@
 			<button
 				class="btn btn-ghost text-xs"
 				disabled={currentPage === 0}
-				on:click={() => (currentPage = Math.max(0, currentPage - 1))}
+				onclick={() => (currentPage = Math.max(0, currentPage - 1))}
 			>
 				← Previous
 			</button>
 
 			<div class="flex items-center gap-1">
+				<!-- eslint-disable-next-line @typescript-eslint/no-unused-vars -->
 				{#each Array(Math.min(totalPages, 5)) as _, p (p)}
 					{@const pageNum =
 						totalPages <= 5
@@ -224,7 +282,7 @@
 						class="w-8 h-8 rounded text-xs {currentPage === pageNum
 							? 'bg-accent-500 text-white'
 							: 'hover:bg-ink-700'}"
-						on:click={() => (currentPage = pageNum)}
+						onclick={() => (currentPage = pageNum)}
 					>
 						{pageNum + 1}
 					</button>
@@ -234,7 +292,7 @@
 			<button
 				class="btn btn-ghost text-xs"
 				disabled={currentPage >= totalPages - 1}
-				on:click={() => (currentPage = Math.min(totalPages - 1, currentPage + 1))}
+				onclick={() => (currentPage = Math.min(totalPages - 1, currentPage + 1))}
 			>
 				Next →
 			</button>

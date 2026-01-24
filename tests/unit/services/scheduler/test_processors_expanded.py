@@ -3,7 +3,7 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 from datetime import date
-from app.services.scheduler.processors import AnalysisProcessor, SavingsProcessor
+from app.modules.governance.domain.scheduler.processors import AnalysisProcessor, SavingsProcessor
 from app.models.remediation import RemediationAction
 
 @pytest.fixture
@@ -27,7 +27,7 @@ class TestAnalysisProcessorExpanded:
     async def test_process_tenant_no_connections(self, mock_db):
         tenant = MagicMock()
         tenant.aws_connections = []
-        with patch("app.services.scheduler.processors.get_settings"):
+        with patch("app.modules.governance.domain.scheduler.processors.get_settings"):
             processor = AnalysisProcessor()
             result = await processor.process_tenant(mock_db, tenant, date.today(), date.today())
             # Should finish early
@@ -35,10 +35,10 @@ class TestAnalysisProcessorExpanded:
 
     @pytest.mark.asyncio
     async def test_process_tenant_timeout(self, mock_db, mock_tenant):
-        with patch("app.services.scheduler.processors.get_settings"):
+        with patch("app.modules.governance.domain.scheduler.processors.get_settings"):
             processor = AnalysisProcessor()
-            with patch("app.services.scheduler.processors.MultiTenantAWSAdapter") as mock_adapter, \
-                 patch("app.services.scheduler.processors.LLMFactory"):
+            with patch("app.modules.governance.domain.scheduler.processors.MultiTenantAWSAdapter") as mock_adapter, \
+                 patch("app.modules.governance.domain.scheduler.processors.LLMFactory"):
                 mock_adapter_instance = AsyncMock()
                 mock_adapter_instance.get_daily_costs = AsyncMock(side_effect=asyncio.TimeoutError)
                 mock_adapter.return_value = mock_adapter_instance
@@ -49,10 +49,10 @@ class TestAnalysisProcessorExpanded:
 
     @pytest.mark.asyncio
     async def test_process_tenant_exception(self, mock_db, mock_tenant):
-        with patch("app.services.scheduler.processors.get_settings"):
+        with patch("app.modules.governance.domain.scheduler.processors.get_settings"):
             processor = AnalysisProcessor()
-            with patch("app.services.scheduler.processors.MultiTenantAWSAdapter") as mock_adapter, \
-                 patch("app.services.scheduler.processors.LLMFactory"):
+            with patch("app.modules.governance.domain.scheduler.processors.MultiTenantAWSAdapter") as mock_adapter, \
+                 patch("app.modules.governance.domain.scheduler.processors.LLMFactory"):
                 mock_adapter_instance = AsyncMock()
                 mock_adapter_instance.get_daily_costs.side_effect = Exception("Crash")
                 mock_adapter.return_value = mock_adapter_instance
@@ -75,7 +75,7 @@ class TestSavingsProcessorExpanded:
             MagicMock(autonomous_ready=False, confidence="high", action="Delete volume", resource="vol-123", resource_type="EBS")
         ]
         
-        with patch("app.services.zombies.remediation_service.RemediationService"):
+        with patch("app.modules.optimization.domain.remediation_service.RemediationService"):
             await processor.process_recommendations(mock_db, tenant_id, mock_result)
             # Should not call remediation since autonomous_ready=False
 
@@ -97,7 +97,7 @@ class TestSavingsProcessorExpanded:
         mock_result = MagicMock()
         mock_result.recommendations = [mock_rec]
         
-        with patch("app.services.zombies.remediation_service.RemediationService") as mock_remediation:
+        with patch("app.modules.optimization.domain.remediation_service.RemediationService") as mock_remediation:
             mock_rem_instance = AsyncMock()
             mock_remediation.return_value = mock_rem_instance
             mock_rem_instance.create_request.return_value = MagicMock(id=uuid4())
@@ -125,7 +125,7 @@ class TestSavingsProcessorExpanded:
         mock_result = MagicMock()
         mock_result.recommendations = [mock_rec]
         
-        with patch("app.services.zombies.remediation_service.RemediationService"):
+        with patch("app.modules.optimization.domain.remediation_service.RemediationService"):
             # Should not raise, just skip unsupported actions
             await processor.process_recommendations(mock_db, tenant_id, mock_result)
 

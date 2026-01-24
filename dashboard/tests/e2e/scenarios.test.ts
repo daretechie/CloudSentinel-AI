@@ -1,15 +1,14 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('Authentication Flow', () => {
-	test('should redirect to login when not authenticated', async ({ page }) => {
+	test('should show landing page when not authenticated', async ({ page }) => {
 		await page.goto('/');
-		await expect(page).toHaveURL(/\/login/);
-		await expect(page.locator('h1')).toContainText('Login');
+		await expect(page.locator('h1')).toContainText('Cloud Cost Intelligence');
 	});
 
 	test('should show sign in button', async ({ page }) => {
-		await page.goto('/login');
-		const button = page.getByRole('button', { name: 'Sign in' });
+		await page.goto('/auth/login');
+		const button = page.getByRole('button', { name: 'Sign In' }); // Correct path and casing
 		await expect(button).toBeVisible();
 	});
 });

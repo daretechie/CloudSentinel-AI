@@ -3,7 +3,7 @@ Tests for LLM Logic - Provider Selection and Smart Factory
 """
 import pytest
 from unittest.mock import MagicMock, patch
-from app.services.llm.factory import LLMFactory, LLMProviderSelector, AnalysisComplexity
+from app.shared.llm.factory import LLMFactory, LLMProviderSelector, AnalysisComplexity
 
 
 def test_estimate_tokens():
@@ -22,7 +22,7 @@ def test_classify_complexity():
 
 def test_select_provider_byok_priority():
     """Test that BYOK provider always takes priority."""
-    with patch("app.services.llm.factory.get_settings") as mock_settings:
+    with patch("app.shared.llm.factory.get_settings") as mock_settings:
         provider, complexity = LLMProviderSelector.select_provider(
             "short text", tenant_byok_provider="openai"
         )
@@ -33,7 +33,7 @@ def test_select_provider_byok_priority():
 
 def test_select_provider_waterfall_simple():
     """Test waterfall selection for SIMPLE complexity (Groq preferred)."""
-    with patch("app.services.llm.factory.get_settings") as mock_settings:
+    with patch("app.shared.llm.factory.get_settings") as mock_settings:
         mock_settings.return_value.GROQ_API_KEY = "sk-groq-valid-key-long-enough"
         
         provider, complexity = LLMProviderSelector.select_provider("A" * 100) # ~25 tokens
@@ -43,7 +43,7 @@ def test_select_provider_waterfall_simple():
 
 def test_select_provider_waterfall_medium():
     """Test waterfall selection for MEDIUM complexity (Google preferred)."""
-    with patch("app.services.llm.factory.get_settings") as mock_settings:
+    with patch("app.shared.llm.factory.get_settings") as mock_settings:
         mock_settings.return_value.GROQ_API_KEY = "sk-groq-valid-key-long-enough"
         mock_settings.return_value.GOOGLE_API_KEY = "google-valid-key-long-enough"
         
@@ -54,7 +54,7 @@ def test_select_provider_waterfall_medium():
 
 def test_select_provider_waterfall_complex():
     """Test waterfall selection for COMPLEX complexity (OpenAI preferred)."""
-    with patch("app.services.llm.factory.get_settings") as mock_settings:
+    with patch("app.shared.llm.factory.get_settings") as mock_settings:
         mock_settings.return_value.OPENAI_API_KEY = "sk-openai-valid-key-long-enough"
         
         provider, complexity = LLMProviderSelector.select_provider("A" * 20000) # ~5000 tokens
@@ -103,10 +103,10 @@ def test_llm_factory_validate_api_key_too_short():
 @pytest.mark.asyncio
 async def test_llm_factory_create_smart():
     """Test smart creation combining selection and instantiation."""
-    with patch("app.services.llm.factory.LLMProviderSelector.select_provider") as mock_select:
+    with patch("app.shared.llm.factory.LLMProviderSelector.select_provider") as mock_select:
         mock_select.return_value = ("groq", AnalysisComplexity.SIMPLE)
         
-        with patch("app.services.llm.factory.LLMFactory.create") as mock_create:
+        with patch("app.shared.llm.factory.LLMFactory.create") as mock_create:
             mock_create.return_value = MagicMock()
             
             llm, provider, complexity = LLMFactory.create_smart("input text")
@@ -118,8 +118,8 @@ async def test_llm_factory_create_smart():
 @pytest.mark.asyncio
 async def test_llm_factory_create_google():
     """Test creating Google Gemini client."""
-    with patch("app.services.llm.factory.ChatGoogleGenerativeAI") as mock_gemini:
-        with patch("app.services.llm.factory.get_settings") as mock_settings:
+    with patch("app.shared.llm.factory.ChatGoogleGenerativeAI") as mock_gemini:
+        with patch("app.shared.llm.factory.get_settings") as mock_settings:
             mock_settings.return_value.GOOGLE_API_KEY = "google-valid-key-long-enough"
             mock_settings.return_value.GOOGLE_MODEL = "gemini-flash"
             
@@ -133,8 +133,8 @@ async def test_llm_factory_create_google():
 @pytest.mark.asyncio
 async def test_llm_factory_create_groq():
     """Test creating Groq client."""
-    with patch("app.services.llm.factory.ChatGroq") as mock_groq:
-        with patch("app.services.llm.factory.get_settings") as mock_settings:
+    with patch("app.shared.llm.factory.ChatGroq") as mock_groq:
+        with patch("app.shared.llm.factory.get_settings") as mock_settings:
             mock_settings.return_value.GROQ_API_KEY = "groq-valid-key-long-enough"
             mock_settings.return_value.GROQ_MODEL = "llama-3"
             

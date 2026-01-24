@@ -11,7 +11,7 @@ Tests:
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 
-from app.core.pricing import (
+from app.shared.core.pricing import (
     PricingTier,
     FeatureFlag,
     TIER_CONFIG as TIER_FEATURES,

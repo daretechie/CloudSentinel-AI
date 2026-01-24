@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 import json
 
-from app.services.cache import CacheService, get_cache_service
+from app.shared.cache import CacheService, get_cache_service
 
 
 class TestCacheServiceDisabled:
@@ -19,12 +19,12 @@ class TestCacheServiceDisabled:
     
     def test_disabled_when_no_credentials(self):
         """Cache is disabled when UPSTASH credentials are missing."""
-        with patch('app.services.cache.get_settings') as mock_settings:
+        with patch('app.shared.cache.get_settings') as mock_settings:
             mock_settings.return_value.UPSTASH_REDIS_URL = None
             mock_settings.return_value.UPSTASH_REDIS_TOKEN = None
             
             # Reset singleton
-            import app.services.cache as cache_module
+            import app.shared.cache as cache_module
             cache_module._async_client = None
             cache_module._cache_service = None
             
@@ -34,11 +34,11 @@ class TestCacheServiceDisabled:
     @pytest.mark.asyncio
     async def test_get_analysis_returns_none_when_disabled(self):
         """get_analysis returns None when cache is disabled."""
-        with patch('app.services.cache.get_settings') as mock_settings:
+        with patch('app.shared.cache.get_settings') as mock_settings:
             mock_settings.return_value.UPSTASH_REDIS_URL = None
             mock_settings.return_value.UPSTASH_REDIS_TOKEN = None
             
-            import app.services.cache as cache_module
+            import app.shared.cache as cache_module
             cache_module._async_client = None
             cache_module._cache_service = None
             
@@ -49,11 +49,11 @@ class TestCacheServiceDisabled:
     @pytest.mark.asyncio
     async def test_set_analysis_returns_false_when_disabled(self):
         """set_analysis returns False when cache is disabled."""
-        with patch('app.services.cache.get_settings') as mock_settings:
+        with patch('app.shared.cache.get_settings') as mock_settings:
             mock_settings.return_value.UPSTASH_REDIS_URL = None
             mock_settings.return_value.UPSTASH_REDIS_TOKEN = None
             
-            import app.services.cache as cache_module
+            import app.shared.cache as cache_module
             cache_module._async_client = None
             cache_module._cache_service = None
             
@@ -71,8 +71,8 @@ class TestCacheServiceEnabled:
         tenant_id = uuid4()
         cached_data = {"anomalies": [], "recommendations": []}
         
-        with patch('app.services.cache.get_settings') as mock_settings, \
-             patch('app.services.cache.AsyncRedis') as MockRedis:
+        with patch('app.shared.cache.get_settings') as mock_settings, \
+             patch('app.shared.cache.AsyncRedis') as MockRedis:
             mock_settings.return_value.UPSTASH_REDIS_URL = "https://test.upstash.io"
             mock_settings.return_value.UPSTASH_REDIS_TOKEN = "test_token"
             
@@ -81,7 +81,7 @@ class TestCacheServiceEnabled:
             mock_client.get = AsyncMock(return_value=json.dumps(cached_data))
             MockRedis.return_value = mock_client
             
-            import app.services.cache as cache_module
+            import app.shared.cache as cache_module
             cache_module._async_client = None
             cache_module._cache_service = None
             
@@ -136,11 +136,11 @@ class TestCacheServiceSingleton:
     
     def test_get_cache_service_returns_same_instance(self):
         """get_cache_service returns the same instance."""
-        with patch('app.services.cache.get_settings') as mock_settings:
+        with patch('app.shared.cache.get_settings') as mock_settings:
             mock_settings.return_value.UPSTASH_REDIS_URL = None
             mock_settings.return_value.UPSTASH_REDIS_TOKEN = None
             
-            import app.services.cache as cache_module
+            import app.shared.cache as cache_module
             cache_module._cache_service = None
             
             service1 = get_cache_service()

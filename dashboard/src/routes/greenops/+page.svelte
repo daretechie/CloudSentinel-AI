@@ -10,6 +10,7 @@
 -->
 
 <script lang="ts">
+	/* eslint-disable svelte/no-navigation-without-resolve */
 	import { base } from '$app/paths';
 	import { goto } from '$app/navigation';
 
@@ -288,6 +289,7 @@
 						</div>
 					{:else}
 						<div class="space-y-3">
+							<!-- eslint-disable-next-line @typescript-eslint/no-unused-vars -->
 							{#each Array(3) as _, i (i)}
 								<div class="h-16 bg-ink-800/30 rounded-lg animate-pulse"></div>
 							{/each}

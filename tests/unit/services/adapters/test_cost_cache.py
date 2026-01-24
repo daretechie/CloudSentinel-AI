@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from datetime import date, datetime, timezone, timedelta
 import json
 from decimal import Decimal
-from app.services.adapters.cost_cache import (
+from app.shared.adapters.cost_cache import (
     InMemoryCache,
     RedisCache,
     CostCache,
@@ -25,7 +25,7 @@ class TestInMemoryCache:
     @pytest.mark.asyncio
     async def test_get_expired(self):
         cache = InMemoryCache()
-        with patch("app.services.adapters.cost_cache.datetime") as mock_dt:
+        with patch("app.shared.adapters.cost_cache.datetime") as mock_dt:
             # mock_dt is the datetime module in cost_cache
             now = datetime.now(timezone.utc)
             mock_dt.now.return_value = now
@@ -130,20 +130,20 @@ class TestCostCache:
 
 @pytest.mark.asyncio
 async def test_get_cost_cache_factory():
-    with patch("app.services.adapters.cost_cache.settings") as mock_settings:
+    with patch("app.shared.adapters.cost_cache.settings") as mock_settings:
         mock_settings.REDIS_URL = None
         # Reset singleton for test
-        with patch("app.services.adapters.cost_cache._cache_instance", None):
+        with patch("app.shared.adapters.cost_cache._cache_instance", None):
             cache = await get_cost_cache()
             assert isinstance(cache.backend, InMemoryCache)
             
             mock_settings.REDIS_URL = "redis://localhost"
-            with patch("app.services.adapters.cost_cache.RedisCache") as mock_redis_cls:
+            with patch("app.shared.adapters.cost_cache.RedisCache") as mock_redis_cls:
                 mock_redis = MagicMock(spec=RedisCache)
                 mock_redis.health_check = AsyncMock(return_value=True)
                 mock_redis_cls.return_value = mock_redis
                 
                 # Reset singleton again
-                with patch("app.services.adapters.cost_cache._cache_instance", None):
+                with patch("app.shared.adapters.cost_cache._cache_instance", None):
                     cache = await get_cost_cache()
                     assert cache.backend is mock_redis

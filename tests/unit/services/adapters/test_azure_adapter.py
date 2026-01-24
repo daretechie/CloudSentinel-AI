@@ -1,9 +1,9 @@
 import pytest
 from unittest.mock import MagicMock, AsyncMock, patch
 from datetime import datetime
-from app.services.adapters.azure import AzureAdapter
+from app.shared.adapters.azure import AzureAdapter
 from app.models.azure_connection import AzureConnection
-from app.core.exceptions import AdapterError
+from app.shared.core.exceptions import AdapterError
 
 @pytest.fixture
 def mock_connection():

@@ -10,7 +10,7 @@ Tests:
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from app.core.middleware import RequestIDMiddleware, SecurityHeadersMiddleware
+from app.shared.core.middleware import RequestIDMiddleware, SecurityHeadersMiddleware
 
 
 class TestRequestIDMiddleware:
@@ -65,12 +65,12 @@ class TestTimeoutMiddleware:
     
     def test_middleware_importable(self):
         """TimeoutMiddleware should be importable."""
-        from app.core.timeout import TimeoutMiddleware
+        from app.shared.core.timeout import TimeoutMiddleware
         assert TimeoutMiddleware is not None
     
     def test_middleware_accepts_timeout(self):
         """Middleware should accept timeout parameter."""
-        from app.core.timeout import TimeoutMiddleware
+        from app.shared.core.timeout import TimeoutMiddleware
         
         app = FastAPI()
         app.add_middleware(TimeoutMiddleware, timeout_seconds=30)
@@ -89,5 +89,5 @@ class TestRateLimitMiddleware:
     
     def test_rate_limit_importable(self):
         """Rate limit module should be importable."""
-        from app.core.rate_limit import get_limiter
+        from app.shared.core.rate_limit import get_limiter
         assert get_limiter() is not None

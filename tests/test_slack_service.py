@@ -8,7 +8,7 @@ Tests cover:
 """
 import pytest
 from unittest.mock import MagicMock, patch, AsyncMock
-from app.services.notifications.slack import SlackService
+from app.modules.notifications.domain.slack import SlackService
 
 
 class TestSlackService:
@@ -17,7 +17,7 @@ class TestSlackService:
     @pytest.fixture
     def mock_web_client(self):
         """Create a mock Slack WebClient."""
-        with patch("app.services.notifications.slack.AsyncWebClient") as mock:
+        with patch("app.modules.notifications.domain.slack.AsyncWebClient") as mock:
             yield mock
     
     @pytest.fixture
@@ -36,7 +36,7 @@ class TestSendAlert:
     @pytest.mark.asyncio
     async def test_send_alert_info_severity(self):
         """Test sending an info-level alert."""
-        with patch("app.services.notifications.slack.AsyncWebClient") as mock_client:
+        with patch("app.modules.notifications.domain.slack.AsyncWebClient") as mock_client:
             mock_instance = MagicMock()
             mock_instance.chat_postMessage = AsyncMock(return_value={"ok": True})
             mock_client.return_value = mock_instance
@@ -58,7 +58,7 @@ class TestSendAlert:
     @pytest.mark.asyncio
     async def test_send_alert_warning_severity(self):
         """Test sending a warning-level alert."""
-        with patch("app.services.notifications.slack.AsyncWebClient") as mock_client:
+        with patch("app.modules.notifications.domain.slack.AsyncWebClient") as mock_client:
             mock_instance = MagicMock()
             mock_instance.chat_postMessage = AsyncMock(return_value={"ok": True})
             mock_client.return_value = mock_instance
@@ -78,7 +78,7 @@ class TestSendAlert:
     @pytest.mark.asyncio
     async def test_send_alert_critical_severity(self):
         """Test sending a critical-level alert."""
-        with patch("app.services.notifications.slack.AsyncWebClient") as mock_client:
+        with patch("app.modules.notifications.domain.slack.AsyncWebClient") as mock_client:
             mock_instance = MagicMock()
             mock_instance.chat_postMessage = AsyncMock(return_value={"ok": True})
             mock_client.return_value = mock_instance
@@ -100,7 +100,7 @@ class TestSendAlert:
         """Test handling of Slack API failures."""
         from slack_sdk.errors import SlackApiError
         
-        with patch("app.services.notifications.slack.AsyncWebClient") as mock_client:
+        with patch("app.modules.notifications.domain.slack.AsyncWebClient") as mock_client:
             mock_instance = MagicMock()
             mock_instance.chat_postMessage = AsyncMock(side_effect=SlackApiError(
                 message="channel_not_found",
@@ -125,7 +125,7 @@ class TestSendDigest:
     @pytest.mark.asyncio
     async def test_send_digest_success(self):
         """Test sending daily digest with all stats."""
-        with patch("app.services.notifications.slack.AsyncWebClient") as mock_client:
+        with patch("app.modules.notifications.domain.slack.AsyncWebClient") as mock_client:
             mock_instance = MagicMock()
             mock_instance.chat_postMessage = AsyncMock(return_value={"ok": True})
             mock_client.return_value = mock_instance
@@ -149,7 +149,7 @@ class TestSendDigest:
     @pytest.mark.asyncio
     async def test_send_digest_handles_missing_stats(self):
         """Test digest handles missing stats gracefully."""
-        with patch("app.services.notifications.slack.AsyncWebClient") as mock_client:
+        with patch("app.modules.notifications.domain.slack.AsyncWebClient") as mock_client:
             mock_instance = MagicMock()
             mock_instance.chat_postMessage = AsyncMock(return_value={"ok": True})
             mock_client.return_value = mock_instance
@@ -164,7 +164,7 @@ class TestSendDigest:
         """Test digest handles API failure gracefully."""
         from slack_sdk.errors import SlackApiError
         
-        with patch("app.services.notifications.slack.AsyncWebClient") as mock_client:
+        with patch("app.modules.notifications.domain.slack.AsyncWebClient") as mock_client:
             mock_instance = MagicMock()
             mock_instance.chat_postMessage = AsyncMock(side_effect=SlackApiError(
                 message="invalid_auth",

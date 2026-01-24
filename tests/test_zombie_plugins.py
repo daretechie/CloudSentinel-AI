@@ -8,8 +8,8 @@ Tests:
 """
 
 
-from app.services.zombies.zombie_plugin import ZombiePlugin
-from app.services.zombies import plugins
+from app.modules.optimization.domain.zombie_plugin import ZombiePlugin
+from app.modules.optimization.domain import plugins
 
 
 class TestZombiePluginModule:

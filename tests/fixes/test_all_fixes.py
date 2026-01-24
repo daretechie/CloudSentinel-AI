@@ -16,16 +16,16 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 # Import all modules under test
-from app.db.session import check_rls_policy
-from app.core.exceptions import ValdrixException, AIAnalysisError
-from app.core.security import (
+from app.shared.db.session import check_rls_policy
+from app.shared.core.exceptions import ValdrixException, AIAnalysisError
+from app.shared.core.security import (
     EncryptionKeyManager,
     encrypt_string,
     decrypt_string,
 )
-from app.services.llm.budget_manager import LLMBudgetManager, BudgetExceededError
-from app.services.jobs.handlers.base import BaseJobHandler, JobTimeoutError
-from app.services.scheduler.orchestrator import SchedulerOrchestrator
+from app.shared.llm.budget_manager import LLMBudgetManager, BudgetExceededError
+from app.modules.governance.domain.jobs.handlers.base import BaseJobHandler, JobTimeoutError
+from app.modules.governance.domain.scheduler.orchestrator import SchedulerOrchestrator
 
 
 logger = structlog.get_logger()
@@ -210,7 +210,7 @@ class TestLLMBudgetCheck:
         tenant_id = uuid4()
         
         # Patch LLMUsage to avoid real model instantiation issues
-        with patch('app.services.llm.budget_manager.LLMUsage', autospec=True) as mock_usage_cls:
+        with patch('app.shared.llm.budget_manager.LLMUsage', autospec=True) as mock_usage_cls:
             await LLMBudgetManager.record_usage(
                 tenant_id=tenant_id,
                 db=mock_db,

@@ -12,7 +12,7 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
-from app.services.billing.webhook_retry import (
+from app.modules.reporting.domain.billing.webhook_retry import (
     WebhookRetryService,
     WEBHOOK_MAX_ATTEMPTS
 )

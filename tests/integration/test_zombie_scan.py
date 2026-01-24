@@ -50,7 +50,7 @@ class TestZombieDetectorFactory:
 
     def test_factory_extracts_aws_credentials(self, mock_aws_connection):
         """Verify factory extracts credentials from AWS connection."""
-        from app.services.zombies.factory import ZombieDetectorFactory
+        from app.modules.optimization.domain.factory import ZombieDetectorFactory
         
         # Get detector - should pass connection
         detector = ZombieDetectorFactory.get_detector(
@@ -66,7 +66,7 @@ class TestZombieDetectorFactory:
 
     def test_factory_handles_azure_connection(self):
         """Verify factory correctly handles Azure connections."""
-        from app.services.zombies.factory import ZombieDetectorFactory
+        from app.modules.optimization.domain.factory import ZombieDetectorFactory
         
         mock_azure = MagicMock()
         type(mock_azure).__name__ = "AzureConnection"
@@ -87,7 +87,7 @@ class TestZombieDetectorFactory:
     def test_factory_handles_gcp_connection(self, mock_creds):
         """Verify factory correctly handles GCP connections."""
         mock_creds.return_value = MagicMock()
-        from app.services.zombies.factory import ZombieDetectorFactory
+        from app.modules.optimization.domain.factory import ZombieDetectorFactory
         
         mock_gcp = MagicMock()
         type(mock_gcp).__name__ = "GCPConnection"
@@ -119,7 +119,7 @@ from botocore.config import Config
 @pytest.fixture(scope="class")
 def moto_server():
     """Start a ThreadedMotoServer for async integration testing."""
-    from app.core.config import get_settings
+    from app.shared.core.config import get_settings
     server = ThreadedMotoServer(port=5001)
     server.start()
     settings = get_settings()
@@ -148,7 +148,7 @@ class TestZombieScanWithMoto:
         """Test that unattached volumes are correctly identified using moto."""
         # 1. Setup - Create a volume in moto
         session = aioboto3.Session()
-        from app.core.config import get_settings
+        from app.shared.core.config import get_settings
         endpoint_url = get_settings().AWS_ENDPOINT_URL
         
         async with session.client("ec2", region_name="us-east-1", endpoint_url=endpoint_url) as ec2:
@@ -163,7 +163,7 @@ class TestZombieScanWithMoto:
             volume_id = vol_response["VolumeId"]
             
         # 2. Act - Run the storage plugin
-        from app.services.zombies.aws_provider.plugins.storage import UnattachedVolumesPlugin
+        from app.modules.optimization.domain.aws_provider.plugins.storage import UnattachedVolumesPlugin
         plugin = UnattachedVolumesPlugin()
         
         boto_config = Config(read_timeout=30, connect_timeout=10, retries={"max_attempts": 3})
@@ -190,7 +190,7 @@ class TestZombieScanWithMoto:
     async def test_old_snapshot_detection_with_moto(self):
         """Test that old snapshots are correctly identified as zombies with moto."""
         session = aioboto3.Session()
-        from app.core.config import get_settings
+        from app.shared.core.config import get_settings
         endpoint_url = get_settings().AWS_ENDPOINT_URL
         
         # 1. Setup - Create a volume and a snapshot
@@ -200,7 +200,7 @@ class TestZombieScanWithMoto:
             snapshot_id = snap["SnapshotId"]
             
         # 2. Act - Run the storage plugin
-        from app.services.zombies.aws_provider.plugins.storage import OldSnapshotsPlugin
+        from app.modules.optimization.domain.aws_provider.plugins.storage import OldSnapshotsPlugin
         plugin = OldSnapshotsPlugin()
         
         boto_config = Config(read_timeout=30, connect_timeout=10, retries={"max_attempts": 3})
@@ -228,7 +228,7 @@ class TestPluginRegistry:
 
     def test_aws_plugins_registered(self):
         """Verify AWS plugins are registered."""
-        from app.services.zombies.registry import registry
+        from app.modules.optimization.domain.registry import registry
         
         aws_plugins = registry.get_plugins_for_provider("aws")
         assert len(aws_plugins) > 0
@@ -239,24 +239,24 @@ class TestPluginRegistry:
 
     def test_azure_plugins_registered(self):
         """Verify Azure plugins are registered."""
-        from app.services.zombies.registry import registry
+        from app.modules.optimization.domain.registry import registry
         
         # Import plugins to trigger registration
-        import app.services.zombies.azure_provider.plugins.unattached_disks  # noqa
-        import app.services.zombies.azure_provider.plugins.orphaned_ips  # noqa
-        import app.services.zombies.azure_provider.plugins.orphaned_images  # noqa
+        import app.modules.optimization.domain.azure_provider.plugins.unattached_disks  # noqa
+        import app.modules.optimization.domain.azure_provider.plugins.orphaned_ips  # noqa
+        import app.modules.optimization.domain.azure_provider.plugins.orphaned_images  # noqa
         
         azure_plugins = registry.get_plugins_for_provider("azure")
         assert len(azure_plugins) >= 3
 
     def test_gcp_plugins_registered(self):
         """Verify GCP plugins are registered."""
-        from app.services.zombies.registry import registry
+        from app.modules.optimization.domain.registry import registry
         
         # Import plugins to trigger registration
-        import app.services.zombies.gcp_provider.plugins.unattached_disks  # noqa
-        import app.services.zombies.gcp_provider.plugins.unused_ips  # noqa
-        import app.services.zombies.gcp_provider.plugins.machine_images  # noqa
+        import app.modules.optimization.domain.gcp_provider.plugins.unattached_disks  # noqa
+        import app.modules.optimization.domain.gcp_provider.plugins.unused_ips  # noqa
+        import app.modules.optimization.domain.gcp_provider.plugins.machine_images  # noqa
         
         gcp_plugins = registry.get_plugins_for_provider("gcp")
         assert len(gcp_plugins) >= 3

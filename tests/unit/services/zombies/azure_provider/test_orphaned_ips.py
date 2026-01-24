@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import MagicMock
-from app.services.zombies.azure_provider.plugins.orphaned_ips import AzureOrphanedIpsPlugin
+from app.modules.optimization.domain.azure_provider.plugins.orphaned_ips import AzureOrphanedIpsPlugin
 
 @pytest.fixture
 def plugin():

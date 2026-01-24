@@ -1,4 +1,4 @@
-from app.services.carbon.calculator import CarbonCalculator, EMBODIED_EMISSIONS_FACTOR, AWS_PUE
+from app.modules.reporting.domain.calculator import CarbonCalculator, EMBODIED_EMISSIONS_FACTOR, AWS_PUE
 
 def test_scope3_calculation():
     """Verify Scope 3 (Embodied) emissions are correctly added."""

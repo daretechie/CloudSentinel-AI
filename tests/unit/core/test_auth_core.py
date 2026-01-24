@@ -1,14 +1,14 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from fastapi import Request, HTTPException, status
-from app.core.auth import get_current_user, decode_jwt, CurrentUser, get_current_user_from_jwt, requires_role, require_tenant_access
+from app.shared.core.auth import get_current_user, decode_jwt, CurrentUser, get_current_user_from_jwt, requires_role, require_tenant_access
 from uuid import uuid4, UUID
 import jwt
 from datetime import datetime, timezone, timedelta
 
 @pytest.fixture
 def mock_settings():
-    with patch("app.core.auth.get_settings") as mock:
+    with patch("app.shared.core.auth.get_settings") as mock:
         mock.return_value.SUPABASE_JWT_SECRET = "test_secret"
         yield mock.return_value
 

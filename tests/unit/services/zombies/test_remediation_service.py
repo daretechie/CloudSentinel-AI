@@ -6,10 +6,10 @@ from datetime import datetime, timezone, timedelta
 from botocore.exceptions import ClientError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from app.services.zombies.remediation_service import RemediationService
+from app.modules.optimization.domain.remediation_service import RemediationService
 from app.models.remediation import RemediationRequest, RemediationStatus, RemediationAction
 from app.models.aws_connection import AWSConnection
-from app.services.security.audit_log import AuditEventType
+from app.modules.governance.domain.security.audit_log import AuditEventType
 
 @pytest.fixture
 def db_session():
@@ -176,8 +176,8 @@ async def test_execute_scheduled_successfully(remediation_service, db_session):
     mock_res.scalar_one_or_none.return_value = req
     db_session.execute.return_value = mock_res
     
-    with patch("app.services.zombies.remediation_service.AuditLogger.log", return_value=AsyncMock()) as mock_audit, \
-         patch("app.services.jobs.processor.enqueue_job", return_value=AsyncMock()) as mock_job:
+    with patch("app.modules.optimization.domain.remediation_service.AuditLogger.log", return_value=AsyncMock()) as mock_audit, \
+         patch("app.modules.governance.domain.jobs.processor.enqueue_job", return_value=AsyncMock()) as mock_job:
         
         res = await remediation_service.execute(request_id, tenant_id, bypass_grace_period=False)
         assert res.status == RemediationStatus.SCHEDULED
@@ -215,7 +215,7 @@ async def test_execute_grace_period_logic(remediation_service, db_session):
     req.reviewed_by_user_id = uuid4()
     
     with patch.object(remediation_service, "_execute_action", return_value=AsyncMock()), \
-         patch("app.services.zombies.remediation_service.AuditLogger.log", return_value=AsyncMock()):
+         patch("app.modules.optimization.domain.remediation_service.AuditLogger.log", return_value=AsyncMock()):
         res = await remediation_service.execute(request_id, tenant_id)
         assert res.status == RemediationStatus.COMPLETED
 
@@ -241,7 +241,7 @@ async def test_execute_backup_routing(remediation_service, db_session):
     db_session.execute.return_value = mock_res
     
     with patch.object(remediation_service, "_execute_action", return_value=AsyncMock()), \
-         patch("app.services.zombies.remediation_service.AuditLogger.log", return_value=AsyncMock()):
+         patch("app.modules.optimization.domain.remediation_service.AuditLogger.log", return_value=AsyncMock()):
         
         # 1. RDS Backup
         req.status = RemediationStatus.APPROVED
@@ -276,7 +276,7 @@ async def test_execute_backup_failure_aborts(remediation_service, db_session):
     db_session.execute.return_value = mock_res
     
     with patch.object(remediation_service, "_create_volume_backup", side_effect=Exception("AWS Error")), \
-         patch("app.services.zombies.remediation_service.AuditLogger.log", return_value=AsyncMock()):
+         patch("app.modules.optimization.domain.remediation_service.AuditLogger.log", return_value=AsyncMock()):
         
         res = await remediation_service.execute(request_id, tenant_id, bypass_grace_period=True)
         assert res.status == RemediationStatus.FAILED
@@ -292,7 +292,7 @@ async def test_get_client_credential_mapping(remediation_service):
     }
     mock_session = MagicMock()
     remediation_service.session = mock_session
-    with patch("app.core.config.get_settings") as mock_settings:
+    with patch("app.shared.core.config.get_settings") as mock_settings:
         mock_settings.return_value.AWS_ENDPOINT_URL = "http://localhost"
         await remediation_service._get_client("ec2")
         args, kwargs = mock_session.client.call_args
@@ -363,7 +363,7 @@ async def test_enforce_hard_limit_success(remediation_service, db_session):
     req.confidence_score = Decimal("0.99")
     req.estimated_monthly_savings = Decimal("10.0")
     
-    with patch("app.services.llm.usage_tracker.UsageTracker.check_budget", return_value="hard_limit"):
+    with patch("app.shared.llm.usage_tracker.UsageTracker.check_budget", return_value="hard_limit"):
         mock_res = MagicMock()
         mock_res.scalars.return_value.all.return_value = [req]
         db_session.execute.return_value = mock_res

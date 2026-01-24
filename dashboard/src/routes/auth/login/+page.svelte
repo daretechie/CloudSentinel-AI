@@ -8,6 +8,7 @@
 -->
 
 <script lang="ts">
+	/* eslint-disable svelte/no-navigation-without-resolve */
 	import { createSupabaseBrowserClient } from '$lib/supabase';
 	import { goto, invalidateAll } from '$app/navigation';
 	import { base } from '$app/paths';

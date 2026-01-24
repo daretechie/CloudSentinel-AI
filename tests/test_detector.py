@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import MagicMock, AsyncMock, patch
 from uuid import uuid4
-from app.services.zombies import ZombieDetector, RemediationService
+from app.modules.optimization.domain import ZombieDetector, RemediationService
 from app.models.remediation import RemediationAction, RemediationStatus, RemediationRequest
 
 # --- ZombieDetector Tests ---

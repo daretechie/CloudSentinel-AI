@@ -3,9 +3,9 @@ import asyncio
 from unittest.mock import MagicMock, AsyncMock, patch
 from uuid import uuid4
 from datetime import datetime, timezone, timedelta
-from app.services.zombies.remediation_service import RemediationService
+from app.modules.optimization.domain.remediation_service import RemediationService
 from app.models.remediation import RemediationRequest, RemediationStatus, RemediationAction
-from app.services.security.audit_log import AuditEventType
+from app.modules.governance.domain.security.audit_log import AuditEventType
 
 @pytest.fixture
 def mock_db():
@@ -48,7 +48,7 @@ async def test_execute_fails_if_backup_fails(remediation_service, mock_db):
         with patch.object(remediation_service, "_execute_action", AsyncMock()) as mock_delete:
             
             # Mock AuditLogger to verify logging
-            with patch("app.services.zombies.remediation_service.AuditLogger") as MockAuditLogger:
+            with patch("app.modules.optimization.domain.remediation_service.AuditLogger") as MockAuditLogger:
                 mock_audit = AsyncMock()
                 MockAuditLogger.return_value = mock_audit
                 
@@ -98,7 +98,7 @@ async def test_execute_success_with_audit_trail(remediation_service, mock_db):
     
     with patch.object(remediation_service, "_create_volume_backup", AsyncMock(return_value="snap-123")):
         with patch.object(remediation_service, "_execute_action", AsyncMock()) as mock_delete:
-            with patch("app.services.zombies.remediation_service.AuditLogger") as MockAuditLogger:
+            with patch("app.modules.optimization.domain.remediation_service.AuditLogger") as MockAuditLogger:
                 mock_audit = AsyncMock()
                 MockAuditLogger.return_value = mock_audit
                 

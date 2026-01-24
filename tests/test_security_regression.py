@@ -4,7 +4,7 @@ from httpx import AsyncClient
 from uuid import uuid4
 from app.models.tenant import Tenant, User
 from app.models.remediation import RemediationRequest, RemediationStatus, RemediationAction
-from app.core.auth import CurrentUser, get_current_user, require_tenant_access
+from app.shared.core.auth import CurrentUser, get_current_user, require_tenant_access
 from fastapi import Request
 
 @pytest.fixture
@@ -194,7 +194,7 @@ async def test_remediation_atomicity_lock_check():
     Verify that the execute method uses row-level locking.
     (P3 Reliability)
     """
-    from app.services.zombies.remediation_service import RemediationService
+    from app.modules.optimization.domain.remediation_service import RemediationService
     
     import inspect
     source = inspect.getsource(RemediationService.execute)

@@ -2,7 +2,7 @@ import pytest
 import uuid
 from unittest.mock import MagicMock
 from sqlalchemy import text
-from app.db.session import get_db, async_session_maker
+from app.shared.db.session import get_db, async_session_maker
 from app.models.tenant import Tenant
 
 @pytest.mark.asyncio
@@ -58,7 +58,7 @@ async def test_rls_listener_emits_log_on_missing_context():
     when a query is executed on an un-contextualized request session.
     """
     from unittest.mock import patch
-    from app.db.session import get_db
+    from app.shared.db.session import get_db
     from sqlalchemy import text
     
     mock_request = MagicMock()
@@ -70,8 +70,8 @@ async def test_rls_listener_emits_log_on_missing_context():
     
     try:
         # Patch the logger to verify critical was called
-        with patch("app.db.session.logger") as mock_logger:
-            from app.core.exceptions import ValdrixException
+        with patch("app.shared.db.session.logger") as mock_logger:
+            from app.shared.core.exceptions import ValdrixException
             # Executing a query with RLS FALSE should trigger the listener and RAISE
             # Use a table that isn't bypassed by SELECT 1 rule
             with pytest.raises(ValdrixException) as exc:

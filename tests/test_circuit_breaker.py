@@ -11,7 +11,7 @@ Tests:
 import pytest
 from unittest.mock import patch
 
-from app.services.remediation.circuit_breaker import (
+from app.shared.remediation.circuit_breaker import (
     CircuitBreakerConfig,
     CircuitBreaker,
     CircuitState,
@@ -49,7 +49,7 @@ class TestCircuitBreakerState:
     @pytest.mark.asyncio
     async def test_memory_fallback_get(self):
         """State should fallback to memory when no Redis."""
-        with patch('app.services.remediation.circuit_breaker.settings.REDIS_URL', None):
+        with patch('app.shared.remediation.circuit_breaker.settings.REDIS_URL', None):
             state = CircuitBreakerState("tenant-123", redis_client=None)
             
             # Get default
@@ -59,7 +59,7 @@ class TestCircuitBreakerState:
     @pytest.mark.asyncio
     async def test_memory_fallback_set_get(self):
         """State should store in memory when no Redis."""
-        with patch('app.services.remediation.circuit_breaker.settings.REDIS_URL', None):
+        with patch('app.shared.remediation.circuit_breaker.settings.REDIS_URL', None):
             state = CircuitBreakerState("tenant-123", redis_client=None)
             
             await state.set("test_key", "test_value")
@@ -69,7 +69,7 @@ class TestCircuitBreakerState:
     @pytest.mark.asyncio
     async def test_memory_fallback_incr(self):
         """State should increment in memory when no Redis."""
-        with patch('app.services.remediation.circuit_breaker.settings.REDIS_URL', None):
+        with patch('app.shared.remediation.circuit_breaker.settings.REDIS_URL', None):
             state = CircuitBreakerState("tenant-fallback-incr", redis_client=None)
             
             result1 = await state.incr("counter")

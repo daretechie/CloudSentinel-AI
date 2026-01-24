@@ -10,7 +10,7 @@ Tests:
 
 from unittest.mock import MagicMock
 
-from app.services.llm.zombie_analyzer import ZombieAnalyzer
+from app.shared.llm.zombie_analyzer import ZombieAnalyzer
 
 
 class TestZombieAnalyzerInitialization:

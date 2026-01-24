@@ -12,7 +12,7 @@ import pytest
 from unittest.mock import MagicMock, AsyncMock, patch
 from uuid import uuid4
 
-from app.services.scheduler.orchestrator import SchedulerService
+from app.modules.governance.domain.scheduler.orchestrator import SchedulerService
 
 
 def create_mock_session_maker():
@@ -154,7 +154,7 @@ class TestDailyAnalysisJob:
     
     async def test_fetches_all_tenants(self):
         """Should query all tenants from database."""
-        from app.services.scheduler.orchestrator import SchedulerService
+        from app.modules.governance.domain.scheduler.orchestrator import SchedulerService
         mock_db = AsyncMock(name="db")
         
         class MockAsyncContext:

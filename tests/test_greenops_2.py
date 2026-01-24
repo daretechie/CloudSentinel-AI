@@ -4,8 +4,8 @@ from uuid import uuid4
 from datetime import datetime, timezone, timedelta
 from decimal import Decimal
 from unittest.mock import MagicMock, patch, AsyncMock
-from app.services.analysis.forecaster import SymbolicForecaster
-from app.services.scheduler.orchestrator import SchedulerOrchestrator
+from app.shared.analysis.forecaster import SymbolicForecaster
+from app.modules.governance.domain.scheduler.orchestrator import SchedulerOrchestrator
 
 @pytest.mark.asyncio
 async def test_forecast_carbon():
@@ -42,7 +42,7 @@ async def test_is_low_carbon_window():
     orchestrator = SchedulerOrchestrator(session_maker)
     
     # Test high solar window (12PM UTC)
-    with patch("app.services.scheduler.orchestrator.datetime") as mock_dt:
+    with patch("app.modules.governance.domain.scheduler.orchestrator.datetime") as mock_dt:
         mock_now = MagicMock()
         mock_now.hour = 12
         mock_dt.now.return_value = mock_now
@@ -50,7 +50,7 @@ async def test_is_low_carbon_window():
         assert result is True
         
     # Test peak demand window (7PM UTC)
-    with patch("app.services.scheduler.orchestrator.datetime") as mock_dt:
+    with patch("app.modules.governance.domain.scheduler.orchestrator.datetime") as mock_dt:
         mock_now = MagicMock()
         mock_now.hour = 19
         mock_dt.now.return_value = mock_now
@@ -64,7 +64,7 @@ async def test_green_scheduling_delays_in_non_green_window():
     orchestrator = SchedulerOrchestrator(session_maker)
     
     # Test 8PM UTC - should NOT be green
-    with patch("app.services.scheduler.orchestrator.datetime") as mock_dt:
+    with patch("app.modules.governance.domain.scheduler.orchestrator.datetime") as mock_dt:
         mock_now = MagicMock()
         mock_now.hour = 20
         mock_dt.now.return_value = mock_now
@@ -72,7 +72,7 @@ async def test_green_scheduling_delays_in_non_green_window():
         assert result is False
 
     # Test 3AM UTC - SHOULD be green (low demand)
-    with patch("app.services.scheduler.orchestrator.datetime") as mock_dt:
+    with patch("app.modules.governance.domain.scheduler.orchestrator.datetime") as mock_dt:
         mock_now = MagicMock()
         mock_now.hour = 3
         mock_dt.now.return_value = mock_now

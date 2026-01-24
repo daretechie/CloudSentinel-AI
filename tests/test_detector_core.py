@@ -10,7 +10,7 @@ Tests:
 
 from datetime import datetime, timezone
 
-from app.services.zombies.detector import ZombieDetector
+from app.modules.optimization.domain.detector import ZombieDetector
 
 
 class TestZombieDetectorInitialization:

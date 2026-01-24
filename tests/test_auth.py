@@ -11,7 +11,7 @@ Tests:
 import pytest
 from uuid import UUID
 
-from app.core.auth import CurrentUser, requires_role
+from app.shared.core.auth import CurrentUser, requires_role
 
 
 class TestCurrentUserModel:
@@ -97,12 +97,12 @@ class TestJWTDecoding:
     
     def test_jwt_decode_function_exists(self):
         """decode_jwt should be importable."""
-        from app.core.auth import decode_jwt
+        from app.shared.core.auth import decode_jwt
         assert callable(decode_jwt)
     
     def test_invalid_token_raises(self):
         """Invalid JWT should raise HTTPException."""
-        from app.core.auth import decode_jwt
+        from app.shared.core.auth import decode_jwt
         from fastapi import HTTPException
         
         with pytest.raises(HTTPException):
@@ -114,10 +114,10 @@ class TestAuthDependencies:
     
     def test_get_current_user_exists(self):
         """get_current_user should be importable."""
-        from app.core.auth import get_current_user
+        from app.shared.core.auth import get_current_user
         assert callable(get_current_user)
     
     def test_get_current_user_from_jwt_exists(self):
         """get_current_user_from_jwt should be importable."""
-        from app.core.auth import get_current_user_from_jwt
+        from app.shared.core.auth import get_current_user_from_jwt
         assert callable(get_current_user_from_jwt)

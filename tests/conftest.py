@@ -20,7 +20,7 @@ from app.models.azure_connection import AzureConnection
 from app.models.gcp_connection import GCPConnection
 from app.models.remediation import RemediationRequest
 from app.models.security import OIDCKey
-from app.services.security.audit_log import AuditLog
+from app.modules.governance.domain.security.audit_log import AuditLog
 from app.models.llm import LLMUsage, LLMBudget
 from app.models.background_job import BackgroundJob
 from app.models.discovered_account import DiscoveredAccount
@@ -34,21 +34,21 @@ from app.models.cloud import CostRecord, CloudAccount
 @pytest.fixture(autouse=True)
 def disable_rate_limiting():
     """Manually disable rate limiting for every test."""
-    from app.core.rate_limit import get_limiter
+    from app.shared.core.rate_limit import get_limiter
     limiter = get_limiter()
     limiter.enabled = False
     yield
     limiter.enabled = True
-from app.db.session import async_session_maker
+from app.shared.db.session import async_session_maker
 from sqlalchemy.ext.asyncio import AsyncSession
 
 _TABLES_CREATED = False
 
 async def _create_tables():
     """Helper to create all tables in the test database."""
-    from app.db.base import Base
+    from app.shared.db.base import Base
 
-    from app.db.session import engine
+    from app.shared.db.session import engine
     from sqlalchemy import text
     async with engine.begin() as conn:
         await conn.execute(text("DROP SCHEMA public CASCADE"))
@@ -69,10 +69,13 @@ def event_loop():
 @pytest.fixture(scope="session", autouse=True)
 def mock_settings():
     """Globally override settings for all tests."""
-    from app.core.config import get_settings, Settings
+    from app.shared.core.config import get_settings, Settings
     from cryptography.fernet import Fernet
     test_key = Fernet.generate_key().decode()
-    test_db_url = "postgresql+asyncpg://agentkern:agentkern_secret@localhost:5433/agentkern_identity"
+    
+    # Use in-memory SQLite by default for unit tests to ensure isolation
+    test_db_url = os.environ.get("TEST_DATABASE_URL", "sqlite+aiosqlite:///:memory:")
+    
     start_settings = Settings(
         DATABASE_URL=test_db_url,
         TESTING=True,
@@ -89,25 +92,36 @@ def mock_settings():
     app.dependency_overrides[get_settings] = lambda: start_settings
     
     with pytest.MonkeyPatch.context() as mp:
-        mp.setattr("app.core.security.settings", start_settings)
-        mp.setattr("app.db.session.settings", start_settings)
+        mp.setattr("app.shared.core.security.settings", start_settings)
+        mp.setattr("app.shared.db.session.settings", start_settings)
         mp.setattr("app.main.settings", start_settings)
         
         # Patch the engine and session maker in session.py
-        from app.db import session
+        from app.shared.db import session
         from sqlalchemy.ext.asyncio import create_async_engine
-        from sqlalchemy.pool import NullPool
+        from sqlalchemy.pool import NullPool, StaticPool
         
-        # Use NullPool for tests to avoid connection leaks across loops
+        # Use StaticPool for SQLite memory to preserve data across connections
+        poolclass = StaticPool if "sqlite" in test_db_url else NullPool
+        
         session.engine = create_async_engine(
             test_db_url,
-            poolclass=NullPool,
-            connect_args={"statement_cache_size": 0}
+            poolclass=poolclass,
+            connect_args={"check_same_thread": False} if "sqlite" in test_db_url else {"statement_cache_size": 0}
         )
         session.async_session_maker.configure(bind=session.engine)
         
         # Initialize schema synchronously for the session
-        asyncio.run(_create_tables())
+        # Only run explicit partition creation if using Postgres
+        if "postgresql" in test_db_url:
+            asyncio.run(_create_tables())
+        else:
+             # Basic creation for SQLite
+             from app.shared.db.base import Base
+             async def _create_sqlite():
+                 async with session.engine.begin() as conn:
+                     await conn.run_sync(Base.metadata.create_all)
+             asyncio.run(_create_sqlite())
         
         yield start_settings
     
@@ -118,14 +132,23 @@ def mock_settings():
 async def db(mock_settings) -> AsyncGenerator[AsyncSession, None]:
     """Provides a clean database session for each test, ensuring fresh engine."""
     from sqlalchemy.ext.asyncio import create_async_engine
-    from sqlalchemy.pool import NullPool
+    from sqlalchemy.pool import NullPool, StaticPool
     
     # Recreate engine to avoid loop-attachment errors from session-level setup
+    connect_args = {"check_same_thread": False} if "sqlite" in mock_settings.DATABASE_URL else {"statement_cache_size": 0}
+    poolclass = StaticPool if "sqlite" in mock_settings.DATABASE_URL else NullPool
+    
     test_engine = create_async_engine(
         mock_settings.DATABASE_URL,
-        poolclass=NullPool,
-        connect_args={"statement_cache_size": 0}
+        poolclass=poolclass,
+        connect_args=connect_args
     )
+    
+    # Ensure tables exist for this fresh engine
+    if "sqlite" in mock_settings.DATABASE_URL:
+        from app.shared.db.base import Base
+        async with test_engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
     
     async with test_engine.connect() as connection:
         trans = await connection.begin()

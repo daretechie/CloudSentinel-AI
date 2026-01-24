@@ -1,8 +1,8 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 from botocore.exceptions import ClientError
-from app.services.adapters.aws_multitenant import MultiTenantAWSAdapter
-from app.core.exceptions import AdapterError
+from app.shared.adapters.aws_multitenant import MultiTenantAWSAdapter
+from app.shared.core.exceptions import AdapterError
 from app.models.aws_connection import AWSConnection
 
 @pytest.mark.asyncio

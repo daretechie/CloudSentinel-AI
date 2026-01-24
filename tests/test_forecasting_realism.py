@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import List
 from app.schemas.costs import CostRecord
-from app.services.analysis.forecaster import SymbolicForecaster
+from app.shared.analysis.forecaster import SymbolicForecaster
 
 def generate_mock_history(days: int, start_val: float = 100.0, trend: float = 1.0, spiky: bool = False, noise: bool = True) -> List[CostRecord]:
     history = []

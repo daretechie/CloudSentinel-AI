@@ -7,7 +7,7 @@ from datetime import date, datetime, timezone
 import pandas as pd
 from io import BytesIO
 from botocore.exceptions import ClientError
-from app.services.adapters.cur_adapter import CURAdapter, CURConfig
+from app.shared.adapters.cur_adapter import CURAdapter, CURConfig
 
 
 @pytest.fixture

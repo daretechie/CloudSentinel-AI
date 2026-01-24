@@ -1,6 +1,6 @@
 import pytest
 import json
-from app.services.llm.guardrails import LLMGuardrails, FinOpsAnalysisResult
+from app.shared.llm.guardrails import LLMGuardrails, FinOpsAnalysisResult
 
 @pytest.mark.asyncio
 async def test_sanitize_input_nested():

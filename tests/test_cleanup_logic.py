@@ -5,7 +5,7 @@ from decimal import Decimal
 from sqlalchemy import select, func
 from app.models.cloud import CostRecord
 import sys
-from app.services.costs.persistence import CostPersistenceService
+from app.modules.reporting.domain.persistence import CostPersistenceService
 print(f"DEBUG: CostPersistenceService module file={sys.modules[CostPersistenceService.__module__].__file__}")
 
 @pytest.mark.asyncio

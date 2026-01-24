@@ -4,11 +4,11 @@ from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
 from datetime import datetime, timezone
 
-from app.services.zombies.service import ZombieService
-from app.services.zombies.remediation_service import RemediationService
+from app.modules.optimization.domain.service import ZombieService
+from app.modules.optimization.domain.remediation_service import RemediationService
 from app.models.aws_connection import AWSConnection
 from app.models.remediation import RemediationRequest, RemediationStatus, RemediationAction
-from app.core.pricing import PricingTier
+from app.shared.core.pricing import PricingTier
 
 @pytest.fixture
 def mock_db():
@@ -92,7 +92,7 @@ async def test_remediation_service_execute_delete_volume(mock_db):
     
     mock_ec2 = AsyncMock()
     with patch.object(service, "_get_client", return_value=MagicMock(__aenter__=AsyncMock(return_value=mock_ec2))):
-        with patch("app.services.security.audit_log.AuditLogger.log", new_callable=AsyncMock):
+        with patch("app.modules.governance.domain.security.audit_log.AuditLogger.log", new_callable=AsyncMock):
             # Use bypass_grace_period=True to test immediate execution
             executed_req = await service.execute(req_id, tenant_id, bypass_grace_period=True)
             
@@ -118,8 +118,8 @@ async def test_remediation_service_schedules_grace_period(mock_db):
     mock_result.scalar_one_or_none.return_value = mock_request
     mock_db.execute.return_value = mock_result
     
-    with patch("app.services.security.audit_log.AuditLogger.log", new_callable=AsyncMock):
-        with patch("app.services.jobs.processor.enqueue_job", new_callable=AsyncMock):
+    with patch("app.modules.governance.domain.security.audit_log.AuditLogger.log", new_callable=AsyncMock):
+        with patch("app.modules.governance.domain.jobs.processor.enqueue_job", new_callable=AsyncMock):
             # Execute without bypass - should schedule, not complete
             scheduled_req = await service.execute(req_id, tenant_id)
             

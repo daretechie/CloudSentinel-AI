@@ -3,8 +3,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 # Mock engine before any app imports to avoid ConnectionRefusedError
 with patch("sqlalchemy.ext.asyncio.create_async_engine"):
-    with patch("app.db.session.engine"):
-        from app.services.zombies.azure_provider.plugins.idle_vms import AzureIdleVMPlugin
+    with patch("app.shared.db.session.engine"):
+        from app.modules.optimization.domain.azure_provider.plugins.idle_vms import AzureIdleVMPlugin
 
 from decimal import Decimal
 

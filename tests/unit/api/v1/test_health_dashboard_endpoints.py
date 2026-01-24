@@ -5,7 +5,7 @@ import pytest
 from uuid import uuid4
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
-from app.api.v1.health_dashboard import get_investor_health_dashboard
+from app.modules.health_dashboard import get_investor_health_dashboard
 
 
 @pytest.mark.asyncio

@@ -3,7 +3,7 @@ import pytest
 import uuid
 from decimal import Decimal
 from unittest.mock import MagicMock, AsyncMock, patch
-from app.services.zombies.service import ZombieService
+from app.modules.optimization.domain.service import ZombieService
 
 @pytest.mark.asyncio
 async def test_high_concurrency_zombie_scans():
@@ -22,7 +22,7 @@ async def test_high_concurrency_zombie_scans():
         "total_monthly_waste": 10.0
     }
     
-    with patch("app.services.zombies.factory.ZombieDetectorFactory.get_detector") as mock_factory:
+    with patch("app.modules.optimization.domain.factory.ZombieDetectorFactory.get_detector") as mock_factory:
         mock_detector = AsyncMock()
         mock_detector.scan_all.return_value = mock_results
         mock_detector.provider_name = "aws"
@@ -60,7 +60,7 @@ async def test_zombie_scan_timeout_resilience():
     mock_db = AsyncMock()
     service = ZombieService(mock_db)
     
-    with patch("app.services.zombies.factory.ZombieDetectorFactory.get_detector") as mock_factory:
+    with patch("app.modules.optimization.domain.factory.ZombieDetectorFactory.get_detector") as mock_factory:
         # Create a detector that hangs forever
         mock_detector = AsyncMock()
         async def hang_forever(*args, **kwargs):

@@ -1,11 +1,11 @@
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from sqlalchemy import String, Boolean, ForeignKey, Numeric, Date, DateTime, UniqueConstraint
+from sqlalchemy import String, Boolean, ForeignKey, Numeric, Date, DateTime, UniqueConstraint, JSON, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy.dialects.postgresql import JSONB
 from typing import TYPE_CHECKING
-from app.db.base import Base
+from app.shared.db.base import Base, get_partition_args
 
 if TYPE_CHECKING:
     from app.models.tenant import Tenant
@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 class CloudAccount(Base):
     __tablename__ = "cloud_accounts"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id"), nullable=False)
 
     provider: Mapped[str] = mapped_column(String)  # 'aws', 'azure', 'gcp'
@@ -33,7 +33,7 @@ class CloudAccount(Base):
 class CostRecord(Base):
     __tablename__ = "cost_records"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
     account_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("cloud_accounts.id"), nullable=False)
 
@@ -52,10 +52,10 @@ class CostRecord(Base):
     # SEC: Cost Reconciliation (BE-COST-1)
     is_preliminary: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
     cost_status: Mapped[str] = mapped_column(String, default="PRELIMINARY", index=True) # PRELIMINARY, FINAL
-    reconciliation_run_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), index=True, nullable=True)
+    reconciliation_run_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, index=True, nullable=True)
     
     # Forensic Lineage (FinOps Audit Phase 1)
-    ingestion_metadata: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    ingestion_metadata: Mapped[dict | None] = mapped_column(JSON().with_variant(JSONB, "postgresql"), nullable=True)
 
     # SEC: Attribution & Allocation (FinOps Audit Phase 2)
     attribution_id: Mapped[uuid.UUID | None] = mapped_column(
@@ -73,6 +73,6 @@ class CostRecord(Base):
 
     __table_args__ = (
         UniqueConstraint('account_id', 'timestamp', 'service', 'region', 'usage_type', 'recorded_at', name='uix_account_cost_granularity'),
-        {"postgresql_partition_by": 'RANGE (recorded_at)'},
+        get_partition_args('RANGE (recorded_at)'),
     )
 

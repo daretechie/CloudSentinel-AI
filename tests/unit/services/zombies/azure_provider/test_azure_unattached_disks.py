@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import MagicMock, AsyncMock
-from app.services.zombies.azure_provider.plugins.unattached_disks import AzureUnattachedDisksPlugin
+from app.modules.optimization.domain.azure_provider.plugins.unattached_disks import AzureUnattachedDisksPlugin
 
 @pytest.fixture
 def plugin():

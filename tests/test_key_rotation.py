@@ -1,6 +1,6 @@
 import pytest
 from cryptography.fernet import Fernet
-from app.core.security import encrypt_string, decrypt_string
+from app.shared.core.security import encrypt_string, decrypt_string
 from unittest.mock import patch, MagicMock
 
 @pytest.mark.asyncio
@@ -25,7 +25,7 @@ async def test_key_rotation_compatibility():
     mock_settings.KDF_ITERATIONS = 1000
 
     # 3. Patch get_settings in the security module
-    with patch("app.core.security.get_settings", return_value=mock_settings):
+    with patch("app.shared.core.security.get_settings", return_value=mock_settings):
         # Initial encryption with key_alpha
         encrypted_alpha = encrypt_string(original_text)
         

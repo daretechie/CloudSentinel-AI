@@ -1,8 +1,8 @@
 import pytest
 from unittest.mock import MagicMock, AsyncMock, patch
-from app.services.zombies.factory import ZombieDetectorFactory
-from app.services.llm.factory import LLMFactory
-from app.core.config import Settings
+from app.modules.optimization.domain.factory import ZombieDetectorFactory
+from app.shared.llm.factory import LLMFactory
+from app.shared.core.config import Settings
 import uuid
 
 @pytest.mark.asyncio
@@ -14,7 +14,7 @@ async def test_zombie_detector_factory_pass_through():
     
     mock_connection = AWSConnectionMock()
     
-    with patch("app.services.zombies.aws_provider.detector.AWSZombieDetector.__init__", return_value=None) as mock_init:
+    with patch("app.modules.optimization.domain.aws_provider.detector.AWSZombieDetector.__init__", return_value=None) as mock_init:
         # We don't actually want to init it, just check if it's called with connection
         detector = ZombieDetectorFactory.get_detector(mock_connection)
         mock_init.assert_called_once()
@@ -40,7 +40,7 @@ def test_llm_factory_key_validation():
 
 def test_rate_limiter_hash_usage():
     """Verify that rate limiter uses hashed tokens to prevent bypass."""
-    from app.core.rate_limit import context_aware_key
+    from app.shared.core.rate_limit import context_aware_key
     mock_request = MagicMock()
     mock_request.headers = {"Authorization": "Bearer some-token"}
     mock_request.state.tenant_id = None # Force token logic
@@ -56,7 +56,7 @@ def test_rate_limiter_hash_usage():
 @pytest.mark.asyncio
 async def test_aws_detector_boto_config_injection():
     """Verify that AWSZombieDetector injects botocore.Config with timeouts."""
-    from app.services.zombies.aws_provider.detector import AWSZombieDetector
+    from app.modules.optimization.domain.aws_provider.detector import AWSZombieDetector
     from botocore.config import Config
     
     detector = AWSZombieDetector(region="us-east-1")

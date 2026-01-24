@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.azure_connection import AzureConnection
 from app.models.gcp_connection import GCPConnection
 from app.main import app
-from app.core.auth import get_current_user, CurrentUser
+from app.shared.core.auth import get_current_user, CurrentUser
 from app.models.tenant import Tenant
 
 # Mocks
@@ -88,7 +88,7 @@ async def test_job_type_hardening_m5(ac: AsyncClient, mock_auth):
 async def test_startup_validation_q1():
     """Verify Q1: Startup validation for critical keys."""
     # This is hard to test in-process, but we can verify the logic in Settings
-    from app.core.config import Settings
+    from app.shared.core.config import Settings
     
     # Missing database URL in prod
     with pytest.raises(ValueError) as exc:

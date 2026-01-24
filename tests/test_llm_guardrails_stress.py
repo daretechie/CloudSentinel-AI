@@ -1,6 +1,6 @@
 import pytest
 import re
-from app.services.llm.guardrails import LLMGuardrails
+from app.shared.llm.guardrails import LLMGuardrails
 
 @pytest.mark.asyncio
 async def test_llm_guardrails_unicode_homoglyphs():

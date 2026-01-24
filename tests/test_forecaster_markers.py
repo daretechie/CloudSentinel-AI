@@ -4,7 +4,7 @@ from uuid import uuid4
 from datetime import date, timedelta
 from decimal import Decimal
 from unittest.mock import MagicMock, AsyncMock, patch
-from app.services.analysis.forecaster import SymbolicForecaster
+from app.shared.analysis.forecaster import SymbolicForecaster
 from app.models.anomaly_marker import AnomalyMarker
 
 @pytest.mark.asyncio
@@ -53,8 +53,8 @@ async def test_forecast_with_anomaly_markers():
     mock_prophet_class = MagicMock(return_value=mock_prophet_instance)
     
     # 4. Use patch with create=True to handle conditional import
-    with patch("app.services.analysis.forecaster.Prophet", mock_prophet_class, create=True), \
-         patch("app.services.analysis.forecaster.PROPHET_AVAILABLE", True):
+    with patch("app.shared.analysis.forecaster.Prophet", mock_prophet_class, create=True), \
+         patch("app.shared.analysis.forecaster.PROPHET_AVAILABLE", True):
         
         results = await SymbolicForecaster.forecast(
             history, 
@@ -87,8 +87,8 @@ async def test_holt_winters_confidence_bands():
         
     # force PROPHET_AVAILABLE = False to trigger HW
     with pytest.MonkeyPatch().context() as mp:
-        import app.services.analysis.forecaster
-        mp.setattr(app.services.analysis.forecaster, "PROPHET_AVAILABLE", False)
+        import app.shared.analysis.forecaster
+        mp.setattr(app.shared.analysis.forecaster, "PROPHET_AVAILABLE", False)
         
         results = await SymbolicForecaster.forecast(history, days=7)
         

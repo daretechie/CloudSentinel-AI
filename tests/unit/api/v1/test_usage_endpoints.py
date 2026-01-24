@@ -5,7 +5,7 @@ import pytest
 from uuid import uuid4
 from datetime import datetime, timezone, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
-from app.api.v1.usage import get_usage_metrics
+from app.modules.usage import get_usage_metrics
 
 
 @pytest.mark.asyncio

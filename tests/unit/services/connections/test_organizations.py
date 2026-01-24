@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, patch, MagicMock
 from uuid import uuid4
 from datetime import datetime, timezone
 
-from app.services.connections.organizations import OrganizationsDiscoveryService
+from app.shared.connections.organizations import OrganizationsDiscoveryService
 from app.models.aws_connection import AWSConnection
 from app.models.discovered_account import DiscoveredAccount
 from botocore.exceptions import ClientError
@@ -34,7 +34,7 @@ async def test_sync_accounts_non_management(mock_db):
     """Should skip sync if connection is not a management account."""
     conn = AWSConnection(is_management_account=False)
     
-    with patch("app.services.connections.organizations.aioboto3.Session") as mock_session:
+    with patch("app.shared.connections.organizations.aioboto3.Session") as mock_session:
         await OrganizationsDiscoveryService.sync_accounts(mock_db, conn)
         
         # Should not have created any session
@@ -82,7 +82,7 @@ async def test_sync_accounts_sucess(mock_db, management_connection):
     mock_session = MagicMock()
     mock_session.client.side_effect = [mock_sts_ctx, mock_org_ctx]
     
-    with patch("app.services.connections.organizations.aioboto3.Session", return_value=mock_session):
+    with patch("app.shared.connections.organizations.aioboto3.Session", return_value=mock_session):
         # Mock DB Query (No existing accounts)
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = None
@@ -131,7 +131,7 @@ async def test_sync_accounts_update_existing(mock_db, management_connection):
         account_id='222222222222', name='Old Name', email='old@example.com'
     )
     
-    with patch("app.services.connections.organizations.aioboto3.Session", return_value=mock_session):
+    with patch("app.shared.connections.organizations.aioboto3.Session", return_value=mock_session):
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = existing_account
         mock_db.execute.return_value = mock_result

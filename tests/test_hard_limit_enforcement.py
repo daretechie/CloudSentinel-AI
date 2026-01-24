@@ -3,8 +3,8 @@ from uuid import uuid4
 from decimal import Decimal
 from unittest.mock import MagicMock, AsyncMock, patch
 from app.models.remediation import RemediationRequest, RemediationStatus, RemediationAction
-from app.services.zombies.remediation_service import RemediationService
-from app.services.llm.usage_tracker import BudgetStatus
+from app.modules.optimization.domain.remediation_service import RemediationService
+from app.shared.llm.usage_tracker import BudgetStatus
 
 @pytest.mark.asyncio
 async def test_enforce_hard_limit_auto_executes(db):
@@ -34,7 +34,7 @@ async def test_enforce_hard_limit_auto_executes(db):
     db.execute.return_value = mock_execute_result
 
     # 3. Mock UsageTracker to return HARD_LIMIT
-    with patch("app.services.llm.usage_tracker.UsageTracker.check_budget", new_callable=AsyncMock) as mock_check:
+    with patch("app.shared.llm.usage_tracker.UsageTracker.check_budget", new_callable=AsyncMock) as mock_check:
         mock_check.return_value = BudgetStatus.HARD_LIMIT
         
         service = RemediationService(db)
@@ -56,7 +56,7 @@ async def test_enforce_hard_limit_ignores_low_confidence(db):
     tenant_id = uuid4()
     
     # Mock UsageTracker to return HARD_LIMIT
-    with patch("app.services.llm.usage_tracker.UsageTracker.check_budget", new_callable=AsyncMock) as mock_check:
+    with patch("app.shared.llm.usage_tracker.UsageTracker.check_budget", new_callable=AsyncMock) as mock_check:
         mock_check.return_value = BudgetStatus.HARD_LIMIT
         
         # Mock DB to return NO high-confidence requests

@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from datetime import datetime, date
 import uuid
 
-from app.services.adapters.aws_cur import AWSCURAdapter
+from app.shared.adapters.aws_cur import AWSCURAdapter
 from app.models.aws_connection import AWSConnection
 from app.schemas.costs import CloudUsageSummary
 

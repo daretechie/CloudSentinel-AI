@@ -10,7 +10,7 @@ from sqlalchemy import Boolean, DateTime, ForeignKey, String, text
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.db.base import Base
+from app.shared.db.base import Base
 
 
 class NotificationSettings(Base):

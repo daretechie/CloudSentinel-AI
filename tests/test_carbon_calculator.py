@@ -6,7 +6,7 @@ Tests cover:
 - Equivalency calculations (trees, miles, etc.)
 - Edge cases (zero cost, unknown regions)
 """
-from app.services.carbon.calculator import (
+from app.modules.reporting.domain.calculator import (
     CarbonCalculator,
     REGION_CARBON_INTENSITY,
 )

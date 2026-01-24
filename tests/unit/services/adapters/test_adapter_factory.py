@@ -3,11 +3,11 @@ Tests for AdapterFactory
 """
 import pytest
 from unittest.mock import MagicMock, patch
-from app.services.adapters.factory import AdapterFactory
-from app.services.adapters.aws_multitenant import MultiTenantAWSAdapter
-from app.services.adapters.aws_cur import AWSCURAdapter
-from app.services.adapters.azure import AzureAdapter
-from app.services.adapters.gcp import GCPAdapter
+from app.shared.adapters.factory import AdapterFactory
+from app.shared.adapters.aws_multitenant import MultiTenantAWSAdapter
+from app.shared.adapters.aws_cur import AWSCURAdapter
+from app.shared.adapters.azure import AzureAdapter
+from app.shared.adapters.gcp import GCPAdapter
 
 
 def test_get_adapter_aws_multitenant():
@@ -16,7 +16,7 @@ def test_get_adapter_aws_multitenant():
     mock_conn.cur_bucket_name = None
     mock_conn.cur_status = None
     
-    with patch("app.services.adapters.factory.isinstance", side_effect=lambda x, t: t.__name__ == "AWSConnection"):
+    with patch("app.shared.adapters.factory.isinstance", side_effect=lambda x, t: t.__name__ == "AWSConnection"):
         with patch.object(AdapterFactory, "get_adapter") as mock_method:
             mock_method.return_value = MagicMock(spec=MultiTenantAWSAdapter)
             adapter = AdapterFactory.get_adapter(mock_conn)

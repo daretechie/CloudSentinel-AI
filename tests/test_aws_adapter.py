@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import MagicMock, patch, AsyncMock
 from datetime import date
-from app.services.adapters.aws import AWSAdapter
+from app.shared.adapters.aws import AWSAdapter
 from botocore.exceptions import ClientError
 
 @pytest.mark.asyncio
@@ -46,7 +46,7 @@ async def test_get_daily_costs_success():
 @pytest.mark.asyncio
 async def test_get_daily_costs_failure():
     """Verify AdapterError is raised on CE failure."""
-    from app.core.exceptions import AdapterError
+    from app.shared.core.exceptions import AdapterError
     
     mock_client = AsyncMock()
     mock_client.get_cost_and_usage.side_effect = ClientError(

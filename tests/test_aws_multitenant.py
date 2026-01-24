@@ -2,7 +2,7 @@ import pytest
 from unittest.mock import MagicMock, AsyncMock, patch
 from datetime import date, datetime, timezone, timedelta
 from decimal import Decimal
-from app.services.adapters.aws_multitenant import MultiTenantAWSAdapter
+from app.shared.adapters.aws_multitenant import MultiTenantAWSAdapter
 from app.models.aws_connection import AWSConnection
 from botocore.exceptions import ClientError
 
@@ -151,7 +151,7 @@ async def test_get_daily_costs_pagination(adapter):
 @pytest.mark.asyncio
 async def test_get_daily_costs_error_handling(adapter):
     """Verify AdapterError is raised on CE failure."""
-    from app.core.exceptions import AdapterError
+    from app.shared.core.exceptions import AdapterError
     
     adapter._credentials = {"AccessKeyId": "TEST", "SecretAccessKey": "SECRET", "SessionToken": "TOKEN"}
     adapter._credentials_expire_at = datetime.now(timezone.utc) + timedelta(hours=1)

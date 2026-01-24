@@ -1,6 +1,6 @@
 
 import pytest
-from app.services.zombies.detector import ZombieDetector
+from app.modules.optimization.domain.detector import ZombieDetector
 
 class AsyncContextManagerMock:
     def __init__(self, return_value):

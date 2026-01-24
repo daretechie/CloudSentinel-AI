@@ -3,8 +3,8 @@ import pytest
 from uuid import uuid4
 from decimal import Decimal
 from unittest.mock import AsyncMock, patch, MagicMock
-from app.services.llm.analyzer import FinOpsAnalyzer
-from app.services.llm.usage_tracker import UsageTracker, BudgetStatus
+from app.shared.llm.analyzer import FinOpsAnalyzer
+from app.shared.llm.usage_tracker import UsageTracker, BudgetStatus
 from app.schemas.costs import CloudUsageSummary, CostRecord
 from datetime import date
 
@@ -24,11 +24,11 @@ async def test_graceful_degradation_soft_limit():
     usage_tracker_mock.check_budget.return_value = BudgetStatus.SOFT_LIMIT
     
     # Patch dependencies in analyzer
-    from app.services.llm.budget_manager import LLMBudgetManager
-    from app.services.analysis.forecaster import SymbolicForecaster
+    from app.shared.llm.budget_manager import LLMBudgetManager
+    from app.shared.analysis.forecaster import SymbolicForecaster
 
-    with patch("app.services.llm.analyzer.UsageTracker", return_value=usage_tracker_mock):
-        with patch("app.services.llm.analyzer.LLMFactory.create") as mock_factory:
+    with patch("app.shared.llm.analyzer.UsageTracker", return_value=usage_tracker_mock):
+        with patch("app.shared.llm.analyzer.LLMFactory.create") as mock_factory:
             with patch.object(LLMBudgetManager, "check_and_reserve", AsyncMock(return_value=Decimal("0.01"))):
                 with patch.object(SymbolicForecaster, "forecast", AsyncMock(return_value={"total_forecasted_cost": 0, "forecast": []})):
                     # Configure mocked DB budget lookup
@@ -83,8 +83,8 @@ async def test_hard_limit_blocking():
     usage_tracker_mock = AsyncMock()
     usage_tracker_mock.check_budget.return_value = BudgetStatus.HARD_LIMIT
     
-    from app.services.llm.budget_manager import LLMBudgetManager, BudgetExceededError
-    with patch("app.services.llm.analyzer.UsageTracker", return_value=usage_tracker_mock):
+    from app.shared.llm.budget_manager import LLMBudgetManager, BudgetExceededError
+    with patch("app.shared.llm.analyzer.UsageTracker", return_value=usage_tracker_mock):
         summary = CloudUsageSummary(
             tenant_id=str(tenant_id),
             provider="aws",

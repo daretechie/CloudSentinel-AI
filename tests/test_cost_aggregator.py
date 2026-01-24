@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.cloud import CostRecord, CloudAccount
-from app.services.costs.aggregator import CostAggregator
+from app.modules.reporting.domain.aggregator import CostAggregator
 
 @pytest.mark.asyncio
 @pytest.mark.asyncio

@@ -2,8 +2,8 @@ import pytest
 import jwt
 from datetime import datetime, timezone, timedelta
 from uuid import uuid4
-from app.services.connections.oidc import OIDCService
-from app.core.config import get_settings
+from app.shared.connections.oidc import OIDCService
+from app.shared.core.config import get_settings
 
 settings = get_settings()
 

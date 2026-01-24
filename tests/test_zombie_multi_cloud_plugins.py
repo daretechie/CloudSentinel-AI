@@ -4,11 +4,11 @@ from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
 from datetime import datetime, timezone, timedelta
 
-from app.services.zombies.azure_provider.plugins.orphaned_images import AzureOrphanedImagesPlugin
-from app.services.zombies.gcp_provider.plugins.unused_ips import GCPUnusedStaticIpsPlugin
-from app.services.zombies.gcp_provider.plugins.machine_images import GCPMachineImagesPlugin
-from app.services.zombies.azure_provider.detector import AzureZombieDetector
-from app.services.zombies.gcp_provider.detector import GCPZombieDetector
+from app.modules.optimization.domain.azure_provider.plugins.orphaned_images import AzureOrphanedImagesPlugin
+from app.modules.optimization.domain.gcp_provider.plugins.unused_ips import GCPUnusedStaticIpsPlugin
+from app.modules.optimization.domain.gcp_provider.plugins.machine_images import GCPMachineImagesPlugin
+from app.modules.optimization.domain.azure_provider.detector import AzureZombieDetector
+from app.modules.optimization.domain.gcp_provider.detector import GCPZombieDetector
 from app.models.azure_connection import AzureConnection
 from app.models.gcp_connection import GCPConnection
 

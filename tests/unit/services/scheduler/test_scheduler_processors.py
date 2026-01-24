@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 from datetime import date
 
-from app.services.scheduler.processors import AnalysisProcessor, SavingsProcessor
+from app.modules.governance.domain.scheduler.processors import AnalysisProcessor, SavingsProcessor
 
 
 @pytest.fixture
@@ -37,9 +37,9 @@ class TestAnalysisProcessor:
         processor = AnalysisProcessor()
         
         # Mock dependencies
-        with patch("app.services.scheduler.processors.MultiTenantAWSAdapter") as mock_adapter, \
-             patch("app.services.scheduler.processors.ZombieDetector") as mock_detector, \
-             patch("app.services.scheduler.processors.LLMFactory") as mock_factory:
+        with patch("app.modules.governance.domain.scheduler.processors.MultiTenantAWSAdapter") as mock_adapter, \
+             patch("app.modules.governance.domain.scheduler.processors.ZombieDetector") as mock_detector, \
+             patch("app.modules.governance.domain.scheduler.processors.LLMFactory") as mock_factory:
             
             mock_adapter_instance = AsyncMock()
             mock_adapter_instance.get_tenant_costs.return_value = []
@@ -121,7 +121,7 @@ class TestSavingsProcessor:
         tenant_id = uuid4()
         
         # Patch in the module where it's imported
-        with patch("app.services.zombies.remediation_service.RemediationService") as mock_service:
+        with patch("app.modules.optimization.domain.remediation_service.RemediationService") as mock_service:
             mock_service_instance = AsyncMock()
             mock_service_instance.create_request.return_value = MagicMock(id=uuid4())
             mock_service_instance.approve = AsyncMock()

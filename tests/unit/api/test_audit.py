@@ -3,15 +3,15 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from fastapi import HTTPException
 from uuid import uuid4
 from datetime import datetime, timezone
-from app.api.v1.audit import (
+from app.modules.audit import (
     get_audit_logs, 
     get_audit_log_detail, 
     export_audit_logs, 
     request_data_erasure,
     get_event_types
 )
-from app.core.auth import CurrentUser
-from app.services.security.audit_log import AuditLog
+from app.shared.core.auth import CurrentUser
+from app.modules.governance.domain.security.audit_log import AuditLog
 
 @pytest.fixture
 def mock_db():

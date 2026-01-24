@@ -12,7 +12,7 @@ from datetime import date, datetime
 from sqlalchemy import String, Text, ForeignKey, Date, DateTime, Boolean
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID
-from app.db.base import Base
+from app.shared.db.base import Base
 
 
 class AnomalyMarker(Base):

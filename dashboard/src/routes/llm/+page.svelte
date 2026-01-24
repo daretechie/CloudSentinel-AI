@@ -8,12 +8,10 @@
 -->
 
 <script lang="ts">
-	import { PUBLIC_API_URL } from '$env/static/public';
-	import { createSupabaseBrowserClient } from '$lib/supabase';
+	/* eslint-disable svelte/no-navigation-without-resolve */
+	import { base } from '$app/paths';
 
 	let { data } = $props();
-
-	const supabase = createSupabaseBrowserClient();
 
 	let usage = $derived(data.usage || []);
 	let summary = $derived(
@@ -41,13 +39,14 @@
 	{#if !data.user}
 		<div class="card text-center py-12">
 			<p class="text-ink-400">
-				Please <a href="/auth/login" class="text-accent-400 hover:underline">sign in</a> to view LLM usage.
+				Please <a href="{base}/auth/login" class="text-accent-400 hover:underline">sign in</a> to view
+				LLM usage.
 			</p>
 		</div>
 	{:else if loading}
 		<!-- Loading Skeletons -->
 		<div class="grid gap-5 md:grid-cols-3">
-			{#each [1, 2, 3] as i}
+			{#each [1, 2, 3] as i (i)}
 				<div class="card">
 					<div class="skeleton h-4 w-20 mb-3"></div>
 					<div class="skeleton h-8 w-32"></div>
@@ -98,7 +97,7 @@
 							</tr>
 						</thead>
 						<tbody>
-							{#each Object.entries(summary.by_model) as [model, stats]}
+							{#each Object.entries(summary.by_model) as [model, stats] (model)}
 								<tr>
 									<td>
 										<span class="font-mono text-xs px-2 py-1 bg-ink-800 rounded">{model}</span>
@@ -141,7 +140,7 @@
 							</tr>
 						</thead>
 						<tbody>
-							{#each usage.slice(0, 20) as record}
+							{#each usage.slice(0, 20) as record (record.id || record.created_at)}
 								<tr>
 									<td class="text-ink-400 text-xs">
 										{new Date(record.created_at).toLocaleString()}

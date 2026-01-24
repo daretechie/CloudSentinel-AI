@@ -2,9 +2,9 @@ import pytest
 import asyncio
 from unittest.mock import MagicMock, AsyncMock, patch
 from datetime import datetime, timezone, timedelta
-from app.services.zombies.aws_provider.plugins.compute import IdleInstancesPlugin
+from app.modules.optimization.domain.aws_provider.plugins.compute import IdleInstancesPlugin
 
-from app.services.llm.guardrails import LLMGuardrails
+from app.shared.llm.guardrails import LLMGuardrails
 
 @pytest.mark.asyncio
 async def test_legitimate_cost_data_passes():
@@ -87,13 +87,13 @@ async def test_rate_limiter_stress_5000_instances():
 
     with patch.object(plugin, "_get_client", side_effect=get_client_mock):
         # Patch the limiter to ensure 1req/sec and track duration
-        from app.services.adapters.rate_limiter import RateLimiter
+        from app.shared.adapters.rate_limiter import RateLimiter
         test_limiter = RateLimiter(rate_per_second=1.0)
         # Ensure it starts empty
         test_limiter.tokens = 0
         test_limiter.last_update = asyncio.get_event_loop().time()
         
-        with patch("app.services.zombies.aws_provider.plugins.compute.cloudwatch_limiter", test_limiter):
+        with patch("app.modules.optimization.domain.aws_provider.plugins.compute.cloudwatch_limiter", test_limiter):
             start_time = asyncio.get_event_loop().time()
             
             await plugin.scan(mock_session, region)

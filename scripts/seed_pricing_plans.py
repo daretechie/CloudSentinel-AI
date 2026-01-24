@@ -5,9 +5,9 @@ import os
 # Add project root to path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from app.db.session import async_session_maker, engine
+from app.shared.db.session import async_session_maker, engine
 from app.models.pricing import PricingPlan, ExchangeRate
-from app.core.pricing import PricingTier, TIER_CONFIG
+from app.shared.core.pricing import PricingTier, TIER_CONFIG
 from sqlalchemy import select
 
 async def seed_data():

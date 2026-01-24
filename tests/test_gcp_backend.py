@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 from fastapi import HTTPException
 
-from app.services.connections.gcp import GCPConnectionService
+from app.shared.connections.gcp import GCPConnectionService
 from app.models.gcp_connection import GCPConnection
 
 @pytest.mark.asyncio
@@ -22,7 +22,7 @@ async def test_gcp_verify_sa_success():
     result_mock.scalar_one_or_none.return_value = mock_connection
     db.execute.return_value = result_mock
 
-    with patch("app.services.connections.gcp.GCPAdapter") as MockAdapter:
+    with patch("app.shared.connections.gcp.GCPAdapter") as MockAdapter:
         mock_adapter_instance = MockAdapter.return_value
         mock_adapter_instance.verify_connection = AsyncMock(return_value=True)
 
@@ -50,7 +50,7 @@ async def test_gcp_verify_oidc_success():
     result_mock.scalar_one_or_none.return_value = mock_connection
     db.execute.return_value = result_mock
 
-    with patch("app.services.connections.gcp.OIDCService") as MockOIDC:
+    with patch("app.shared.connections.gcp.OIDCService") as MockOIDC:
         MockOIDC.verify_gcp_access = AsyncMock(return_value=(True, None))
 
         # Act

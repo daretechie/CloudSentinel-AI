@@ -1,6 +1,7 @@
 # Multi-Cloud Zombie Detection Reference (2026)
 
 > Comprehensive API reference for implementing zombie resource detection across AWS, Azure, and GCP.
+> **Code Location:** `app/modules/optimization/domain/` and `app/modules/optimization/adapters/`
 
 ---
 

@@ -17,8 +17,8 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.hybrid import hybrid_property
 
-from app.core.security import encrypt_string, decrypt_string
-from app.db.base import Base
+from app.shared.core.security import encrypt_string, decrypt_string
+from app.shared.db.base import Base
 
 
 class LLMUsage(Base):
