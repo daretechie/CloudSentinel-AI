@@ -1,8 +1,8 @@
 from datetime import datetime
-import uuid
+from uuid import UUID, uuid4
 from sqlalchemy import String, Boolean, ForeignKey, DateTime, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy_utils import StringEncryptedType
 from sqlalchemy_utils.types.encrypted.encrypted_type import AesEngine
 
@@ -25,8 +25,8 @@ class AzureConnection(Base):
         UniqueConstraint('tenant_id', 'subscription_id', name='uq_tenant_azure_subscription'),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    tenant_id: Mapped[UUID] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
     
     # Connection Name (e.g. "Dev Subscription")
     name: Mapped[str] = mapped_column(String, nullable=False)
@@ -37,7 +37,7 @@ class AzureConnection(Base):
     subscription_id: Mapped[str] = mapped_column(String, nullable=False)
     
     # Secret (Optional for Workload Identity)
-    client_secret = mapped_column(
+    client_secret: Mapped[str | None] = mapped_column(
         StringEncryptedType(String, _encryption_key, AesEngine, "pkcs5"),
         nullable=True
     )
@@ -55,7 +55,7 @@ class AzureConnection(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
-    tenant = relationship("Tenant", backref="azure_connections")
+    tenant: Mapped["Tenant"] = relationship("Tenant", backref="azure_connections")
 
     @property
     def provider(self) -> str:

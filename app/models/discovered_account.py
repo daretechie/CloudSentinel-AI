@@ -1,6 +1,8 @@
-import uuid
+from uuid import UUID, uuid4
+from datetime import datetime, timezone
+from typing import Optional
 from sqlalchemy import String, ForeignKey, DateTime
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 
 from app.shared.db.base import Base
@@ -12,11 +14,11 @@ class DiscoveredAccount(Base):
     """
     __tablename__ = "discovered_accounts"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
     
     # The management connection that discovered this account
-    management_connection_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
+    management_connection_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
         ForeignKey("aws_connections.id", ondelete="CASCADE"),
         nullable=False,
         index=True
@@ -29,10 +31,10 @@ class DiscoveredAccount(Base):
     # status: "discovered", "linked", "ignored"
     status: Mapped[str] = mapped_column(String(20), default="discovered", server_default="discovered")
     
-    last_discovered_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_discovered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Relationship to the management connection
-    management_connection = relationship("AWSConnection", foreign_keys=[management_connection_id])
+    management_connection: Mapped["AWSConnection"] = relationship("AWSConnection", foreign_keys=[management_connection_id])
 
     def __repr__(self):
         return f"<DiscoveredAccount {self.account_id} ({self.status})>"

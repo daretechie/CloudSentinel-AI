@@ -126,8 +126,9 @@ class GCPAdapter(BaseAdapter):
             
             return [self._parse_row(row) for row in results]
         except Exception as e:
+            from app.shared.core.exceptions import AdapterError
             logger.error("gcp_bq_query_failed", table=table_path, error=str(e))
-            return []
+            raise AdapterError(f"GCP BigQuery cost fetch failed: {str(e)}") from e
 
     def _build_cost_query(self, table_path: str) -> str:
         """Constructs the BigQuery SQL for cost extraction."""

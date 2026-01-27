@@ -6,6 +6,7 @@ from app.shared.adapters.aws_multitenant import MultiTenantAWSAdapter
 import app.models.llm  # noqa: F401 - Required for SQLAlchemy registry
 import app.models.notification_settings  # noqa: F401
 import app.models.background_job  # noqa: F401
+from app.models.tenant import Tenant  # noqa: F401 - Required for AWSConnection relationship
 from app.models.aws_connection import AWSConnection
 from botocore.exceptions import ClientError
 

@@ -9,12 +9,24 @@ import structlog
 from decimal import Decimal
 from datetime import datetime, timezone
 from uuid import UUID
+from enum import Enum
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.llm import LLMBudget, LLMUsage
 from app.shared.core.exceptions import BudgetExceededError, ResourceNotFoundError
+from app.shared.llm.pricing_data import LLM_PRICING
+from app.shared.core.cache import get_cache_service
+# Moved BudgetStatus here
+from app.shared.core.ops_metrics import LLM_PRE_AUTH_DENIALS, LLM_SPEND_USD
+from app.shared.core.pricing import get_tenant_tier
+from app.shared.core.logging import audit_log
 
 logger = structlog.get_logger()
+
+class BudgetStatus(str, Enum):
+    OK = "ok"
+    SOFT_LIMIT = "soft_limit"
+    HARD_LIMIT = "hard_limit"
 
 
 class LLMBudgetManager:
@@ -27,42 +39,34 @@ class LLMBudgetManager:
     3. All operations are logged for audit trail
     """
     
-    # Cost per 1M tokens for different models (rough estimates)
-    MODEL_COSTS = {
-        "gpt-4o": Decimal("0.03"),           # $0.03 per 1K input tokens
-        "gpt-4-turbo": Decimal("0.01"),      # $0.01 per 1K tokens
-        "claude-3-opus": Decimal("0.015"),   # $0.015 per 1K tokens
-        "claude-3-sonnet": Decimal("0.003"), # $0.003 per 1K tokens
-        "gemini-2.0-flash": Decimal("0.0005"), # $0.0005 per 1K tokens
-        "llama-3.3-70b": Decimal("0.0004"),  # $0.0004 per 1K tokens (Groq)
-    }
-    
     # Conservative estimate: 1 prompt ≈ 500 tokens
     AVG_PROMPT_TOKENS = 500
     AVG_RESPONSE_TOKENS = 500
     
     @staticmethod
-    def estimate_cost(prompt_tokens: int, completion_tokens: int, model: str) -> Decimal:
+    def estimate_cost(prompt_tokens: int, completion_tokens: int, model: str, provider: str = "openai") -> Decimal:
         """
-        Estimate LLM request cost in USD.
+        Estimate LLM request cost in USD using shared pricing data.
+        """
+        # Find pricing data for provider and model
+        provider_data = LLM_PRICING.get(provider, {})
+        pricing = provider_data.get(model, provider_data.get("default"))
         
-        Args:
-            prompt_tokens: Estimated input tokens
-            completion_tokens: Estimated output tokens
-            model: Model identifier (e.g., "gpt-4o")
+        if not pricing:
+            logger.warning("llm_pricing_not_found_for_estimation", provider=provider, model=model)
+            # Fallback to a safe estimate ($0.01 per 1K tokens)
+            pricing = {"input": 10.0, "output": 10.0} # Per 1M
             
-        Returns:
-            Estimated cost in USD
-        """
-        cost_per_1k = LLMBudgetManager.MODEL_COSTS.get(model, Decimal("0.01"))
-        total_tokens = prompt_tokens + completion_tokens
-        estimated_cost = (Decimal(total_tokens) / Decimal("1000")) * cost_per_1k
-        return estimated_cost.quantize(Decimal("0.0001"))
+        input_cost = Decimal(str(prompt_tokens)) * Decimal(str(pricing["input"])) / Decimal("1000000")
+        output_cost = Decimal(str(completion_tokens)) * Decimal(str(pricing["output"])) / Decimal("1000000")
+        
+        return (input_cost + output_cost).quantize(Decimal("0.0001"))
     
     @staticmethod
     async def check_and_reserve(
         tenant_id: UUID,
         db: AsyncSession,
+        provider: str = "openai",
         model: str = "gpt-4o",
         prompt_tokens: int = AVG_PROMPT_TOKENS,
         completion_tokens: int = AVG_RESPONSE_TOKENS,
@@ -70,26 +74,9 @@ class LLMBudgetManager:
     ) -> Decimal:
         """
         PRODUCTION: Check budget and atomically reserve funds.
-        
-        This is a BLOCKING operation - the request WILL NOT proceed without authorization.
-        
-        Args:
-            tenant_id: Tenant UUID
-            db: Database session
-            model: LLM model name
-            prompt_tokens: Estimated input tokens
-            completion_tokens: Estimated output tokens
-            operation_id: Unique operation ID for deduplication
-            
-        Returns:
-            Reserved amount in USD
-            
-        Raises:
-            BudgetExceededError: If budget is insufficient (402 Payment Required)
-            ResourceNotFoundError: If tenant budget not configured
         """
         estimated_cost = LLMBudgetManager.estimate_cost(
-            prompt_tokens, completion_tokens, model
+            prompt_tokens, completion_tokens, model, provider
         )
         
         try:
@@ -139,8 +126,7 @@ class LLMBudgetManager:
                 
                 # Emit metric for alerting
                 try:
-                    from app.shared.core.ops_metrics import LLM_BUDGET_EXCEEDED
-                    LLM_BUDGET_EXCEEDED.labels(tenant_id=str(tenant_id)).inc()
+                    LLM_PRE_AUTH_DENIALS.labels(reason="hard_limit_exceeded", tenant_tier="unknown").inc()
                 except Exception:
                     pass
                 
@@ -189,39 +175,50 @@ class LLMBudgetManager:
         model: str,
         prompt_tokens: int,
         completion_tokens: int,
+        provider: str = "openai",
         actual_cost_usd: Decimal = None,
         operation_id: str = None,
+        request_type: str = "unknown"
     ) -> None:
         """
-        Record actual LLM usage after successful request.
-        
-        Args:
-            tenant_id: Tenant UUID
-            db: Database session
-            model: LLM model used
-            prompt_tokens: Actual input tokens consumed
-            completion_tokens: Actual output tokens consumed
-            actual_cost_usd: Actual cost from API response (overrides estimate)
-            operation_id: Operation ID for tracing
+        Record actual LLM usage and handle metrics/alerts.
         """
         try:
             # Use actual cost if provided, else calculate from tokens
             if actual_cost_usd is None:
                 actual_cost_usd = LLMBudgetManager.estimate_cost(
-                    prompt_tokens, completion_tokens, model
+                    prompt_tokens, completion_tokens, model, provider
                 )
             
             # Create usage record
             usage = LLMUsage(
                 tenant_id=tenant_id,
+                provider=provider,
                 model=model,
-                prompt_tokens=prompt_tokens,
-                completion_tokens=completion_tokens,
+                input_tokens=prompt_tokens,
+                output_tokens=completion_tokens,
+                total_tokens=prompt_tokens + completion_tokens,
                 cost_usd=actual_cost_usd,
-                operation_id=operation_id
+                operation_id=operation_id,
+                request_type=request_type
             )
             db.add(usage)
-            await db.flush()  # Ensure it's persisted before commit
+            
+            # Metrics
+            try:
+                tier = await get_tenant_tier(tenant_id, db)
+                LLM_SPEND_USD.labels(
+                    tenant_tier=tier.value,
+                    provider=provider,
+                    model=model
+                ).inc(float(actual_cost_usd))
+            except Exception:
+                pass
+
+            await db.flush()
+            
+            # Handle alerts
+            await LLMBudgetManager._check_budget_and_alert(tenant_id, db, actual_cost_usd)
             
             logger.info(
                 "llm_usage_recorded",
@@ -242,3 +239,107 @@ class LLMBudgetManager:
             )
             # Don't fail the request if we can't record usage
             # (the usage is what matters, not the audit log)
+
+    @staticmethod
+    async def check_budget(tenant_id: UUID, db: AsyncSession):
+        """
+        Unified budget check for tenants.
+        Returns: OK, SOFT_LIMIT, or HARD_LIMIT (via exception).
+        """
+        
+        # 1. Cache Check
+        cache = get_cache_service()
+        if cache.enabled:
+            try:
+                if await cache.client.get(f"budget_blocked:{tenant_id}"):
+                    return BudgetStatus.HARD_LIMIT
+                if await cache.client.get(f"budget_soft:{tenant_id}"):
+                    return BudgetStatus.SOFT_LIMIT
+            except Exception:
+                pass
+
+        # 2. DB Check
+        result = await db.execute(select(LLMBudget).where(LLMBudget.tenant_id == tenant_id))
+        budget = result.scalar_one_or_none()
+        if not budget:
+            return BudgetStatus.OK
+
+        # Calculate usage
+        now = datetime.now(timezone.utc)
+        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        result_usage = await db.execute(
+            select(func.coalesce(func.sum(LLMUsage.cost_usd), Decimal("0")))
+            .where((LLMUsage.tenant_id == tenant_id) & (LLMUsage.created_at >= month_start))
+        )
+        current_usage = result_usage.scalar()
+        
+        limit = budget.monthly_limit_usd
+        threshold = Decimal(str(budget.alert_threshold_percent)) / 100
+
+        if current_usage >= limit:
+            if budget.hard_limit:
+                if cache.enabled:
+                    await cache.client.set(f"budget_blocked:{tenant_id}", "1", ex=600)
+                raise BudgetExceededError(
+                    f"LLM budget of ${limit:.2f} exceeded.",
+                    details={"usage": float(current_usage), "limit": float(limit)}
+                )
+            return BudgetStatus.SOFT_LIMIT
+
+        if current_usage >= (limit * threshold):
+            if cache.enabled:
+                await cache.client.set(f"budget_soft:{tenant_id}", "1", ex=300)
+            return BudgetStatus.SOFT_LIMIT
+
+        return BudgetStatus.OK
+
+    @staticmethod
+    async def _check_budget_and_alert(tenant_id: UUID, db: AsyncSession, last_cost: Decimal) -> None:
+        """
+        Checks budget threshold and sends Slack alerts if needed.
+        """
+        result = await db.execute(select(LLMBudget).where(LLMBudget.tenant_id == tenant_id))
+        budget = result.scalar_one_or_none()
+        if not budget:
+            return
+
+        # Simplified usage check for alerting (could use cached value or sum)
+        now = datetime.now(timezone.utc)
+        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        result_usage = await db.execute(
+            select(func.coalesce(func.sum(LLMUsage.cost_usd), Decimal("0")))
+            .where((LLMUsage.tenant_id == tenant_id) & (LLMUsage.created_at >= month_start))
+        )
+        current_usage = result_usage.scalar()
+        
+        limit = budget.monthly_limit_usd
+        threshold_percent = budget.alert_threshold_percent
+        usage_percent = (current_usage / limit * 100) if limit > 0 else Decimal("0")
+
+        # Threshold check
+        already_sent = budget.alert_sent_at and budget.alert_sent_at.year == now.year and budget.alert_sent_at.month == now.month
+        
+        if usage_percent >= threshold_percent and not already_sent:
+            from app.shared.core.config import get_settings
+            
+            settings = get_settings()
+            audit_log(
+                event="llm_budget_alert",
+                user_id="system",
+                tenant_id=str(tenant_id),
+                details={"usage_usd": float(current_usage), "limit_usd": float(limit), "percent": float(usage_percent)}
+            )
+
+            if settings.SLACK_BOT_TOKEN and settings.SLACK_CHANNEL_ID:
+                try:
+                    from app.modules.notifications.domain import SlackService
+                    slack = SlackService(settings.SLACK_BOT_TOKEN, settings.SLACK_CHANNEL_ID)
+                    await slack.send_alert(
+                        title="LLM Budget Alert",
+                        message=f"Usage: ${current_usage:.2f} / ${limit:.2f} ({usage_percent:.1f}%)",
+                        severity="critical" if usage_percent >= 100 else "warning"
+                    )
+                except Exception:
+                    pass
+
+            budget.alert_sent_at = now

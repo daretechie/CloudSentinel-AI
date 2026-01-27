@@ -16,6 +16,7 @@ export interface Toast {
 class UIState {
 	toasts = $state<Toast[]>([]);
 	isSidebarOpen = $state(true);
+	isCommandPaletteOpen = $state(false);
 
 	addToast(message: string, type: ToastType = 'info', duration = 5000) {
 		const id = Math.random().toString(36).substring(2, 9);

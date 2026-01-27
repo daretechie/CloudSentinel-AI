@@ -4,11 +4,11 @@ Carbon Settings Model
 Stores per-tenant carbon budget configuration.
 """
 
-import uuid
+from uuid import UUID, uuid4
 from datetime import datetime
 from sqlalchemy import String, Integer, Float, Boolean, ForeignKey, DateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.sql import func
 from app.shared.db.base import Base
 
@@ -26,8 +26,8 @@ class CarbonSettings(Base):
     """
     __tablename__ = "carbon_settings"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id"), unique=True, nullable=False)
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    tenant_id: Mapped[UUID] = mapped_column(ForeignKey("tenants.id"), unique=True, nullable=False)
 
     # Budget configuration
     carbon_budget_kg: Mapped[float] = mapped_column(Float, default=100.0)  # kg CO2/month
@@ -48,5 +48,5 @@ class CarbonSettings(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     # Relationship
-    tenant = relationship("Tenant", backref="carbon_settings")
+    tenant: Mapped["Tenant"] = relationship("Tenant", backref="carbon_settings")
 

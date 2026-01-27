@@ -9,6 +9,9 @@ import structlog
 import sys
 import time
 from fastapi import Request
+from sqlalchemy.pool import StaticPool, NullPool
+from app.shared.core.exceptions import ValdrixException
+from app.shared.core.ops_metrics import RLS_CONTEXT_MISSING
 
 logger = structlog.get_logger()
 settings = get_settings()
@@ -74,11 +77,9 @@ else:
 # Pool Configuration: Use NullPool for testing to avoid connection leaks across loops
 pool_args: Dict[str, Any] = {}
 if "sqlite" in settings.DATABASE_URL:
-    from sqlalchemy.pool import StaticPool
     pool_args["poolclass"] = StaticPool
     connect_args["check_same_thread"] = False
 elif settings.TESTING:
-    from sqlalchemy.pool import NullPool
     pool_args["poolclass"] = NullPool
 else:
     pool_args["pool_size"] = settings.DB_POOL_SIZE
@@ -220,7 +221,6 @@ def check_rls_policy(conn, _cursor, statement, parameters, _context, _executeman
     # but for all request-bound sessions, it will be True or False.
     if rls_status is False:
         try:
-            from app.shared.core.ops_metrics import RLS_CONTEXT_MISSING
             if statement.split():
                 RLS_CONTEXT_MISSING.labels(statement_type=statement.split()[0].upper()).inc()
         except Exception as e:
@@ -233,7 +233,6 @@ def check_rls_policy(conn, _cursor, statement, parameters, _context, _executeman
         )
         
         # PRODUCTION: Hard exception - no execution allowed
-        from app.shared.core.exceptions import ValdrixException
         raise ValdrixException(
             message="RLS context missing - query execution aborted",
             code="rls_enforcement_failed",

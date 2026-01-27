@@ -11,7 +11,7 @@ Manages the remediation approval workflow:
 from datetime import datetime, timezone
 from uuid import UUID
 from decimal import Decimal
-from typing import List, Dict, Optional, Any, Tuple
+from typing import List, Dict, Any, Optional, Union, TYPE_CHECKING
 import aioboto3
 from botocore.exceptions import ClientError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,6 +25,8 @@ from app.shared.core.security_metrics import REMEDIATION_TOTAL
 from app.shared.core.ops_metrics import REMEDIATION_DURATION_SECONDS
 from app.shared.core.constants import SYSTEM_USER_ID
 from app.shared.adapters.aws_utils import map_aws_credentials
+from app.shared.core.safety_service import SafetyGuardrailService
+from app.shared.core.config import get_settings
 
 logger = structlog.get_logger()
 
@@ -37,7 +39,6 @@ class RemediationService:
     1. create_request() - User requests remediation
     2. list_pending() - Reviewer sees pending requests
     3. approve() / reject() - Reviewer takes action
-    4. execute() - System executes approved requests
     4. execute() - System executes approved requests
     """
 
@@ -220,17 +221,24 @@ class RemediationService:
         If create_backup is True, creates snapshot before deleting volume.
         If bypass_grace_period is True, executes immediately (emergency use).
         """
+        # 0. Global Safety Guardrail (Unified)
+        safety = SafetyGuardrailService(self.db)
+        # We fetch the request first to get estimated savings for the impact check
         result = await self.db.execute(
             select(RemediationRequest)
             .where(RemediationRequest.id == request_id)
             .where(RemediationRequest.tenant_id == tenant_id)
-            .with_for_update()  # SEC-03: Atomic lock to prevent race conditions
+            .with_for_update()
         )
         request = result.scalar_one_or_none()
-
+        
         if not request:
-            raise ValueError(f"Request {request_id} not found")
+            raise ValueError("Remediation request not found.")
 
+        # Check all safety guards (Kill Switch, Circuit Breaker, Hard Cap)
+        await safety.check_all_guards(tenant_id, request.estimated_monthly_savings)
+
+        # 1. Validation & Pre-execution State Check
         if request.status != RemediationStatus.APPROVED:
             # BE-SEC-3: If already scheduled, check if grace period has passed
             if request.status == RemediationStatus.SCHEDULED:
@@ -418,6 +426,15 @@ class RemediationService:
                 resource_type=request.resource_type,
                 action=request.action.value
             ).inc()
+            
+            # Notification dispatch
+            from app.shared.core.notifications import NotificationDispatcher
+            await NotificationDispatcher.notify_remediation_completed(
+                tenant_id=str(tenant_id),
+                resource_id=request.resource_id,
+                action=request.action.value,
+                savings=float(request.estimated_monthly_savings or 0)
+            )
 
         return request
 

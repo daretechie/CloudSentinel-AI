@@ -1,4 +1,5 @@
 from typing import Optional, Dict, Any
+import re
 
 class ValdrixException(Exception):
     """Base exception for all Valdrix errors."""
@@ -26,7 +27,6 @@ class AdapterError(ValdrixException):
 
     def _sanitize(self, msg: str) -> str:
         """Remove sensitive tokens, request IDs, and internal paths from error messages."""
-        import re
         # Remove UUIDs (likely Request IDs)
         msg = re.sub(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', '[REDACTED_ID]', msg, flags=re.IGNORECASE)
         # Remove common sensitive AWS/Azure/GCP keywords if they appear in raw error strings
@@ -67,3 +67,8 @@ class BudgetExceededError(ValdrixException):
     """Raised when an LLM request is blocked due to budget constraints."""
     def __init__(self, message: str, details: Optional[Dict[str, Any]] = None):
         super().__init__(message, code="budget_exceeded", status_code=402, details=details)
+
+class KillSwitchTriggeredError(ValdrixException):
+    """Raised when a remediation action is blocked by the safety kill switch."""
+    def __init__(self, message: str, details: Optional[Dict[str, Any]] = None):
+        super().__init__(message, code="kill_switch_triggered", status_code=403, details=details)

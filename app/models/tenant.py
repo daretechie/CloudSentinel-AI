@@ -1,16 +1,22 @@
-import uuid
+from uuid import UUID, uuid4
 from enum import Enum
 from datetime import datetime
-from typing import Any, Optional, List
+from typing import Any, Optional, List, TYPE_CHECKING
 from sqlalchemy import String, ForeignKey, DateTime, UniqueConstraint, event
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from app.shared.db.base import Base
 from app.shared.core.security import generate_blind_index
 
 from sqlalchemy_utils import StringEncryptedType
 from sqlalchemy_utils.types.encrypted.encrypted_type import AesEngine
 from app.shared.core.config import get_settings
+
+if TYPE_CHECKING:
+    from app.models.llm import LLMUsage, LLMBudget
+    from app.models.aws_connection import AWSConnection
+    from app.models.notification_settings import NotificationSettings
+    from app.models.background_job import BackgroundJob
 
 settings = get_settings()
 _encryption_key = settings.ENCRYPTION_KEY
@@ -28,7 +34,7 @@ class UserRole(str, Enum):
 class Tenant(Base):
     __tablename__ = "tenants"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
     name: Mapped[str] = mapped_column(
         StringEncryptedType(String, _encryption_key, AesEngine, "pkcs5"),
         index=True
@@ -45,12 +51,12 @@ class Tenant(Base):
     last_accessed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Relationships
-    users: Mapped[list["User"]] = relationship(back_populates="tenant", cascade="all, delete")
-    llm_usage = relationship("LLMUsage", back_populates="tenant", cascade="all, delete-orphan")
-    llm_budget = relationship("LLMBudget", back_populates="tenant", uselist=False, cascade="all, delete-orphan")
-    aws_connections = relationship("AWSConnection", back_populates="tenant", cascade="all, delete-orphan")
-    notification_settings: Mapped["NotificationSettings"] = relationship(back_populates="tenant", uselist=False, cascade="all, delete-orphan")
-    background_jobs: Mapped[list["BackgroundJob"]] = relationship(back_populates="tenant", cascade="all, delete-orphan")
+    users: Mapped[List["User"]] = relationship(back_populates="tenant", cascade="all, delete")
+    llm_usage: Mapped[List["LLMUsage"]] = relationship(back_populates="tenant", cascade="all, delete-orphan")
+    llm_budget: Mapped[Optional["LLMBudget"]] = relationship(back_populates="tenant", uselist=False, cascade="all, delete-orphan")
+    aws_connections: Mapped[List["AWSConnection"]] = relationship(back_populates="tenant", cascade="all, delete-orphan")
+    notification_settings: Mapped[Optional["NotificationSettings"]] = relationship(back_populates="tenant", uselist=False, cascade="all, delete-orphan")
+    background_jobs: Mapped[List["BackgroundJob"]] = relationship(back_populates="tenant", cascade="all, delete-orphan")
 
 class User(Base):
     __tablename__ = "users"
@@ -59,8 +65,8 @@ class User(Base):
     )
 
     # We use the Supabase User ID (which is a UUID) as our PK
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
-    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id"), nullable=False)
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True)
+    tenant_id: Mapped[UUID] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
     email: Mapped[str] = mapped_column(
         StringEncryptedType(String, _encryption_key, AesEngine, "pkcs5"),
         index=True

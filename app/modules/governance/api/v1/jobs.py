@@ -22,6 +22,9 @@ from app.modules.governance.domain.jobs.processor import JobProcessor, enqueue_j
 from app.shared.core.rate_limit import standard_limit
 import structlog
 import secrets
+import asyncio
+import json
+from sse_starlette.sse import EventSourceResponse
 
 router = APIRouter(tags=["Background Jobs"])
 logger = structlog.get_logger()
@@ -201,6 +204,83 @@ async def list_jobs(
         )
         for j in jobs
     ]
+
+
+@router.get("/stream")
+async def stream_job_updates(
+    user: Annotated[CurrentUser, Depends(requires_role("member"))]
+) -> EventSourceResponse:
+    """
+    Stream real-time job status updates for the tenant.
+    
+    This uses Server-Sent Events (SSE) to push updates to the frontend
+    whenever a job status changes or a new job is enqueued.
+    """
+    async def event_generator():
+        last_seen_job_states = {}
+        
+        while True:
+            try:
+                # We use a fresh session to avoid stale data
+                async with async_session_maker() as session:
+                    # Fetch active jobs (pending, running) and recently finished ones
+                    query = (
+                        select(BackgroundJob)
+                        .where(BackgroundJob.tenant_id == user.tenant_id)
+                        .where(sa.not_(BackgroundJob.is_deleted))
+                        .where(
+                            sa.or_(
+                                BackgroundJob.status.in_([JobStatus.PENDING, JobStatus.RUNNING]),
+                                sa.and_(
+                                    BackgroundJob.status.in_([JobStatus.COMPLETED, JobStatus.FAILED]),
+                                    BackgroundJob.updated_at >= datetime.now(timezone.utc).replace(second=0, microsecond=0)
+                                )
+                            )
+                        )
+                        .order_by(desc(BackgroundJob.updated_at))
+                        .limit(20)
+                    )
+                    
+                    result = await session.execute(query)
+                    jobs = result.scalars().all()
+                    
+                    updates = []
+                    for job in jobs:
+                        job_id_str = str(job.id)
+                        current_state = f"{job.status}:{job.updated_at.isoformat()}"
+                        
+                        if last_seen_job_states.get(job_id_str) != current_state:
+                            last_seen_job_states[job_id_str] = current_state
+                            updates.append({
+                                "id": job_id_str,
+                                "job_type": job.job_type,
+                                "status": job.status,
+                                "updated_at": job.updated_at.isoformat(),
+                                "error_message": job.error_message.split(":")[0] if job.error_message and ":" in job.error_message else job.error_message
+                            })
+                    
+                    if updates:
+                        yield {
+                            "event": "job_update",
+                            "data": json.dumps(updates)
+                        }
+                    
+                    # Heartbeat to keep connection alive
+                    yield {
+                        "event": "ping",
+                        "data": "heartbeat"
+                    }
+                    
+            except Exception as e:
+                logger.error("SSE Stream Error", error=str(e))
+                yield {
+                    "event": "error",
+                    "data": json.dumps({"error": "Stream interrupted"})
+                }
+            
+            await asyncio.sleep(3)  # Poll every 3 seconds
+
+    return EventSourceResponse(event_generator())
 
 
 # Internal endpoint for pg_cron (no auth, called by database)

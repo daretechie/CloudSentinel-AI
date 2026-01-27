@@ -8,18 +8,14 @@ import structlog
 from app.shared.core.config import get_settings
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from datetime import datetime, timedelta, timezone
 from app.shared.db.session import get_db, set_session_tenant_id
-from app.models.tenant import User, UserRole
+from app.models.tenant import User, UserRole, Tenant
 from app.shared.core.pricing import PricingTier
 
 logger = structlog.get_logger()
 
-# HTTPBearer: Extracts "Bearer <token>" from Authorization header
-# auto_error=False: Returns None instead of 403 if no token (allows optional auth)
 security = HTTPBearer(auto_error=False)
-
-from datetime import datetime, timedelta, timezone
-
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     """
     Generate a new JWT token signed with the application secret.
@@ -146,7 +142,6 @@ async def get_current_user(
 
     try:
         # Fetch user and tenant from DB
-        from app.models.tenant import Tenant
         result = await db.execute(
             select(User, Tenant.plan)
             .join(Tenant, User.tenant_id == Tenant.id)

@@ -30,12 +30,20 @@ from app.shared.core.rate_limit import setup_rate_limiting, RateLimitExceeded, _
 # Ensure all models are registered with SQLAlchemy
 import app.models.tenant
 import app.models.aws_connection
+import app.models.azure_connection
+import app.models.gcp_connection
 import app.models.llm
 import app.models.notification_settings
 import app.models.remediation
+import app.models.remediation_settings
 import app.models.background_job
-import app.models.azure_connection
-import app.models.gcp_connection
+import app.models.attribution
+import app.models.carbon_settings
+import app.models.cost_audit
+import app.models.discovered_account
+import app.models.pricing
+import app.models.security
+import app.models.anomaly_marker
 import app.modules.governance.domain.security.audit_log
 
 
@@ -55,6 +63,7 @@ from app.modules.governance.api.v1.health_dashboard import router as health_dash
 from app.modules.reporting.api.v1.usage import router as usage_router
 from app.modules.governance.api.oidc import router as oidc_router
 from app.modules.governance.api.v1.public import router as public_router
+from app.modules.reporting.api.v1.currency import router as currency_router
 
 # Configure logging and Sentry
 setup_logging()  # type: ignore[no-untyped-call]
@@ -75,7 +84,6 @@ logger = structlog.get_logger()
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> Any:
     # Setup: Initialize scheduler and emissions tracker
-    settings = get_settings()
     logger.info(f"Starting {settings.APP_NAME}...")
 
     # Ensure data directory exists
@@ -115,7 +123,6 @@ async def lifespan(app: FastAPI) -> Any:
 
 
 # Application instance
-settings = get_settings()
 valdrix_app = FastAPI(
     title=settings.APP_NAME,
     version=settings.VERSION,
@@ -356,5 +363,6 @@ valdrix_app.include_router(audit_router, prefix="/api/v1/audit")
 valdrix_app.include_router(jobs_router, prefix="/api/v1/jobs")
 valdrix_app.include_router(health_dashboard_router, prefix="/api/v1/admin/health-dashboard")
 valdrix_app.include_router(usage_router, prefix="/api/v1/usage")
+valdrix_app.include_router(currency_router, prefix="/api/v1/currency")
 valdrix_app.include_router(oidc_router)
 valdrix_app.include_router(public_router, prefix="/api/v1/public")

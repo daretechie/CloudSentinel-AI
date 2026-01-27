@@ -23,7 +23,7 @@ async def get_csrf_token(request: Request):
 
 @router.post("/assessment")
 @rate_limit("5/day")
-async def run_public_assessment(_request: Request, body: Dict[str, Any]):
+async def run_public_assessment(request: Request, body: Dict[str, Any]):
     """
     Public endpoint for lead-gen cost assessment.
     Limited to 5 requests per day per IP to prevent abuse.

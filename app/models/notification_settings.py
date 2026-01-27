@@ -52,7 +52,7 @@ class NotificationSettings(Base):
     # Timestamps are inherited from Base
 
     # Relationship
-    tenant = relationship("Tenant", back_populates="notification_settings")
+    tenant: Mapped["Tenant"] = relationship("Tenant", back_populates="notification_settings")
 
     def __repr__(self) -> str:
         return f"<NotificationSettings tenant={self.tenant_id} schedule={self.digest_schedule}>"

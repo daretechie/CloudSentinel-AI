@@ -7,11 +7,11 @@ so the forecasting engine can exclude or weight them appropriately.
 Phase 3.2: Manual intervention markers for forecast tuning.
 """
 
-import uuid
 from datetime import date, datetime
+from uuid import UUID, uuid4
 from sqlalchemy import String, Text, ForeignKey, Date, DateTime, Boolean
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from app.shared.db.base import Base
 
 
@@ -23,8 +23,8 @@ class AnomalyMarker(Base):
     """
     __tablename__ = "anomaly_markers"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    tenant_id: Mapped[UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
     
     # The date(s) marked as anomalous
     start_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
@@ -48,7 +48,7 @@ class AnomalyMarker(Base):
     exclude_from_training: Mapped[bool] = mapped_column(Boolean, default=True)
     
     # Audit
-    created_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    created_by: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     
     def __repr__(self) -> str:

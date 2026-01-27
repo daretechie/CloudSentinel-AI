@@ -1,8 +1,8 @@
-import uuid
+from uuid import UUID, uuid4
 from datetime import datetime, timezone, timedelta
 from sqlalchemy import String, Boolean, DateTime, Text
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from app.shared.db.base import Base
 
 # BE-CONN-2: Default key rotation period
@@ -19,7 +19,7 @@ class OIDCKey(Base):
     """
     __tablename__ = "oidc_keys"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
     kid: Mapped[str] = mapped_column(String, unique=True, index=True)
     
     # Store keys in PEM format (encrypted in production, but here we prioritize persistence)

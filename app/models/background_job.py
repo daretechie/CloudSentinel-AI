@@ -5,13 +5,13 @@ Represents jobs in the background_jobs table for durable job processing.
 """
 from __future__ import annotations
 
-import uuid
+from uuid import UUID, uuid4
 from datetime import datetime
 from enum import Enum
 from typing import TYPE_CHECKING
-from sqlalchemy import String, Text, Integer, DateTime, ForeignKey, Boolean, event, JSON, Uuid
+from sqlalchemy import String, Text, Integer, DateTime, ForeignKey, Boolean, event, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, UUID as PG_UUID
 from app.shared.db.base import Base
 
 if TYPE_CHECKING:
@@ -56,13 +56,13 @@ class BackgroundJob(Base):
     """
     __tablename__ = "background_jobs"
     
-    id: Mapped[uuid.UUID] = mapped_column(
-        Uuid, 
+    id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True), 
         primary_key=True, 
-        default=uuid.uuid4
+        default=uuid4
     )
     job_type: Mapped[str] = mapped_column(String(50), nullable=False)
-    tenant_id: Mapped[uuid.UUID | None] = mapped_column(
+    tenant_id: Mapped[UUID | None] = mapped_column(
         ForeignKey("tenants.id", ondelete="CASCADE"), 
         nullable=True
     )

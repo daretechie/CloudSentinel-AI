@@ -18,8 +18,25 @@
 	import ToastComponent from '$lib/components/Toast.svelte';
 	import CloudLogo from '$lib/components/CloudLogo.svelte';
 	import { base } from '$app/paths';
+	import { fly, fade } from 'svelte/transition';
+	import { browser } from '$app/environment';
+	import CommandPalette from '$lib/components/CommandPalette.svelte';
+	import { jobStore } from '$lib/stores/jobs.svelte';
 
 	let { data, children } = $props();
+
+	// FE-M9: Command Palette (Cmd+K) Placeholder
+	$effect(() => {
+		if (!browser) return;
+		const handleKeydown = (e: KeyboardEvent) => {
+			if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+				e.preventDefault();
+				uiState.isCommandPaletteOpen = !uiState.isCommandPaletteOpen;
+			}
+		};
+		window.addEventListener('keydown', handleKeydown);
+		return () => window.removeEventListener('keydown', handleKeydown);
+	});
 
 	const supabase = createSupabaseBrowserClient();
 
@@ -53,6 +70,14 @@
 		});
 
 		return () => subscription.unsubscribe();
+	});
+
+	$effect(() => {
+		if (browser && data.user) {
+			jobStore.init();
+		} else if (browser && !data.user) {
+			jobStore.disconnect();
+		}
 	});
 </script>
 
@@ -127,16 +152,38 @@
 					</button>
 
 					<div class="flex items-center gap-3">
+						<button
+							type="button"
+							class="hidden md:flex items-center gap-2 text-xs text-ink-500 mr-4 hover:text-ink-300 transition-colors"
+							onclick={() => (uiState.isCommandPaletteOpen = true)}
+						>
+							<kbd class="px-1.5 py-0.5 rounded border border-ink-700 bg-ink-800">⌘</kbd>
+							<kbd class="px-1.5 py-0.5 rounded border border-ink-700 bg-ink-800">K</kbd>
+						</button>
+						{#if jobStore.activeJobsCount > 0}
+							<div class="flex items-center gap-2 px-3 py-1 rounded-full bg-accent-500/10 border border-accent-500/20 mr-2">
+								<span class="relative flex h-2 w-2">
+									<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent-400 opacity-75"></span>
+									<span class="relative inline-flex rounded-full h-2 w-2 bg-accent-500"></span>
+								</span>
+								<span class="text-[10px] font-bold uppercase tracking-wider text-accent-400">
+									{jobStore.activeJobsCount} Active {jobStore.activeJobsCount === 1 ? 'Job' : 'Jobs'}
+								</span>
+							</div>
+						{/if}
 						<span class="badge badge-accent">Beta</span>
 					</div>
 				</div>
 			</header>
 
 			<!-- Page Content -->
-			<div class="p-6 page-enter">
+			<div class="p-6" in:fly={{ y: 8, duration: 400, delay: 200 }}>
 				{@render children()}
 			</div>
 		</main>
+
+		<!-- Global Overlays -->
+		<CommandPalette bind:isOpen={uiState.isCommandPaletteOpen} />
 	{:else}
 		<!-- Public Layout (Login/Landing) -->
 		<header class="border-b border-ink-800 bg-ink-900/50 backdrop-blur sticky top-0 z-50">

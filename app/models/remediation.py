@@ -133,9 +133,9 @@ class RemediationRequest(Base):
     updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), onupdate=func.now())
 
     # Relationships
-    tenant = relationship("Tenant")
-    requested_by = relationship("User", foreign_keys=[requested_by_user_id])
-    reviewed_by = relationship("User", foreign_keys=[reviewed_by_user_id])
+    tenant: Mapped["Tenant"] = relationship("Tenant")
+    requested_by: Mapped["User"] = relationship("User", foreign_keys=[requested_by_user_id])
+    reviewed_by: Mapped[Optional["User"]] = relationship("User", foreign_keys=[reviewed_by_user_id])
 
     def __repr__(self) -> str:
         return f"<RemediationRequest {self.resource_id} [{self.status.value}]>"

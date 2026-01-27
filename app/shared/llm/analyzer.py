@@ -1,3 +1,6 @@
+import yaml
+import os
+import uuid
 from typing import Dict, Any, Optional, TYPE_CHECKING
 import json
 import re
@@ -56,8 +59,6 @@ class FinOpsAnalyzer:
 
     def _load_system_prompt(self) -> str:
         """Loads the system prompt from yaml or returns fallback."""
-        import yaml
-        import os
         prompt_path = os.path.join(os.path.dirname(__file__), "prompts.yaml")
         
         try:
@@ -110,8 +111,6 @@ class FinOpsAnalyzer:
         4. Record actual usage on success
         5. Release reservation on failure (optional, handled by lack of record_usage)
         """
-        import uuid
-        
         operation_id = str(uuid.uuid4())
         effective_db = db or self.db
         
@@ -170,7 +169,6 @@ class FinOpsAnalyzer:
             # 3. Prepare Data
             try:
                 sanitized_data = await LLMGuardrails.sanitize_input(usage_summary.model_dump())
-                from app.shared.analysis.forecaster import SymbolicForecaster
                 sanitized_data["symbolic_forecast"] = await SymbolicForecaster.forecast(
                     usage_summary.records,
                     db=effective_db,

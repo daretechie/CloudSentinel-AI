@@ -11,10 +11,11 @@ Why this matters:
 - Analytics dashboard (AI spend over time)
 """
 
-from uuid import uuid4
-from sqlalchemy import Column, String, Integer, Numeric, ForeignKey, Boolean, DateTime, func
-from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import relationship
+from uuid import uuid4, UUID
+from datetime import datetime
+from sqlalchemy import String, Integer, Numeric, ForeignKey, Boolean, DateTime, func
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
+from sqlalchemy.orm import relationship, Mapped, mapped_column
 from sqlalchemy.ext.hybrid import hybrid_property
 
 from app.shared.core.security import encrypt_string, decrypt_string
@@ -43,51 +44,38 @@ class LLMUsage(Base):
     __tablename__ = "llm_usage"
 
     # Primary Key: UUID prevents enumeration attacks
-    # default=uuid4 generates a new UUID if not provided
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
 
     # Foreign Key: Links this record to a tenant
-    # Every LLM call belongs to a tenant (multi-tenancy)
-    # ondelete="CASCADE": If tenant is deleted, their usage records go too
-    tenant_id = Column(
-        UUID(as_uuid=True),
+    tenant_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
         ForeignKey("tenants.id", ondelete="CASCADE"),
         nullable=False,
         index=True,  # Fast filtering by tenant
     )
 
     # Provider: Which company's API (openai, anthropic, groq)
-    # Why separate from model: Same model can be on different providers
-    provider = Column(String(50), nullable=False)
+    provider: Mapped[str] = mapped_column(String(50), nullable=False)
 
     # Model: Specific model used (gpt-4o, claude-3-sonnet, llama-3.3-70b)
-    # Important for cost calculation (each model has different pricing)
-    model = Column(String(100), nullable=False, index=True)
+    model: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
 
     # Token counts: The currency of LLM pricing
-    # input_tokens: How many tokens in your prompt
-    # output_tokens: How many tokens in the response
-    # total_tokens: Convenience field (input + output)
-    input_tokens = Column(Integer, nullable=False, default=0)
-    output_tokens = Column(Integer, nullable=False, default=0)
-    total_tokens = Column(Integer, nullable=False, default=0)
+    input_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    output_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    total_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     # Cost in USD: Calculated at time of call
-    # Numeric(18, 8): High precision for tiny fractions of cents
-    # Why 8 decimals: Token costs are tiny fractions of cents
-    cost_usd = Column(Numeric(18, 8), nullable=False, default=0)
+    cost_usd: Mapped[float] = mapped_column(Numeric(18, 8), nullable=False, default=0)
 
     # Request Type: What was this LLM call for?
-    # Examples: "daily_analysis", "chat", "anomaly_detection"
-    # Useful for analytics: "80% of cost comes from daily_analysis"
-    request_type = Column(String(50), nullable=True)
+    request_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
     # is_byok: True if the user's personal API key was used
-    # Important for billing: Platform fees vs Token costs
-    is_byok = Column(Boolean, nullable=False, default=False)
+    is_byok: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     # Timestamp when this usage record was created
-    created_at = Column(
+    created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
@@ -95,8 +83,7 @@ class LLMUsage(Base):
     )
 
     # Relationship: Access the tenant object
-    # Use: usage.tenant.name
-    tenant = relationship("Tenant", back_populates="llm_usage")
+    tenant: Mapped["Tenant"] = relationship("Tenant", back_populates="llm_usage")
 
     def __repr__(self):
         """String representation for debugging."""
@@ -118,11 +105,11 @@ class LLMBudget(Base):
     __tablename__ = "llm_budgets"
 
     # Primary Key
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
 
     # Foreign Key: One budget per tenant
-    tenant_id = Column(
-        UUID(as_uuid=True),
+    tenant_id: Mapped[UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
         ForeignKey("tenants.id", ondelete="CASCADE"),
         nullable=False,
         unique=True,  # One budget per tenant
@@ -130,23 +117,23 @@ class LLMBudget(Base):
     )
 
     # Monthly limit in USD (e.g., $10.00)
-    monthly_limit_usd = Column(Numeric(10, 2), nullable=False, default=10.00)
+    monthly_limit_usd: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False, default=10.00)
 
     # Alert threshold percentage (e.g., 80 = alert at 80% usage)
-    alert_threshold_percent = Column(Integer, nullable=False, default=80)
+    alert_threshold_percent: Mapped[int] = mapped_column(Integer, nullable=False, default=80)
 
     # Hard limit: If True, block LLM requests when budget exceeded
-    hard_limit = Column(Boolean, nullable=False, default=False)
+    hard_limit: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     # AI Strategy: Per-tenant model and provider selection
-    preferred_provider = Column(String(50), nullable=False, default="groq")
-    preferred_model = Column(String(100), nullable=False, default="llama-3.3-70b-versatile")
+    preferred_provider: Mapped[str] = mapped_column(String(50), nullable=False, default="groq")
+    preferred_model: Mapped[str] = mapped_column(String(100), nullable=False, default="llama-3.3-70b-versatile")
 
     # Underlying columns for API Key Overrides (storing encrypted data)
-    _openai_api_key = Column("openai_api_key", String(512), nullable=True)
-    _claude_api_key = Column("claude_api_key", String(512), nullable=True)
-    _google_api_key = Column("google_api_key", String(512), nullable=True)
-    _groq_api_key = Column("groq_api_key", String(512), nullable=True)
+    _openai_api_key: Mapped[str | None] = mapped_column("openai_api_key", String(512), nullable=True)
+    _claude_api_key: Mapped[str | None] = mapped_column("claude_api_key", String(512), nullable=True)
+    _google_api_key: Mapped[str | None] = mapped_column("google_api_key", String(512), nullable=True)
+    _groq_api_key: Mapped[str | None] = mapped_column("groq_api_key", String(512), nullable=True)
 
     # Hybrid properties for transparent encryption/decryption
     @hybrid_property
@@ -182,10 +169,10 @@ class LLMBudget(Base):
         self._groq_api_key = encrypt_string(value) if value else None
 
     # Track when alert was sent (avoid spam)
-    alert_sent_at = Column(DateTime(timezone=True), nullable=True)
+    alert_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Relationship
-    tenant = relationship("Tenant", back_populates="llm_budget")
+    tenant: Mapped["Tenant"] = relationship("Tenant", back_populates="llm_budget")
 
     def __repr__(self):
         return f"<LLMBudget ${self.monthly_limit_usd}/month>"

@@ -160,23 +160,66 @@ export async function resilientFetch(
 		throw error;
 	}
 }
+
+/**
+ * Enhanced fetch with exponential backoff for 503s
+ */
+export async function resilientFetchWithRetry(
+	url: string | URL,
+	options: RequestInit = {},
+	maxRetries = 3
+): Promise<Response> {
+	let lastError: Error | null = null;
+	for (let i = 0; i < maxRetries; i++) {
+		try {
+			const response = await resilientFetch(url, options);
+
+			// Handle 503 Service Unavailable with backoff
+			if (response.status === 503 && i < maxRetries - 1) {
+				const delay = Math.pow(2, i) * 1000;
+				console.warn(`[API] 503 detected. Retrying in ${delay}ms... (Attempt ${i + 1}/${maxRetries})`);
+				await new Promise((resolve) => setTimeout(resolve, delay));
+				continue;
+			}
+
+			// Handle 403 Forbidden specifically
+			if (response.status === 403) {
+				uiState.addToast(
+					'Access Restricted: You do not have permission to perform this action.',
+					'error',
+					7000
+				);
+			}
+
+			return response;
+		} catch (e: unknown) {
+			lastError = e as Error;
+			if (i < maxRetries - 1) {
+				const delay = Math.pow(2, i) * 1000;
+				await new Promise((resolve) => setTimeout(resolve, delay));
+			}
+		}
+	}
+	throw lastError || new Error(`Failed to fetch ${url} after ${maxRetries} attempts`);
+}
+
 export const api = {
 	get: (url: string, options: RequestInit = {}) =>
-		resilientFetch(url, { ...options, method: 'GET' }),
+		resilientFetchWithRetry(url, { ...options, method: 'GET' }),
 	post: (url: string, body: unknown, options: RequestInit = {}) =>
-		resilientFetch(url, {
+		resilientFetchWithRetry(url, {
 			...options,
 			method: 'POST',
 			body: JSON.stringify(body),
 			headers: { 'Content-Type': 'application/json', ...options.headers }
 		}),
 	put: (url: string, body: unknown, options: RequestInit = {}) =>
-		resilientFetch(url, {
+		resilientFetchWithRetry(url, {
 			...options,
 			method: 'PUT',
 			body: JSON.stringify(body),
 			headers: { 'Content-Type': 'application/json', ...options.headers }
 		}),
 	delete: (url: string, options: RequestInit = {}) =>
-		resilientFetch(url, { ...options, method: 'DELETE' })
+		resilientFetchWithRetry(url, { ...options, method: 'DELETE' })
 };

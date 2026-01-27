@@ -2,10 +2,11 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi import Request
 import uuid
 import structlog
+from app.shared.core.config import get_settings
+from app.shared.core.tracing import set_correlation_id
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        from app.shared.core.config import get_settings
         settings = get_settings()
 
         response = await call_next(request)
@@ -53,8 +54,6 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
     This is intended for correlation and debugging, not as a security principal.
     """
     async def dispatch(self, request: Request, call_next):
-        from app.shared.core.tracing import set_correlation_id
-        
         request_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
         
         # Set unified tracing context

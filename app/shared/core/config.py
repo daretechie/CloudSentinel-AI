@@ -200,10 +200,19 @@ class Settings(BaseSettings):
     PAYSTACK_PLAN_PRO_ANNUAL: Optional[str] = None
     PAYSTACK_PLAN_ENTERPRISE_ANNUAL: Optional[str] = None
 
-    # Circuit Breaker Defaults
+    # Circuit Breaker & Safety Guardrails (Phase 12)
     CIRCUIT_BREAKER_FAILURE_THRESHOLD: int = 3
     CIRCUIT_BREAKER_RECOVERY_SECONDS: int = 300
     CIRCUIT_BREAKER_MAX_DAILY_SAVINGS: float = 1000.0
+    
+    # REMEDIATION KILL SWITCH: Stop all deletions if daily cost impact hits $500
+    REMEDIATION_KILL_SWITCH_THRESHOLD: float = 500.0
+    ENFORCE_REMEDIATION_DRY_RUN: bool = False
+    
+    # Multi-Currency & Localization (Phase 12)
+    SUPPORTED_CURRENCIES: list[str] = ["USD", "NGN", "EUR", "GBP"]
+    EXCHANGE_RATE_SYNC_INTERVAL_HOURS: int = 24
+    BASE_CURRENCY: str = "USD"
 
     # AWS Regions (BE-ADAPT-1: Regional Whitelist)
     AWS_SUPPORTED_REGIONS: list[str] = AWS_SUPPORTED_REGIONS

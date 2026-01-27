@@ -1,8 +1,8 @@
 from datetime import datetime
-import uuid
+from uuid import UUID, uuid4
 from sqlalchemy import String, Boolean, ForeignKey, DateTime, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy_utils import StringEncryptedType
 from sqlalchemy_utils.types.encrypted.encrypted_type import AesEngine
 
@@ -26,8 +26,8 @@ class GCPConnection(Base):
         UniqueConstraint('tenant_id', 'project_id', name='uq_tenant_gcp_project'),
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    tenant_id: Mapped[UUID] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
     
     # Connection Name (e.g. "Production Project")
     name: Mapped[str] = mapped_column(String, nullable=False)
@@ -36,7 +36,7 @@ class GCPConnection(Base):
     project_id: Mapped[str] = mapped_column(String, nullable=False)
     
     # Encrypted Credentials (Full JSON blob) - Optional for Workload Identity
-    service_account_json = mapped_column(
+    service_account_json: Mapped[str | None] = mapped_column(
         StringEncryptedType(Text, _encryption_key, AesEngine, "pkcs5"),
         nullable=True
     )
@@ -59,7 +59,7 @@ class GCPConnection(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
-    tenant = relationship("Tenant", backref="gcp_connections")
+    tenant: Mapped["Tenant"] = relationship("Tenant", backref="gcp_connections")
 
     @property
     def provider(self) -> str:

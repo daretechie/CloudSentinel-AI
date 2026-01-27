@@ -24,7 +24,7 @@ router = APIRouter(tags=["onboarding"])
 @router.post("", response_model=OnboardResponse)
 @auth_limit
 async def onboard(
-    _request: Request,
+    request: Request,
     onboard_req: OnboardRequest,
     user: CurrentUser = Depends(get_current_user_from_jwt),  # No DB check
     db: AsyncSession = Depends(get_db),

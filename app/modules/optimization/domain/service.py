@@ -220,10 +220,8 @@ class ZombieService:
     async def _send_notifications(self, zombies: Dict[str, Any]):
         """Send notifications about detected zombies."""
         try:
-            from app.modules.notifications.domain import get_slack_service
-            slack = get_slack_service()
-            if slack:
-                estimated_savings = zombies.get("total_monthly_waste", 0.0)
-                await slack.notify_zombies(zombies, estimated_savings)
+            from app.shared.core.notifications import NotificationDispatcher
+            estimated_savings = zombies.get("total_monthly_waste", 0.0)
+            await NotificationDispatcher.notify_zombies(zombies, estimated_savings)
         except Exception as e:
             logger.error("service_zombie_notification_failed", error=str(e))

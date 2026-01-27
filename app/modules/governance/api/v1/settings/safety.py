@@ -39,7 +39,7 @@ class SafetyStatusResponse(BaseModel):
 @router.get("/safety", response_model=SafetyStatusResponse)
 @rate_limit("20/minute")
 async def get_safety_status(
-    _request: Request,
+    request: Request,
     current_user: CurrentUser = Depends(get_current_user),
     _db: AsyncSession = Depends(get_db),
 ):
@@ -90,7 +90,7 @@ async def get_safety_status(
 @router.post("/safety/reset")
 @rate_limit("5/minute")
 async def reset_circuit_breaker(
-    _request: Request,
+    request: Request,
     current_user: CurrentUser = Depends(requires_role("admin")),
     _db: AsyncSession = Depends(get_db),
 ):

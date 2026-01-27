@@ -58,6 +58,7 @@ dependencies = [
     "fastapi-csrf-protect>=1.0.7",
     "pyasn1>=0.6.2",
     "celery>=5.3.0",
+    "sse-starlette>=2.0.0",
 ]
 
 [project.urls]

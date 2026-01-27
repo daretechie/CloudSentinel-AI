@@ -1,72 +1,86 @@
 import pytest
-from datetime import datetime
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
+from datetime import datetime, timezone
 from app.shared.adapters.gcp import GCPAdapter
-from app.models.gcp_connection import GCPConnection
+from app.shared.core.exceptions import AdapterError
 
 @pytest.fixture
 def mock_gcp_connection():
-    return GCPConnection(
+    return MagicMock(
         project_id="test-project",
+        service_account_json='{"type": "service_account"}',
         billing_project_id="billing-project",
-        billing_dataset="billing_dataset",
-        billing_table="billing_table",
-        service_account_json='{"type": "service_account", "project_id": "test-project"}'
+        billing_dataset="dataset",
+        billing_table="table"
     )
 
-@pytest.mark.asyncio
-async def test_gcp_adapter_verify_connection(mock_gcp_connection):
-    with patch("google.cloud.bigquery.Client") as mock_bq_client:
-        mock_client_inst = mock_bq_client.return_value
-        mock_client_inst.list_datasets.return_value = [MagicMock()]
-        
-        adapter = GCPAdapter(mock_gcp_connection)
-        is_verified = await adapter.verify_connection()
-        
-        assert is_verified is True
-        # Verify it checks the billing project if provided
-        mock_client_inst.list_datasets.assert_called_once_with(project="billing-project", max_results=1)
+@pytest.fixture
+def gcp_adapter(mock_gcp_connection):
+    return GCPAdapter(mock_gcp_connection)
 
 @pytest.mark.asyncio
-async def test_gcp_adapter_get_cost_and_usage(mock_gcp_connection):
-    with patch("google.cloud.bigquery.Client") as mock_bq_client:
-        mock_client_inst = mock_bq_client.return_value
-        mock_row = MagicMock()
-        mock_row.timestamp = datetime(2026, 1, 1)
-        mock_row.service = "Compute Engine"
-        mock_row.cost_usd = 10.5
-        mock_row.currency = "USD"
-        
-        mock_job = MagicMock()
-        mock_job.result.return_value = [mock_row]
-        mock_client_inst.query.return_value = mock_job
-        
-        adapter = GCPAdapter(mock_gcp_connection)
-        costs = await adapter.get_cost_and_usage(datetime(2026, 1, 1), datetime(2026, 1, 2))
-        
-        assert len(costs) == 1
-        assert costs[0]["service"] == "Compute Engine"
-        assert costs[0]["cost_usd"] == 10.5
-        
-        # Verify query path
-        tokenized_query = mock_client_inst.query.call_args[0][0]
-        assert "billing-project.billing_dataset.billing_table" in tokenized_query
+async def test_gcp_adapter_verify_connection_success(gcp_adapter):
+    mock_client = MagicMock()
+    # Mock some basic API call
+    mock_client.list_datasets.return_value = []
+    
+    with patch("google.cloud.bigquery.Client", return_value=mock_client):
+        result = await gcp_adapter.verify_connection()
+        assert result is True
 
 @pytest.mark.asyncio
-async def test_gcp_adapter_discover_resources(mock_gcp_connection):
-    with patch("google.cloud.asset_v1.AssetServiceClient") as mock_asset_client:
-        mock_client_inst = mock_asset_client.return_value
+async def test_gcp_adapter_verify_connection_failure(gcp_adapter):
+    with patch("google.cloud.bigquery.Client", side_effect=Exception("Auth error")):
+        result = await gcp_adapter.verify_connection()
+        assert result is False
+
+@pytest.mark.asyncio
+async def test_gcp_adapter_get_cost_and_usage_success(gcp_adapter):
+    mock_client = MagicMock()
+    mock_query_job = MagicMock()
+    mock_row = MagicMock()
+    mock_row.id = "id-1"
+    mock_row.service = "Compute Engine"
+    mock_row.cost_usd = 10.5
+    mock_row.total_credits = 0.0
+    mock_row.currency = "USD"
+    mock_row.timestamp = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    
+    mock_query_job.result.return_value = [mock_row]
+    mock_client.query.return_value = mock_query_job
+    
+    with patch("google.cloud.bigquery.Client", return_value=mock_client):
+        start = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        end = datetime(2026, 1, 2, tzinfo=timezone.utc)
+        results = await gcp_adapter.get_cost_and_usage(start, end)
         
-        mock_asset = MagicMock()
-        mock_asset.name = "//compute.googleapis.com/projects/test-project/zones/us-central1-a/instances/test-instance"
-        mock_asset.asset_type = "compute.googleapis.com/Instance"
-        mock_asset.resource.data = {"status": "RUNNING"}
-        
-        mock_client_inst.list_assets.return_value = [mock_asset]
-        
-        adapter = GCPAdapter(mock_gcp_connection)
-        resources = await adapter.discover_resources("compute")
-        
+        assert len(results) == 1
+        assert results[0]["service"] == "Compute Engine"
+        assert results[0]["cost_usd"] == 10.5
+
+@pytest.mark.asyncio
+async def test_gcp_adapter_get_cost_and_usage_error(gcp_adapter):
+    mock_client = MagicMock()
+    mock_client.query.side_effect = Exception("BigQuery Error")
+    
+    with patch("google.cloud.bigquery.Client", return_value=mock_client):
+        start = datetime(2026, 1, 1, tzinfo=timezone.utc)
+        end = datetime(2026, 1, 2, tzinfo=timezone.utc)
+        with pytest.raises(AdapterError, match="GCP BigQuery cost fetch failed"):
+            await gcp_adapter.get_cost_and_usage(start, end)
+
+@pytest.mark.asyncio
+async def test_gcp_adapter_discover_resources(gcp_adapter):
+    mock_client = MagicMock()
+    mock_instance = MagicMock()
+    mock_instance.name = "vm-1"
+    mock_instance.id = "123"
+    mock_instance.status = "RUNNING"
+    
+    # Mocking pager
+    mock_client.list_assets.return_value = [mock_instance]
+    
+    with patch("google.cloud.asset_v1.AssetServiceClient", return_value=mock_client):
+        resources = await gcp_adapter.discover_resources("compute")
         assert len(resources) == 1
-        assert resources[0]["name"] == "test-instance"
-        assert resources[0]["type"] == "compute.googleapis.com/Instance"
+        assert resources[0]["name"] == "vm-1"

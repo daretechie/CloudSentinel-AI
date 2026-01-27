@@ -41,7 +41,7 @@ class RemediationSettings(Base):
     monthly_hard_cap_usd: Mapped[float] = mapped_column(Numeric(12, 2), default=0.0)
 
     # Relationship
-    tenant = relationship("Tenant")
+    tenant: Mapped["Tenant"] = relationship("Tenant")
 
     def __repr__(self):
         return f"<RemediationSettings tenant={self.tenant_id} auto_pilot={self.auto_pilot_enabled}>"

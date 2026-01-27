@@ -602,3 +602,18 @@ body {
 .border-ink-700 {
 	border-color: var(--color-ink-700);
 }
+
+/* Glassmorphism Extras */
+.frosted-glass {
+	background: rgba(15, 19, 24, 0.6);
+	backdrop-filter: blur(8px);
+	-webkit-backdrop-filter: blur(8px);
+	border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.glass-card {
+	background: linear-gradient(135deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.01) 100%);
+	backdrop-filter: blur(10px);
+	border: 1px solid rgba(255, 255, 255, 0.08);
+	box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+}

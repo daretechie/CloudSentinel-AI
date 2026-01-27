@@ -81,7 +81,7 @@ async def check_growth_tier(user: CurrentUser, db: AsyncSession):
 
 @router.post("/aws/setup", response_model=TemplateResponse)
 @rate_limit("10/minute") # Protect setup against scanning
-async def get_aws_setup_templates(_request: Request):
+async def get_aws_setup_templates(request: Request):
     """Get CloudFormation/Terraform templates and Magic Link for AWS setup."""
     external_id = AWSConnection.generate_external_id()
     templates = AWSConnectionService.get_setup_templates(external_id)
@@ -107,7 +107,7 @@ async def get_gcp_setup(
 @router.post("/aws", response_model=AWSConnectionResponse, status_code=status.HTTP_201_CREATED)
 @standard_limit
 async def create_aws_connection(
-    _request: Request,
+    request: Request,
     data: AWSConnectionCreate,
     current_user: CurrentUser = Depends(requires_role("member")),
     db: AsyncSession = Depends(get_db),
@@ -156,7 +156,7 @@ async def list_aws_connections(
 @router.post("/aws/{connection_id}/verify")
 @standard_limit
 async def verify_aws_connection(
-    _request: Request,
+    request: Request,
     connection_id: UUID,
     current_user: CurrentUser = Depends(requires_role("member")),
     db: AsyncSession = Depends(get_db),
@@ -293,7 +293,7 @@ async def link_discovered_account(
 @router.post("/azure", response_model=AzureConnectionResponse, status_code=status.HTTP_201_CREATED)
 @rate_limit("5/minute")
 async def create_azure_connection(
-    _request: Request,
+    request: Request,
     data: AzureConnectionCreate,
     current_user: CurrentUser = Depends(requires_role("member")),
     db: AsyncSession = Depends(get_db),
@@ -331,7 +331,7 @@ async def create_azure_connection(
 @router.post("/azure/{connection_id}/verify")
 @rate_limit("10/minute")
 async def verify_azure_connection(
-    _request: Request,
+    request: Request,
     connection_id: UUID,
     current_user: CurrentUser = Depends(requires_role("member")),
     db: AsyncSession = Depends(get_db),
@@ -377,7 +377,7 @@ async def delete_azure_connection(
 @router.post("/gcp", response_model=GCPConnectionResponse, status_code=status.HTTP_201_CREATED)
 @rate_limit("5/minute")
 async def create_gcp_connection(
-    _request: Request,
+    request: Request,
     data: GCPConnectionCreate,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser = Depends(requires_role("member")),
@@ -417,7 +417,7 @@ async def create_gcp_connection(
 @router.post("/gcp/{connection_id}/verify")
 @rate_limit("10/minute")
 async def verify_gcp_connection(
-    _request: Request,
+    request: Request,
     connection_id: UUID,
     current_user: CurrentUser = Depends(requires_role("member")),
     db: AsyncSession = Depends(get_db),
